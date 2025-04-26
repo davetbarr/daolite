@@ -1,0 +1,12 @@
+name: "AMD Ryzen 9 7950X"
+description: "AMD Ryzen 9 7950X 16-Core Desktop Processor"
+
+# Hardware specifications
+cores: 16
+core_frequency: 4.5e9   # 4.5 GHz base clock
+flops_per_cycle: 32     # AVX-256 FLOPS per cycle (4 double-precision operations per core * 8 cores)
+memory_channels: 2
+memory_width: 64        # 64 bits per channel
+memory_frequency: 5200e6  # 5200 MHz DDR5
+network_speed: 40e9      # 40 Gbps network (typical high-end desktop)
+time_in_driver: 5        # 5μs driver overhead

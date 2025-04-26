@@ -1,0 +1,12 @@
+name: "AMD EPYC 7763 (Milan)"
+description: "AMD EPYC 7763 64-Core Server Processor"
+
+# Hardware specifications
+cores: 64
+core_frequency: 2.45e9  # 2.45 GHz base clock
+flops_per_cycle: 64     # AVX-512 FLOPS per cycle (8 double-precision operations per core * 8 cores)
+memory_channels: 8
+memory_width: 64        # 64 bits per channel
+memory_frequency: 3200e6  # 3200 MHz DDR4
+network_speed: 200e9     # 200 Gbps network
+time_in_driver: 5        # 5μs driver overhead

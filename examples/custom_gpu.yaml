@@ -1,0 +1,9 @@
+hardware: GPU
+name: "Custom NVIDIA GPU"
+fp32_tflops: 45.5         # 45.5 TFLOPS FP32
+memory_bandwidth: 2500e9  # 2.5 TB/s
+network_speed: 200e9      # 200 Gbps
+time_in_driver: 6.5       # microseconds
+core_fudge: 0.9           # Performance adjustment factor
+mem_fudge: 0.95           # Memory adjustment factor
+network_fudge: 0.92       # Network adjustment factor

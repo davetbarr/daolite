@@ -1,0 +1,12 @@
+name: "AMD Instinct MI300X"
+description: "AMD Instinct MI300X Accelerator"
+
+# Hardware specifications
+cores: 304               # Compute Units
+core_frequency: 1.7e9    # 1.7 GHz base clock
+flops_per_cycle: 9728    # FP64 FLOPS per cycle
+memory_channels: 16      # HBM3 memory channels
+memory_width: 128        # 128 bits per channel
+memory_frequency: 2.4e9  # 2.4 GHz HBM3
+network_speed: 800e9     # 800 Gbps (Infinity Fabric)
+time_in_driver: 8        # 8μs driver overhead for GPU

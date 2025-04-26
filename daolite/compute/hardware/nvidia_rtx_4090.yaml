@@ -1,0 +1,12 @@
+name: "NVIDIA RTX 4090"
+description: "NVIDIA GeForce RTX 4090 GPU"
+
+# Hardware specifications
+cores: 128               # Streaming Multiprocessors
+core_frequency: 2.23e9   # 2.23 GHz base clock
+flops_per_cycle: 5632    # FP32 FLOPS per cycle
+memory_channels: 24      # GDDR6X memory channels
+memory_width: 32         # 32 bits per channel
+memory_frequency: 1.313e9 # 1.313 GHz (21 Gbps GDDR6X)
+network_speed: 64e9      # 64 Gbps (PCIe 4.0 x16)
+time_in_driver: 8        # 8μs driver overhead for GPU

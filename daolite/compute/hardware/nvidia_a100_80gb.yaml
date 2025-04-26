@@ -1,0 +1,12 @@
+name: "NVIDIA A100 80GB"
+description: "NVIDIA A100 80GB Tensor Core GPU"
+
+# Hardware specifications
+cores: 108               # SMX count (each with multiple cores)
+core_frequency: 1.41e9   # 1.41 GHz base clock
+flops_per_cycle: 19456   # FP64 tensor core FLOPS per cycle
+memory_channels: 32      # HBM2e memory channels
+memory_width: 128        # 128 bits per channel
+memory_frequency: 1.2e9  # 1.2 GHz HBM2e
+network_speed: 600e9     # 600 Gbps (NVLink 4.0)
+time_in_driver: 8        # 8μs driver overhead for GPU

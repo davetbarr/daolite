@@ -1,0 +1,13 @@
+hardware: CPU
+name: "Custom Intel Xeon Gold"
+cores: 64
+core_frequency: 2.6e9  # 2.6 GHz
+flops_per_cycle: 64    # AVX-512 support
+memory_channels: 6
+memory_width: 64
+memory_frequency: 3600e6  # DDR4-3600
+network_speed: 100e9      # 100 Gbps
+time_in_driver: 4.5       # microseconds
+core_fudge: 0.85          # Performance adjustment factor
+mem_fudge: 0.9            # Memory adjustment factor
+network_fudge: 0.85       # Network adjustment factor

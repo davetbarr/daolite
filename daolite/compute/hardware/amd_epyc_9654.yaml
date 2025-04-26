@@ -1,0 +1,12 @@
+name: "AMD EPYC 9654 (Genoa)"
+description: "AMD EPYC 9654 96-Core Server Processor"
+
+# Hardware specifications
+cores: 96
+core_frequency: 2.40e9  # 2.40 GHz base clock
+flops_per_cycle: 64     # AVX-512 FLOPS per cycle (8 double-precision operations per core * 8 cores)
+memory_channels: 12
+memory_width: 64        # 64 bits per channel
+memory_frequency: 4800e6  # 4800 MHz DDR5
+network_speed: 400e9     # 400 Gbps network
+time_in_driver: 5        # 5μs driver overhead

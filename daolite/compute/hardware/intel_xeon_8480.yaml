@@ -1,0 +1,12 @@
+name: "Intel Xeon Platinum 8480+ (Sapphire Rapids)"
+description: "Intel Xeon Platinum 8480+ 56-Core Server Processor"
+
+# Hardware specifications
+cores: 56
+core_frequency: 2.0e9   # 2.0 GHz base clock
+flops_per_cycle: 64     # AVX-512 FLOPS per cycle (8 double-precision operations per core * 8 cores)
+memory_channels: 8
+memory_width: 64        # 64 bits per channel
+memory_frequency: 4800e6  # 4800 MHz DDR5
+network_speed: 200e9     # 200 Gbps network
+time_in_driver: 5        # 5μs driver overhead

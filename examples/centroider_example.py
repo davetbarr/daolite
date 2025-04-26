@@ -1,0 +1,20 @@
+# Example: Centroiding only
+from daolite.pipeline.centroider import Centroider
+from daolite.compute import hardware
+import numpy as np
+
+start_times = np.array([
+    [500.0, 677.776],
+    [677.776, 855.552],
+    [855.552, 1033.328],
+    [1033.328, 1211.104],
+    [1211.104, 1388.88],
+    [1388.88, 1566.656],
+    [1566.656, 1744.432],
+    [1744.432, 1922.208],
+    [1922.208, 2099.984],
+    [2099.984, 2277.76]
+])
+
+result = Centroider(start_times=start_times, n_valid_subaps=100, n_pix_per_subap=16, compute_resources=hardware.amd_epyc_7763())
+print("Centroiding timing:", result)

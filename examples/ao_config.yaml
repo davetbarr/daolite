@@ -1,0 +1,43 @@
+# Example AO System Configuration for DaoLITE
+#
+# This configuration file defines a sample adaptive optics system
+# with specifications for camera, optics, pipeline processing,
+# and computational resources.
+
+# Camera configuration
+camera:
+  n_pixels: 1048576          # Total pixels (1024x1024)
+  n_subapertures: 6400       # Subaperture grid (80x80)
+  pixels_per_subaperture: 256  # Pixels per subaperture (16x16)
+  bit_depth: 16              # Camera bit depth
+  readout_time: 500.0        # Camera readout time in microseconds
+  n_lines_of_sight: 1        # Single guide star
+
+# Optical system configuration
+optics:
+  n_actuators: 5000          # Number of DM actuators
+  n_dm_modes: null           # Optional modes (null = use raw actuators)
+  n_combine: 1               # Combine N frames for control
+  calibration_scale: 1.0     # Computational scaling factors
+  centroid_scale: 1.0
+  reconstruction_scale: 1.0
+  control_scale: 1.0
+
+# Processing pipeline configuration
+pipeline:
+  use_square_diff: false     # Use square difference instead of cross-correlation
+  use_sorting: false         # Sort centroids by intensity
+  delay_start: 0.0           # Delay processing start
+  n_workers: 4               # Number of worker threads/processes
+  pcie_gen: 5                # PCIe generation for transfers
+
+# Compute resources configuration
+compute:
+  cores: 16                  # Number of CPU cores
+  core_frequency: 2600000000.0  # Core frequency in Hz (2.6 GHz)
+  flops_per_cycle: 32        # FLOPS per CPU cycle
+  memory_channels: 4         # Number of memory channels
+  memory_width: 64           # Memory width in bits
+  memory_frequency: 3200000000.0  # Memory frequency in Hz (3200 MHz)
+  network_speed: 100000000000.0  # Network speed in bits/s (100 Gbps)
+  time_in_driver: 5.0        # Time spent in driver (microseconds)
