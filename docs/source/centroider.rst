@@ -6,7 +6,7 @@ Wavefront Sensing
 Overview
 --------
 
-The wavefront sensing (centroiding) component in DaoLITE (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) handles the calculation of wavefront slopes from Shack-Hartmann sensor images. These slopes represent the local tilts of the wavefront across the pupil and are crucial inputs for wavefront reconstruction in adaptive optics systems.
+The wavefront sensing (centroiding) component in daolite (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) handles the calculation of wavefront slopes from Shack-Hartmann sensor images. These slopes represent the local tilts of the wavefront across the pupil and are crucial inputs for wavefront reconstruction in adaptive optics systems.
 
 Key Centroiding Features
 ------------------------
@@ -52,7 +52,7 @@ Adding a centroider to your AO pipeline:
 Centroiding Algorithms
 ----------------------
 
-DaoLITE provides timing models for the cross-correlation centroiding method, which is optimized for extended sources like in solar AO.
+daolite provides timing models for the cross-correlation centroiding method, which is optimized for extended sources like in solar AO.
 
 Cross-Correlation
 ~~~~~~~~~~~~~~~~~

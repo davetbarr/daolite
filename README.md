@@ -1,4 +1,4 @@
-# DaoLITE
+# daolite
 
 **D**urham **A**daptive **O**ptics **L**atency **I**nspection and **T**iming **E**stimator
 
@@ -6,7 +6,7 @@ A Python package for estimating latency in Adaptive Optics Real-time Control Sys
 
 ## Overview
 
-DaoLITE provides tools to estimate the computational latency of various components in an adaptive optics (AO) real-time control system. This helps in system design and benchmarking by modeling:
+daolite provides tools to estimate the computational latency of various components in an adaptive optics (AO) real-time control system. This helps in system design and benchmarking by modeling:
 
 - Camera readout and data transfer timing
 - Pixel calibration processing
@@ -30,7 +30,7 @@ pip install -e .
 
 ## Running Tests
 
-DaoLITE includes a comprehensive test suite to ensure all components work correctly:
+daolite includes a comprehensive test suite to ensure all components work correctly:
 
 ```bash
 # Run all tests
@@ -64,7 +64,7 @@ open build/html/index.html
 
 ## Package Structure
 
-DaoLITE is organized into several subpackages:
+daolite is organized into several subpackages:
 
 - `compute`: Hardware specification and computational resource modeling
   - `resources`: Library of predefined compute resources (CPUs and GPUs)
@@ -165,7 +165,7 @@ pipeline.visualize(
 
 ## Compute Resources Library
 
-DaoLITE includes a comprehensive library of predefined compute resources for modern CPUs and GPUs:
+daolite includes a comprehensive library of predefined compute resources for modern CPUs and GPUs:
 
 ```python
 from daolite.compute import hardware, create_compute_resources
@@ -189,7 +189,7 @@ custom_resource = create_compute_resources(
 
 ## Configuration System
 
-DaoLITE includes a configuration system to easily define and modify AO system parameters:
+daolite includes a configuration system to easily define and modify AO system parameters:
 
 ```python
 from daolite import (
@@ -217,7 +217,7 @@ loaded_config = SystemConfig.from_yaml('my_ao_config.yaml')
 
 ## Flexible Pipeline Architecture
 
-The new pipeline architecture in DaoLITE allows for:
+The new pipeline architecture in daolite allows for:
 
 1. **Component Arrangement**: Define components in any order with automatic dependency resolution
 2. **Different Compute Resources**: Assign different hardware to each component

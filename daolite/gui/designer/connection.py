@@ -1,5 +1,5 @@
 """
-Connection classes for the DaoLITE pipeline designer.
+Connection classes for the daolite pipeline designer.
 
 This module provides graphical representations of connections between components.
 """

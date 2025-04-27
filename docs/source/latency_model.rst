@@ -6,12 +6,12 @@ Latency Model
 Overview
 --------
 
-DaoLITE models the computational latency of Adaptive Optics (AO) real-time control systems by breaking down the process into distinct components and estimating the processing time for each. The model takes into account hardware specifications, data transfers, and algorithm complexity.
+daolite models the computational latency of Adaptive Optics (AO) real-time control systems by breaking down the process into distinct components and estimating the processing time for each. The model takes into account hardware specifications, data transfers, and algorithm complexity.
 
 Core Concepts
 -------------
 
-The latency modeling in DaoLITE is based on several key concepts:
+The latency modeling in daolite is based on several key concepts:
 
 Pipeline Components
 ~~~~~~~~~~~~~~~~~~~
@@ -29,7 +29,7 @@ An AO pipeline typically consists of:
 Packetization
 ~~~~~~~~~~~~~
 
-DaoLITE supports modeling of "packetized" processing, where data is processed in chunks as it becomes available:
+daolite supports modeling of "packetized" processing, where data is processed in chunks as it becomes available:
 
 - Camera readout is often performed in rows or regions
 - Each packet can begin processing as soon as it's available
@@ -48,7 +48,7 @@ The performance of each component depends on the available compute resources:
 Hardware/Software Co-Design
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-DaoLITE enables users to explore different hardware and software configurations:
+daolite enables users to explore different hardware and software configurations:
 
 - Test different algorithms (e.g., square difference vs. cross-correlation for centroiding)
 - Evaluate hardware options (CPU vs. GPU, memory bandwidth effects)
@@ -57,12 +57,12 @@ DaoLITE enables users to explore different hardware and software configurations:
 Latency Determination Methodology
 ---------------------------------
 
-DaoLITE uses a detailed latency determination model based on both computational throughput (FLOPS) and memory bandwidth limitations. This section explains the core methodology and the theoretical foundations behind the latency calculations.
+daolite uses a detailed latency determination model based on both computational throughput (FLOPS) and memory bandwidth limitations. This section explains the core methodology and the theoretical foundations behind the latency calculations.
 
 Basic Principles
 ~~~~~~~~~~~~~~~~
 
-The fundamental principle behind DaoLITE's latency model is that processing time is limited by either:
+The fundamental principle behind daolite's latency model is that processing time is limited by either:
 
 1. **Computational throughput** - How quickly can the processor execute the required arithmetic operations
 2. **Memory bandwidth** - How quickly can data be moved between memory and the processor
@@ -129,7 +129,7 @@ In practice, achieving theoretical peak FLOPS is rarely possible due to various 
 - Instruction dependencies
 - Hardware utilization inefficiencies
 
-Therefore, DaoLITE applies an algorithm-specific scaling factor:
+Therefore, daolite applies an algorithm-specific scaling factor:
 
 .. code-block:: python
 
@@ -203,7 +203,7 @@ Typical efficiency factors:
 Combined Latency Model
 ~~~~~~~~~~~~~~~~~~~~~~
 
-For each pipeline component, DaoLITE calculates:
+For each pipeline component, daolite calculates:
 
 1. The computational time based on required FLOPS and available throughput
 2. The memory time based on data access and available bandwidth
@@ -242,7 +242,7 @@ Resource Partitioning in Packetized Systems
 
 In real-world AO systems using a packetized approach, different components of the pipeline operate simultaneously on different packets of data. For example, while one part of the system is performing calibration on packet N, another part might be computing centroids for packet N-1, and a third part might be handling reconstruction for packet N-2.
 
-This parallelism requires careful modeling of how compute resources are partitioned across these simultaneous operations. DaoLITE accounts for this with specialized scaling factors that represent resource allocation in pipelined systems:
+This parallelism requires careful modeling of how compute resources are partitioned across these simultaneous operations. daolite accounts for this with specialized scaling factors that represent resource allocation in pipelined systems:
 
 .. code-block:: python
 
@@ -283,10 +283,10 @@ Consider a GPU with 10 TFLOPS theoretical peak processing 3 pipeline stages in p
    - Overall pipeline throughput increases as components run in parallel
    - Pipeline latency is determined by the longest component latency, not the sum
 
-Implementing Resource Partitioning in DaoLITE
+Implementing Resource Partitioning in daolite
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-When using DaoLITE to model packetized processing, you should adjust the scaling factors to reflect resource partitioning:
+When using daolite to model packetized processing, you should adjust the scaling factors to reflect resource partitioning:
 
 .. code-block:: python
 
@@ -355,7 +355,7 @@ When modeling a specific system, these partition factors should be calibrated ba
 Benefits of Accurate Resource Partitioning
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Properly modeling resource partitioning in packetized systems allows DaoLITE to:
+Properly modeling resource partitioning in packetized systems allows daolite to:
 
 1. **Accurately predict pipeline throughput**: By accounting for parallel execution
 2. **Identify bottlenecks**: Components with insufficient resources will limit throughput
@@ -367,7 +367,7 @@ Note that while partitioning resources reduces the performance of individual com
 Advantages and Disadvantages
 ----------------------------
 
-Advantages of DaoLITE's Latency Model
+Advantages of daolite's Latency Model
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 1. **Physically-based modeling**: The model is based on actual hardware constraints rather than empirical timing measurements that might vary between systems.
@@ -402,7 +402,7 @@ Disadvantages and Limitations
 When to Trust the Model
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-The DaoLITE latency model is most accurate when:
+The daolite latency model is most accurate when:
 
 1. The operations are regular and predictable (like most numerical computations in AO pipelines)
 2. The system is not I/O bound or limited by external factors

@@ -6,7 +6,7 @@ Pixel Calibration
 Overview
 --------
 
-The pixel calibration component in DaoLITE (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) handles the preprocessing of raw camera data before wavefront sensing. This preprocessing is essential for accurate wavefront measurements and includes dark frame subtraction, flat fielding, bad pixel correction, and other operations to prepare the raw pixel data for centroiding.
+The pixel calibration component in daolite (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) handles the preprocessing of raw camera data before wavefront sensing. This preprocessing is essential for accurate wavefront measurements and includes dark frame subtraction, flat fielding, bad pixel correction, and other operations to prepare the raw pixel data for centroiding.
 
 Key Calibration Operations
 --------------------------
@@ -21,7 +21,7 @@ Key Calibration Operations
 Using Calibration Components
 ----------------------------
 
-DaoLITE makes it easy to add pixel calibration stages to your AO pipeline:
+daolite makes it easy to add pixel calibration stages to your AO pipeline:
 
 .. code-block:: python
 
@@ -80,7 +80,7 @@ The pixel calibration component accepts a variety of parameters to customize its
 Available Calibration Operations
 --------------------------------
 
-DaoLITE provides timing models for the following calibration operations:
+daolite provides timing models for the following calibration operations:
 
 Dark Subtraction
 ~~~~~~~~~~~~~~~~
@@ -153,7 +153,7 @@ Handles defective pixels:
 Combined Calibration
 ~~~~~~~~~~~~~~~~~~~~
 
-For convenience, DaoLITE provides a combined calibration function that performs multiple operations in sequence:
+For convenience, daolite provides a combined calibration function that performs multiple operations in sequence:
 
 .. code-block:: python
 
@@ -188,7 +188,7 @@ The computational cost of pixel calibration operations depends on several factor
 GPU Acceleration
 ~~~~~~~~~~~~~~~~
 
-DaoLITE models GPU-accelerated pixel calibration for higher performance:
+daolite models GPU-accelerated pixel calibration for higher performance:
 
 .. code-block:: python
 
@@ -236,7 +236,7 @@ For very large pixel arrays, chunked processing can be more efficient:
 Customizing Calibration Models
 ------------------------------
 
-DaoLITE allows you to create custom calibration operations with your own timing models:
+daolite allows you to create custom calibration operations with your own timing models:
 
 .. code-block:: python
 

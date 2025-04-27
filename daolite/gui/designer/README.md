@@ -1,10 +1,10 @@
-# DaoLITE Pipeline Designer
+# daolite Pipeline Designer
 
 A visual tool for designing AO pipeline configurations with emphasis on network and multi-compute node configurations.
 
 ## Overview
 
-The DaoLITE Pipeline Designer provides a graphical interface for designing adaptive optics pipelines using a drag-and-drop interface. It allows you to:
+The daolite Pipeline Designer provides a graphical interface for designing adaptive optics pipelines using a drag-and-drop interface. It allows you to:
 
 1. Visually place AO components (camera, centroider, reconstruction, etc.)
 2. Connect components to show data flow between them
@@ -20,11 +20,11 @@ The designer especially emphasizes network components and multi-compute node con
 
 - Python 3.7+
 - PyQt5 (install with `pip install PyQt5`)
-- DaoLITE package
+- daolite package
 
 ### Running the Designer
 
-Simply run the `pipeline_designer.py` script from the root of the DaoLITE package:
+Simply run the `pipeline_designer.py` script from the root of the daolite package:
 
 ```bash
 python pipeline_designer.py
@@ -69,7 +69,7 @@ Once your pipeline is designed:
 
 1. Click File → Generate Code
 2. Choose a location to save the Python file
-3. The generated code will create a DaoLITE pipeline that matches your design
+3. The generated code will create a daolite pipeline that matches your design
 
 ## Network and Multi-Compute Emphasis
 

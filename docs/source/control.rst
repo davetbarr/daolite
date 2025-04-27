@@ -8,7 +8,7 @@ Control System
 Overview
 --------
 
-The control system in DaoLITE (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) governs how the adaptive optics system responds to measured wavefront errors. This component is responsible for converting reconstructed wavefront shapes into appropriate commands for deformable mirrors (DMs), applying control laws to ensure stability and optimal performance.
+The control system in daolite (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) governs how the adaptive optics system responds to measured wavefront errors. This component is responsible for converting reconstructed wavefront shapes into appropriate commands for deformable mirrors (DMs), applying control laws to ensure stability and optimal performance.
 
 .. _control_features:
 
@@ -58,7 +58,7 @@ Adding a controller to your AO pipeline:
 Control Algorithms
 ------------------
 
-DaoLITE provides timing models for several control algorithms, each with different performance characteristics and stability properties.
+daolite provides timing models for several control algorithms, each with different performance characteristics and stability properties.
 
 .. _dm_control:
 
@@ -191,7 +191,7 @@ Controllers must operate with fixed, deterministic timing:
 Performance Metrics
 -------------------
 
-Controller performance in DaoLITE is typically evaluated by timing analysis, latency, and throughput of the control loop. For more details on how to interpret these metrics and optimize controller performance, see the :ref:`latency_model` section.
+Controller performance in daolite is typically evaluated by timing analysis, latency, and throughput of the control loop. For more details on how to interpret these metrics and optimize controller performance, see the :ref:`latency_model` section.
 
 .. _related_topics:
 

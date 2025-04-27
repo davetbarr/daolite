@@ -1,5 +1,5 @@
 """
-DaoLITE - Durham Adaptive Optics Latency Inspection Tool Environment
+daolite - Durham Adaptive Optics Latency Inspection Tool Environment
 
 A Python package for estimating latency in Adaptive Optics Real-time
 Control Systems, with a focus on Durham Adaptive Optics (DAO) RTC systems.

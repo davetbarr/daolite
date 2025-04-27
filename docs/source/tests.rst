@@ -6,12 +6,12 @@ Running Tests
 Overview
 --------
 
-Testing is an essential part of maintaining DaoLITE (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) and ensuring that all components work correctly. This guide explains how to run the test suite, generate coverage reports, and contribute new tests to the project.
+Testing is an essential part of maintaining daolite (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) and ensuring that all components work correctly. This guide explains how to run the test suite, generate coverage reports, and contribute new tests to the project.
 
 Prerequisites
 -------------
 
-To run the DaoLITE tests, you'll need pytest and several testing-related packages:
+To run the daolite tests, you'll need pytest and several testing-related packages:
 
 .. code-block:: bash
 
@@ -25,7 +25,7 @@ To run the complete test suite:
 .. code-block:: bash
 
     # Navigate to the project root directory
-    cd /path/to/DaoLITE
+    cd /path/to/daolite
     
     # Run all tests
     pytest
@@ -56,10 +56,10 @@ To generate a test coverage report:
 .. code-block:: bash
 
     # Run tests with coverage
-    pytest --cov=DaoLite
+    pytest --cov=daolite
     
     # Generate an HTML report
-    pytest --cov=DaoLite --cov-report=html
+    pytest --cov=daolite --cov-report=html
     
     # Open the HTML report
     open htmlcov/index.html
@@ -102,7 +102,7 @@ This requires a configured `tox.ini` file in the project root.
 Continuous Integration
 ----------------------
 
-The DaoLITE project uses GitHub Actions for continuous integration testing. When a pull request is submitted, the test suite automatically runs on:
+The daolite project uses GitHub Actions for continuous integration testing. When a pull request is submitted, the test suite automatically runs on:
 
 * Different operating systems (Linux, macOS, Windows)
 * Different Python versions (3.8, 3.9, 3.10, 3.11)
@@ -111,7 +111,7 @@ The DaoLITE project uses GitHub Actions for continuous integration testing. When
 Adding New Tests
 ----------------
 
-When adding new functionality to DaoLITE, you should also add corresponding tests:
+When adding new functionality to daolite, you should also add corresponding tests:
 
 1. Create test functions in an appropriate file in the `tests/` directory
 2. Use the pytest framework for assertions and fixtures
@@ -125,7 +125,7 @@ Example test function:
     # tests/test_new_feature.py
     import pytest
     import numpy as np
-    from DaoLite.your_module import your_function
+    from daolite.your_module import your_function
     
     def test_your_function_basic():
         """Test basic functionality of your_function."""
@@ -141,14 +141,14 @@ Example test function:
 Test Fixtures
 -------------
 
-DaoLITE tests use pytest fixtures for setup and teardown of test resources:
+daolite tests use pytest fixtures for setup and teardown of test resources:
 
 .. code-block:: python
 
     # tests/conftest.py (shared fixtures)
     import pytest
     import numpy as np
-    from DaoLite import amd_epyc_7763
+    from daolite import amd_epyc_7763
     
     @pytest.fixture
     def cpu_resource():
@@ -176,14 +176,14 @@ For testing components that depend on external systems:
     import pytest
     from unittest.mock import MagicMock, patch
     
-    @patch('DaoLite.external_module.external_function')
+    @patch('daolite.external_module.external_function')
     def test_with_mock(mock_external):
         """Test with mocked external dependency."""
         # Configure the mock
         mock_external.return_value = 42
         
         # Test your function that calls the external dependency
-        from DaoLite.your_module import function_that_uses_external
+        from daolite.your_module import function_that_uses_external
         result = function_that_uses_external()
         
         # Assert the result and that the mock was called
@@ -255,7 +255,7 @@ If you need help with running tests or adding new tests, please:
 
 1. Check the existing test files for examples
 2. Review pytest documentation at https://docs.pytest.org/
-3. Ask for help in the DaoLITE GitHub repository by opening an issue
+3. Ask for help in the daolite GitHub repository by opening an issue
 
 Contributing Tests
 ------------------

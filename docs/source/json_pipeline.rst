@@ -6,12 +6,12 @@ JSON Pipeline Runner
 Overview
 --------
 
-The JSON Pipeline Runner allows you to define and execute DaoLITE AO pipelines using a JSON configuration file. This is useful for scripting, automation, and reproducible pipeline setups.
+The JSON Pipeline Runner allows you to define and execute daolite AO pipelines using a JSON configuration file. This is useful for scripting, automation, and reproducible pipeline setups.
 
 Features
 --------
 - Define pipeline components and connections in a JSON file
-- Map JSON component types to actual DaoLITE classes/functions
+- Map JSON component types to actual daolite classes/functions
 - Run pipelines from the command line
 - Supports all major pipeline component types (camera, centroider, calibration, reconstruction, control, network)
 
@@ -19,6 +19,12 @@ Usage
 -----
 
 To run a pipeline from a JSON file:
+
+.. code-block:: bash
+
+    daolite-pipeline-json path/to/pipeline.json
+
+or, if running from source:
 
 .. code-block:: bash
 

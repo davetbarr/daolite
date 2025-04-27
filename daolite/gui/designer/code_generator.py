@@ -1,5 +1,5 @@
 """
-Code generator for the DaoLITE pipeline designer.
+Code generator for the daolite pipeline designer.
 
 This module generates executable Python code from a visual pipeline design.
 """
@@ -17,7 +17,7 @@ class CodeGenerator:
 
     This class analyzes the component blocks and connections in a
     pipeline design and produces executable code that creates the
-    equivalent DaoLITE pipeline.
+    equivalent daolite pipeline.
     """
 
     def __init__(self, components: List[ComponentBlock]):

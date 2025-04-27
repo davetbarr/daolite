@@ -6,7 +6,7 @@ Compute Resources
 Overview
 --------
 
-The Compute Resources module in DaoLITE provides detailed models of various computing hardware to accurately estimate the performance of AO pipeline components. This module allows users to:
+The Compute Resources module in daolite provides detailed models of various computing hardware to accurately estimate the performance of AO pipeline components. This module allows users to:
 
 1. Define custom hardware specifications
 2. Use pre-defined hardware profiles
@@ -76,7 +76,7 @@ GPU resources are modeled with a simplified approach focusing on the key perform
 Pre-defined Hardware Library
 ----------------------------
 
-DaoLITE includes a comprehensive library of pre-defined hardware profiles for common CPUs and GPUs:
+daolite includes a comprehensive library of pre-defined hardware profiles for common CPUs and GPUs:
 
 CPU Profiles
 ~~~~~~~~~~~~
@@ -118,7 +118,7 @@ GPU Profiles
 Memory Model
 ------------
 
-The memory model in DaoLITE calculates effective bandwidth based on:
+The memory model in daolite calculates effective bandwidth based on:
 
 1. **Theoretical peak bandwidth**: Base calculation from hardware specs
    
@@ -154,7 +154,7 @@ The computation model estimates processing time based on:
 Multiple Resource Types
 -----------------------
 
-DaoLITE supports defining multiple resource types for different components:
+daolite supports defining multiple resource types for different components:
 
 .. code-block:: python
 

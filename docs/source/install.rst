@@ -3,12 +3,12 @@
 Installation
 =============
 
-DaoLITE (Durham Adaptive Optics Latency Inspection Tool Environment) provides tools to estimate computational latency in Adaptive Optics (AO) real-time control systems.
+daolite (Durham Adaptive Optics Latency Inspection Tool Environment) provides tools to estimate computational latency in Adaptive Optics (AO) real-time control systems.
 
 Requirements
 ------------
 
-DaoLITE requires the following dependencies:
+daolite requires the following dependencies:
 - Python 3.8 or higher
 - NumPy
 - Matplotlib
@@ -21,7 +21,7 @@ Installation Methods
 Standard Installation
 ~~~~~~~~~~~~~~~~~~~~~
 
-To install DaoLITE, run the following commands:
+To install daolite, run the following commands:
 
 .. code-block:: bash
 
@@ -31,7 +31,7 @@ To install DaoLITE, run the following commands:
 Development Installation
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-For development purposes, you can install DaoLITE in development mode:
+For development purposes, you can install daolite in development mode:
 
 .. code-block:: bash
 
@@ -42,7 +42,7 @@ This will install the package in development mode, allowing you to modify the so
 Verifying Installation
 ----------------------
 
-After installation, you can verify that DaoLITE is installed correctly by running:
+After installation, you can verify that daolite is installed correctly by running:
 
 .. code-block:: python
 
@@ -52,7 +52,7 @@ After installation, you can verify that DaoLITE is installed correctly by runnin
 Platform Support
 ----------------
 
-DaoLITE is compatible with:
+daolite is compatible with:
 - Linux (recommended for performance analysis)
 - macOS
 - Windows
@@ -60,7 +60,7 @@ DaoLITE is compatible with:
 GPU Support
 -----------
 
-While DaoLITE itself does not require a GPU to run, it can model performance of GPU-accelerated systems. The modeling capabilities support:
+While daolite itself does not require a GPU to run, it can model performance of GPU-accelerated systems. The modeling capabilities support:
 - NVIDIA GPUs
 - AMD GPUs
 - Intel GPUs

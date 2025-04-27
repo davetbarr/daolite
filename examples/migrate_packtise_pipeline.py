@@ -1,8 +1,8 @@
 """
-Migration example: Converting packtisePipeline.py to DaoLITE
+Migration example: Converting packtisePipeline.py to daolite
 
 This example demonstrates how to migrate the Performance Estimation CPU-based
-packtisePipeline to the new DaoLITE framework.
+packtisePipeline to the new daolite framework.
 """
 
 import numpy as np
@@ -11,7 +11,7 @@ import sys
 import re
 import matplotlib.pyplot as plt
 
-# DaoLITE imports - replaces the old imports
+# daolite imports - replaces the old imports
 from daolite import Pipeline, PipelineComponent, ComponentType
 from daolite.compute import create_compute_resources
 from daolite.simulation.camera import PCOCamLink
@@ -27,7 +27,7 @@ from daolite.utils.sh_utility import genSHSubApMap
 # Example 1: Direct migration using the old style API
 # This shows how to use the same API style as Performance Estimation
 def run_old_style_migration(config_file=None):
-    """Run a pipeline using the old style API but with DaoLITE classes"""
+    """Run a pipeline using the old style API but with daolite classes"""
     if config_file is None:
         config_file = "examples/ao_config.yaml"
 
@@ -99,7 +99,7 @@ def run_old_style_migration(config_file=None):
     mvmScale = data["computationScale"]["MVM"]
     controlScale = data["computationScale"]["Control"]
 
-    # Create pipeline steps - same API as old packtisePipeline.py but using DaoLITE classes
+    # Create pipeline steps - same API as old packtisePipeline.py but using daolite classes
     packetTrain = PCOCamLink(
         comp, nPixels, group=len(centroid_agenda), readout=readoutTime
     )
@@ -163,9 +163,9 @@ def run_old_style_migration(config_file=None):
     return fig, latency
 
 
-# Example 2: Modern DaoLITE approach using the Pipeline interface
+# Example 2: Modern daolite approach using the Pipeline interface
 def run_modern_pipeline(config_file=None):
-    """Run a pipeline using the new DaoLITE Pipeline interface"""
+    """Run a pipeline using the new daolite Pipeline interface"""
     if config_file is None:
         config_file = "examples/ao_config.yaml"
 

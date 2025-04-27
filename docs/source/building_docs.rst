@@ -3,7 +3,7 @@
 Building Documentation
 ======================
 
-This guide explains how to build the DaoLITE documentation locally and contribute to documentation improvements.
+This guide explains how to build the daolite documentation locally and contribute to documentation improvements.
 
 Prerequisites
 -------------
@@ -91,7 +91,7 @@ To add a new documentation page:
 Documenting Code for API Reference
 ----------------------------------
 
-DaoLITE uses autodoc to generate API documentation from docstrings. When writing docstrings, please follow these guidelines:
+daolite uses autodoc to generate API documentation from docstrings. When writing docstrings, please follow these guidelines:
 
 1. Use NumPy-style docstrings
 2. Document all parameters, return values, and exceptions
@@ -170,9 +170,9 @@ To include images:
     .. figure:: images/pipeline_diagram.png
         :width: 80%
         :align: center
-        :alt: DaoLITE Pipeline Diagram
+        :alt: daolite Pipeline Diagram
         
-        Diagram of the DaoLITE pipeline architecture.
+        Diagram of the daolite pipeline architecture.
 
 Documentation Testing
 ---------------------

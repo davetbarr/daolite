@@ -1,5 +1,5 @@
 """
-Hardware module for DaoLITE compute resources.
+Hardware module for daolite compute resources.
 
 This module provides predefined hardware configurations for various
 CPUs and GPUs, which can be used in latency estimation.

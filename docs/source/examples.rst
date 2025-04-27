@@ -3,7 +3,7 @@
 Examples
 ========
 
-The following example scripts are available in the ``examples/`` directory. Each demonstrates a specific feature or use case of DaoLITE. To run an example, use:
+The following example scripts are available in the ``examples/`` directory. Each demonstrates a specific feature or use case of daolite. To run an example, use:
 
 .. code-block:: bash
 
@@ -317,7 +317,7 @@ Shows a simple test/validation pattern for pipeline components.
 
 migrate_packtise_pipeline.py & migrate_packtise_pipeline_gpu.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Advanced examples for packetized processing and GPU-accelerated pipelines. These scripts show both legacy and modern DaoLITE approaches, including YAML config loading, packetization, and visualization.
+Advanced examples for packetized processing and GPU-accelerated pipelines. These scripts show both legacy and modern daolite approaches, including YAML config loading, packetization, and visualization.
 
 **Key code:**
 

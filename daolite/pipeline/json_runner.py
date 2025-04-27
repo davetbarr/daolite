@@ -101,7 +101,7 @@ def run_pipeline_from_json(json_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run a DaoLITE pipeline from a JSON file."
+        description="Run a daolite pipeline from a JSON file."
     )
     parser.add_argument("json_file", help="Path to the pipeline JSON file")
     args = parser.parse_args()

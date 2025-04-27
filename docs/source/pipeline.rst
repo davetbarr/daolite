@@ -8,7 +8,7 @@ Pipeline Architecture
 Overview
 --------
 
-The Pipeline Architecture is the core of DaoLITE, providing a flexible way to model complex Adaptive Optics processing chains. It allows you to define components, their dependencies, and compute resources to accurately model the timing behavior of real-world AO systems.
+The Pipeline Architecture is the core of daolite, providing a flexible way to model complex Adaptive Optics processing chains. It allows you to define components, their dependencies, and compute resources to accurately model the timing behavior of real-world AO systems.
 
 .. _pipeline_features:
 
@@ -26,7 +26,7 @@ Key Features
 Pipeline Concepts
 -----------------
 
-The DaoLITE pipeline is based on these fundamental concepts:
+The daolite pipeline is based on these fundamental concepts:
 
 .. _pipeline_components:
 
@@ -56,7 +56,7 @@ A pipeline is composed of individual components, each representing a specific pr
 Component Types
 ~~~~~~~~~~~~~~~
 
-DaoLITE defines standard component types for AO systems:
+daolite defines standard component types for AO systems:
 
 * ``ComponentType.CAMERA``: Camera readout and initial data acquisition
 * ``ComponentType.CALIBRATION``: Pixel calibration operations
@@ -296,7 +296,7 @@ Once a pipeline is defined, you can run it to calculate timing:
 Pipeline Visualization
 ~~~~~~~~~~~~~~~~~~~~~~
 
-DaoLITE provides built-in visualization tools for pipeline timing:
+daolite provides built-in visualization tools for pipeline timing:
 
 .. code-block:: python
 

@@ -6,7 +6,7 @@ Network and Data Transfer
 Overview
 --------
 
-The network and data transfer component in DaoLITE (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) models the latency associated with moving data between different hardware elements in adaptive optics systems. DaoLITE provides detailed timing models for various network technologies, PCIe transfers, and other data movement operations that significantly impact overall AO system latency.
+The network and data transfer component in daolite (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) models the latency associated with moving data between different hardware elements in adaptive optics systems. daolite provides detailed timing models for various network technologies, PCIe transfers, and other data movement operations that significantly impact overall AO system latency.
 
 Key Data Transfer Features
 --------------------------
@@ -79,7 +79,7 @@ Network components accept various parameters to customize their behavior:
 Available Transfer Models
 -------------------------
 
-DaoLITE provides timing models for the following data transfer methods:
+daolite provides timing models for the following data transfer methods:
 
 Ethernet Transfer
 ~~~~~~~~~~~~~~~~~
@@ -221,7 +221,7 @@ The latency and throughput of network and transfer operations depends on several
 Modeling Network Protocol Effects
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-DaoLITE accurately models how different protocols affect transfer performance:
+daolite accurately models how different protocols affect transfer performance:
 
 .. code-block:: python
 
@@ -265,7 +265,7 @@ DaoLITE accurately models how different protocols affect transfer performance:
 Scaling with Data Size
 ~~~~~~~~~~~~~~~~~~~~~~
 
-DaoLITE models how transfer performance scales with different data sizes:
+daolite models how transfer performance scales with different data sizes:
 
 .. code-block:: python
 
@@ -311,7 +311,7 @@ DaoLITE models how transfer performance scales with different data sizes:
 Customizing Network Models
 --------------------------
 
-DaoLITE allows you to create custom network transfer models with your own timing characteristics:
+daolite allows you to create custom network transfer models with your own timing characteristics:
 
 .. code-block:: python
 
@@ -384,7 +384,7 @@ DaoLITE allows you to create custom network transfer models with your own timing
 Optimizing Data Transfers
 -------------------------
 
-DaoLITE models various optimization techniques for data transfers:
+daolite models various optimization techniques for data transfers:
 
 Zero-Copy Transfers
 ~~~~~~~~~~~~~~~~~~~

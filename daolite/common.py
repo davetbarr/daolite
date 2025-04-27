@@ -1,6 +1,6 @@
 """
-Common definitions and base classes for DaoLite.
-This module contains base classes and enums that are used throughout the DaoLite package.
+Common definitions and base classes for daolite.
+This module contains base classes and enums that are used throughout the daolite package.
 Putting them here helps avoid circular imports.
 """
 

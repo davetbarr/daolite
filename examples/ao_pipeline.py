@@ -1,7 +1,7 @@
 """
-Example script demonstrating the DaoLITE pipeline for latency estimation.
+Example script demonstrating the daolite pipeline for latency estimation.
 
-This script shows how to use DaoLITE to model a complete AO pipeline,
+This script shows how to use daolite to model a complete AO pipeline,
 from camera readout to deformable mirror control, with timing visualization.
 """
 

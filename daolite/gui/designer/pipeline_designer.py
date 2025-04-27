@@ -1,5 +1,5 @@
 """
-Main application for the DaoLITE pipeline designer.
+Main application for the daolite pipeline designer.
 
 This module provides the main application window and functionality for
 the visual pipeline designer, with emphasis on network and multi-compute
@@ -438,7 +438,7 @@ class ResourceSelectionDialog(QDialog):
 
 class PipelineDesignerApp(QMainWindow):
     """
-    Main application window for the DaoLITE pipeline designer.
+    Main application window for the daolite pipeline designer.
 
     Provides a graphical interface for designing AO pipelines with emphasis on
     network and multi-compute node configurations.
@@ -447,7 +447,7 @@ class PipelineDesignerApp(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("DaoLITE Pipeline Designer")
+        self.setWindowTitle("daolite Pipeline Designer")
         self.resize(1200, 800)
 
         # Set up the scene and view
@@ -946,11 +946,11 @@ class PipelineDesignerApp(QMainWindow):
         """Show about dialog."""
         QMessageBox.about(
             self,
-            "About DaoLITE Pipeline Designer",
-            """<b>DaoLITE Pipeline Designer</b><br/><br/>
+            "About daolite Pipeline Designer",
+            """<b>daolite Pipeline Designer</b><br/><br/>
                A visual tool for designing AO pipelines with emphasis on 
                network and multi-compute node configurations.<br/><br/>
-               Part of the DaoLITE package for estimating latency in 
+               Part of the daolite package for estimating latency in 
                Adaptive Optics Real-time Control Systems.""",
         )
 

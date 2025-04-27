@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Example script demonstrating how to use custom hardware configurations with DaoLite.
+Example script demonstrating how to use custom hardware configurations with daolite.
 
 This script loads custom hardware configurations from YAML files and compares
 their performance characteristics for typical adaptive optics workloads.

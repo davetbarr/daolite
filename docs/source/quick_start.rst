@@ -3,12 +3,12 @@
 Quick Start Guide
 =================
 
-This guide will help you quickly get started with DaoLITE by walking through the basic steps of setting up and running an AO pipeline simulation.
+This guide will help you quickly get started with daolite by walking through the basic steps of setting up and running an AO pipeline simulation.
 
 Installation
 ------------
 
-If you haven't installed DaoLITE yet, refer to :ref:`installation` for detailed installation instructions. In short:
+If you haven't installed daolite yet, refer to :ref:`installation` for detailed installation instructions. In short:
 
 .. code-block:: bash
 
@@ -123,7 +123,7 @@ Key Concepts
 1. **Pipeline and Component Structure**
 ---------------------------------------
 
-The DaoLITE pipeline is composed of components that represent different processing steps in an adaptive optics system. Each component has:
+The daolite pipeline is composed of components that represent different processing steps in an adaptive optics system. Each component has:
 
 - A component type (e.g., CAMERA, CALIBRATION)
 - A name
@@ -135,7 +135,7 @@ The DaoLITE pipeline is composed of components that represent different processi
 2. **Compute Resources**
 ------------------------
 
-DaoLITE includes models for various CPUs and GPUs. You can use predefined resources or create custom ones:
+daolite includes models for various CPUs and GPUs. You can use predefined resources or create custom ones:
 
 .. code-block:: python
 

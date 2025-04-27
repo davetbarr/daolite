@@ -1,6 +1,6 @@
 class Component:
     """
-    Base component class for the DaoLITE pipeline.
+    Base component class for the daolite pipeline.
 
     This is the foundational class for all components in the adaptive optics
     processing pipeline. Components can be arranged in sequence to perform

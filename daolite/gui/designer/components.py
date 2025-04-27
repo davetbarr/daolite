@@ -1,5 +1,5 @@
 """
-Component classes for the DaoLITE pipeline designer.
+Component classes for the daolite pipeline designer.
 
 This module provides classes for representing AO pipeline components visually.
 """

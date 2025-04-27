@@ -1,4 +1,4 @@
-"""Setup configuration for DaoLITE package."""
+"""Setup configuration for daolite package."""
 
 from setuptools import setup, find_packages
 
@@ -34,8 +34,8 @@ setup(
     test_suite="tests",
     entry_points={
         'console_scripts': [
-            'pipeline_designer=daolite.gui.pipeline_designer:main',
-            'json_runner=daolite.pipeline.json_runner:main',
+            'daolite-pipeline-designer=daolite.gui.pipeline_designer:main',
+            'daolite-json-runner=daolite.pipeline.json_runner:main',
         ],
     },
 )

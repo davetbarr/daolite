@@ -3,7 +3,7 @@
 Control API Reference
 =====================
 
-This page documents the API for the control components in DaoLITE.
+This page documents the API for the control components in daolite.
 
 Control Module
 --------------

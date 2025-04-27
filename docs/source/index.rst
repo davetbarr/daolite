@@ -1,13 +1,13 @@
-.. DaoLITE documentation master file, created by
+.. daolite documentation master file, created by
    sphinx-quickstart on Mon Aug 19 11:36:33 2024.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to DaoLITE's documentation!
+Welcome to daolite's documentation!
 ===================================
 
-DaoLITE (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) is a Python package for
-modeling and simulating the performance of adaptive optics systems. DaoLITE provides detailed timing models
+daolite (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) is a Python package for
+modeling and simulating the performance of adaptive optics systems. daolite provides detailed timing models
 for various AO pipeline components, allowing users to understand and optimize the latency performance
 of real-time adaptive optics systems.
 
@@ -34,7 +34,6 @@ of real-time adaptive optics systems.
    reconstruction
    control
    network
-   gui
    pipeline_designer
    json_pipeline
 

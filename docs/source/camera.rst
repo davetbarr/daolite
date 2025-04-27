@@ -8,7 +8,7 @@ Camera Simulation
 Overview
 --------
 
-The camera simulation component in DaoLITE (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) models the behavior and timing of wavefront sensor cameras in adaptive optics systems. DaoLITE provides detailed timing models for various camera readout patterns, frame rates, and data transfer mechanisms to accurately estimate the initial latency component in AO systems.
+The camera simulation component in daolite (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) models the behavior and timing of wavefront sensor cameras in adaptive optics systems. daolite provides detailed timing models for various camera readout patterns, frame rates, and data transfer mechanisms to accurately estimate the initial latency component in AO systems.
 
 .. _camera_features:
 
@@ -90,7 +90,7 @@ Camera components accept various parameters to customize their behavior:
 Available Camera Models
 -----------------------
 
-DaoLITE provides timing models for the following camera readout methods:
+daolite provides timing models for the following camera readout methods:
 
 .. _global_shutter:
 
@@ -236,7 +236,7 @@ Models cameras reading out only a portion of the sensor:
 Flexible Camera Model
 ~~~~~~~~~~~~~~~~~~~~~
 
-For convenience, DaoLITE provides a combined camera function that can simulate various configurations:
+For convenience, daolite provides a combined camera function that can simulate various configurations:
 
 .. code-block:: python
 
@@ -282,7 +282,7 @@ The computational cost and latency of camera operations depends on several facto
 Modeling ROI and Binning Effects
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-DaoLITE accurately models how ROI and binning settings affect frame rate and latency:
+daolite accurately models how ROI and binning settings affect frame rate and latency:
 
 .. code-block:: python
 
@@ -310,7 +310,7 @@ DaoLITE accurately models how ROI and binning settings affect frame rate and lat
 Interface Timing Models
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-DaoLITE models various camera interfaces and their timing characteristics:
+daolite models various camera interfaces and their timing characteristics:
 
 .. code-block:: python
 
@@ -363,7 +363,7 @@ DaoLITE models various camera interfaces and their timing characteristics:
 Customizing Camera Models
 -------------------------
 
-DaoLITE allows you to create custom camera models with your own timing characteristics:
+daolite allows you to create custom camera models with your own timing characteristics:
 
 .. code-block:: python
 

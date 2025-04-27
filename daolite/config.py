@@ -51,7 +51,7 @@ class PipelineConfig:
 
 
 class Config:
-    """Base configuration class for DaoLite.
+    """Base configuration class for daolite.
 
     This class provides basic configuration functionality and serves as a
     factory for creating more specific configuration objects.

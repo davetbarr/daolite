@@ -6,7 +6,7 @@ Wavefront Reconstruction
 Overview
 --------
 
-The wavefront reconstruction component in DaoLITE (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) is responsible for converting wavefront slope measurements into commands for deformable mirrors. This is a critical computational step in adaptive optics systems, translating Shack-Hartmann wavefront sensor measurements into the shape required for the deformable mirror to correct wavefront aberrations.
+The wavefront reconstruction component in daolite (**D**\ urham **A**\ daptive **O**\ ptics **L**\ atency **I**\ nspection and **T**\ iming **E**\ stimator) is responsible for converting wavefront slope measurements into commands for deformable mirrors. This is a critical computational step in adaptive optics systems, translating Shack-Hartmann wavefront sensor measurements into the shape required for the deformable mirror to correct wavefront aberrations.
 
 Key Reconstruction Features
 ---------------------------
@@ -49,7 +49,7 @@ Adding a reconstructor to your AO pipeline:
 Reconstruction Algorithms
 -------------------------
 
-DaoLITE provides timing models for the Minimum Variance Reconstruction (MVR) method.
+daolite provides timing models for the Minimum Variance Reconstruction (MVR) method.
 
 Minimum Variance Reconstruction (MVR)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
