@@ -1,5 +1,6 @@
 import json
 import argparse
+import inspect
 from daolite import Pipeline, PipelineComponent, ComponentType
 from daolite.compute import create_compute_resources
 from daolite.simulation.camera import PCOCamLink, GigeVisionCamera, RollingShutterCamera
@@ -31,16 +32,28 @@ def run_pipeline_from_json(json_path):
         comp_type = ComponentType[comp["type"]]
         name = comp["name"]
         params = comp.get("params", {})
-        compute = create_compute_resources(
-            cores=16,
-            core_frequency=2.6e9,
-            flops_per_cycle=32,
-            memory_frequency=3.2e9,
-            memory_width=64,
-            memory_channels=8,
-            network_speed=100e9,
-            time_in_driver=5.0,
-        )
+        compute = None
+        if "compute" in comp:
+            from daolite.compute.base_resources import ComputeResources
+            # Only use fields that are valid for ComputeResources
+            valid_fields = {
+                'hardware', 'memory_bandwidth', 'flops', 'network_speed', 'time_in_driver',
+                'core_fudge', 'mem_fudge', 'network_fudge', 'adjust', 'cores', 'core_frequency',
+                'flops_per_cycle', 'memory_frequency', 'memory_width', 'memory_channels'
+            }
+            compute_dict = {k: v for k, v in comp["compute"].items() if k in valid_fields}
+            compute = ComputeResources.from_dict(compute_dict)
+        else:
+            compute = create_compute_resources(
+                cores=16,
+                core_frequency=2.6e9,
+                flops_per_cycle=32,
+                memory_frequency=3.2e9,
+                memory_width=64,
+                memory_channels=8,
+                network_speed=100e9,
+                time_in_driver=5.0,
+            )
         func_name = (
             params.get("camera_function", None)
             if comp_type == ComponentType.CAMERA
@@ -60,12 +73,15 @@ def run_pipeline_from_json(json_path):
             raise TypeError(
                 f"Function '{func_name}' not found for component '{name}' of type '{comp_type.name}'"
             )
+        # Filter params to only those accepted by the function
+        sig = inspect.signature(function)
+        filtered_params = {k: v for k, v in params.items() if k in sig.parameters}
         pipeline_comp = PipelineComponent(
             component_type=comp_type,
             name=name,
             compute=compute,
             function=function,
-            params=params,
+            params=filtered_params,
             dependencies=[],
         )
         pipeline.add_component(pipeline_comp)

@@ -41,6 +41,15 @@ class ComputeResources:
     def total_time(self, memory_size, n_flops) -> float:
         return self.calc_time(n_flops) + self.load_time(memory_size)
 
+    def to_dict(self):
+        """Serialize compute resource to a dictionary."""
+        return self.__dict__
+
+    @staticmethod
+    def from_dict(data):
+        """Deserialize compute resource from a dictionary."""
+        return ComputeResources(**data)
+
 def create_compute_resources(
     cores,
     core_frequency,

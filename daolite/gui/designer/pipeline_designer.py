@@ -789,17 +789,24 @@ class PipelineDesignerApp(QMainWindow):
 
             data = {"components": [], "connections": []}
             for comp in self._get_all_components():
-                data["components"].append(
-                    {
-                        "type": comp.component_type.name,
-                        "name": comp.name,
-                        "pos": (comp.pos().x(), comp.pos().y()),
-                        "params": comp.params,
-                    }
-                )
+                comp_data = {
+                    "type": comp.component_type.name,
+                    "name": comp.name,
+                    "pos": (comp.pos().x(), comp.pos().y()),
+                    "params": comp.params,
+                }
+                if comp.compute is not None:
+                    compute_dict = comp.compute.to_dict().copy()
+                    if "name" in compute_dict:
+                        del compute_dict["name"]
+                    comp_data["compute"] = compute_dict
+                data["components"].append(comp_data)
             for conn in self.scene.connections:
                 data["connections"].append(
-                    {"start": conn.start_block.name, "end": conn.end_block.name}
+                    {
+                        "start": conn.start_block.name,
+                        "end": conn.end_block.name,
+                    }
                 )
             with open(filename, "w") as f:
                 json.dump(data, f, indent=2)
@@ -827,6 +834,11 @@ class PipelineDesignerApp(QMainWindow):
                 block = ComponentBlock(comp_type, comp_data["name"])
                 block.setPos(*comp_data["pos"])
                 block.params = comp_data.get("params", {})
+                # Restore compute resource if present
+                compute_dict = comp_data.get("compute")
+                if compute_dict is not None:
+                    from daolite.compute.base_resources import ComputeResources
+                    block.compute = ComputeResources.from_dict(compute_dict)
                 self.scene.addItem(block)
                 name_to_block[block.name] = block
                 self.component_counts[comp_type] += 1
