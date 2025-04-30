@@ -220,3 +220,61 @@ def PCIE(
         timings[i, 1] = timings[i, 0] + total_time
 
     return timings
+
+
+def CameraDataTransfer(
+    compute_resources: ComputeResources,
+    pixel_availability_timings: np.ndarray,
+    n_pixels: int,
+    bits_per_pixel: int = 16,
+    debug: bool = False,
+) -> np.ndarray:
+    """
+    Calculate network transfer timing for camera data based on pixel availability.
+
+    This function takes the pixel availability timing from the camera and calculates
+    when those pixels will be transferred over the network.
+
+    Args:
+        compute_resources: ComputeResources instance
+        pixel_availability_timings: Array from camera with pixel availability times
+        n_pixels: Total number of pixels to transfer
+        bits_per_pixel: Number of bits per pixel (default: 16 for 16-bit pixels)
+        debug: Enable debug output
+
+    Returns:
+        np.ndarray: Array of shape (groups, 2) with network transfer start/end times
+    """
+    group = len(pixel_availability_timings)
+    pixels_per_group = n_pixels // group + 1
+    bits_per_group = pixels_per_group * bits_per_pixel
+    
+    # Calculate network transfer time for each group
+    transfer_time = compute_resources.network_time(bits_per_group)
+    
+    # Create timing array for network transfers
+    network_timings = np.zeros_like(pixel_availability_timings)
+    
+    # First group starts transfer as soon as pixels are available
+    network_timings[0, 0] = pixel_availability_timings[0, 1]
+    network_timings[0, 1] = network_timings[0, 0] + transfer_time
+    
+    # Subsequent groups start transfer when previous transfer ends AND pixels are available
+    for i in range(1, group):
+        # Start when both previous transfer is complete AND pixels are available
+        network_timings[i, 0] = max(network_timings[i-1, 1], pixel_availability_timings[i, 1])
+        network_timings[i, 1] = network_timings[i, 0] + transfer_time
+    
+    if debug:
+        print("\n*************Camera Data Network Transfer************")
+        print(f"Total pixels: {n_pixels}")
+        print(f"Pixels per group: {pixels_per_group}")
+        print(f"Bits per group: {bits_per_group}")
+        print(f"Transfer time per group: {transfer_time:.2f} μs")
+        print(f"Total transfer time: {network_timings[-1, 1] - network_timings[0, 0]:.2f} μs")
+        print(f"First group available: {pixel_availability_timings[0, 1]:.2f} μs")
+        print(f"First group transfer start: {network_timings[0, 0]:.2f} μs")
+        print(f"Last group available: {pixel_availability_timings[-1, 1]:.2f} μs")
+        print(f"Last group transfer end: {network_timings[-1, 1]:.2f} μs")
+    
+    return network_timings

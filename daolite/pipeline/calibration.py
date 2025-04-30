@@ -20,11 +20,11 @@ def _calibration_flops(n_pixels: int) -> int:
     Returns:
         int: Number of floating point operations
     """
-    # Operations: dark subtraction, flat field division, bad pixel handling
-    return 3 * n_pixels
+    # Operations: dark subtraction, flat field division
+    return 2 * n_pixels
 
 
-def _calibration_mem(n_pixels: int) -> int:
+def _calibration_mem(n_pixels: int, bit_depth: int) -> int:
     """
     Calculate memory operations for pixel calibration.
 
@@ -32,16 +32,18 @@ def _calibration_mem(n_pixels: int) -> int:
         n_pixels: Number of pixels to calibrate
 
     Returns:
-        int: Number of memory operations in bytes
+        int: Number of memory operations in bits
     """
     # Read pixel, read dark, read flat, write calibrated pixel
-    return 4 * n_pixels
+    return  bit_depth*n_pixels + 3*n_pixels*32
 
 
 def PixelCalibration(
     n_pixels: int,
     compute_resources: ComputeResources,
     start_times: np.ndarray,
+    n_workers: int = 1,
+    bitdepth: int = 16,
     group: Optional[int] = None,
     scale: float = 1.0,
     debug: bool = False,
@@ -53,6 +55,8 @@ def PixelCalibration(
         n_pixels: Total number of pixels to calibrate
         compute_resources: ComputeResources instance
         start_times: Array of shape (rows, 2) with start/end times from camera
+        n_workers: Number of workers (default: 1)
+        bitdepth: Bit depth of the pixel data (default: 16)
         group: Number of groups to process (default: use start_times length)
         scale: Computational scaling factor (default: 1.0)
         debug: Enable debug output
@@ -68,7 +72,7 @@ def PixelCalibration(
 
     # Calculate FLOPS and memory operations per group
     flops_per_group = _calibration_flops(pixels_per_group)
-    mem_ops_per_group = _calibration_mem(pixels_per_group)
+    mem_ops_per_group = _calibration_mem(pixels_per_group, bitdepth)
 
     # Calculate computation time per group
     computation_time = (

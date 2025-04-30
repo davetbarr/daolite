@@ -6,7 +6,7 @@ import regex as re
 class ComputeResources:
     # ...existing fields and methods from compute_resources.py...
     hardware: str = "CPU"
-    memory_bandwidth: float = 32e9  # 32 GB/s
+    memory_bandwidth: float = 32e9 * 8  # 32 GB/s (converted to bits/s internally)
     flops: float = 2.4e9  # 2.4 GFLOPS
     network_speed: float = 10e9  # 10 Gbps
     time_in_driver: float = 5.0  # microseconds
@@ -22,12 +22,20 @@ class ComputeResources:
     memory_channels: int = 4
 
     def get_memory_bandwidth(self) -> float:
+        """
+        Returns memory bandwidth in bits/sec (internal unit).
+        """
         return self.memory_bandwidth * self.mem_fudge
 
     def get_flops(self) -> float:
         return self.flops * self.core_fudge
 
     def load_time(self, memory_size) -> float:
+        """
+        memory_size: in bits
+        memory_bandwidth: in bits/sec
+        Returns time in microseconds.
+        """
         return (memory_size / self.get_memory_bandwidth()) * self.adjust
 
     def network_time(self, data_size) -> float:
@@ -62,13 +70,13 @@ def create_compute_resources(
     hardware="CPU",
     **kwargs,
 ):
-    memory_bandwidth = (
-        memory_frequency * memory_width * memory_channels / 8
-    )
+    # Manufacturer spec is bytes/sec, convert to bits/sec for internal use
+    memory_bandwidth_bytes = memory_frequency * memory_width * memory_channels / 8
+    memory_bandwidth_bits = memory_bandwidth_bytes * 8
     flops = cores * core_frequency * flops_per_cycle
     return ComputeResources(
         hardware=hardware,
-        memory_bandwidth=memory_bandwidth,
+        memory_bandwidth=memory_bandwidth_bits,  # store as bits/sec
         flops=flops,
         network_speed=network_speed,
         time_in_driver=time_in_driver,
@@ -84,9 +92,11 @@ def create_compute_resources(
 def create_gpu_resource(
     flops, memory_bandwidth, network_speed=100e9, time_in_driver=8.0, **kwargs
 ):
+    # Assume memory_bandwidth is given in bytes/sec, convert to bits/sec
+    memory_bandwidth_bits = memory_bandwidth * 8
     return ComputeResources(
         hardware="GPU",
-        memory_bandwidth=memory_bandwidth,
+        memory_bandwidth=memory_bandwidth_bits,
         flops=flops,
         network_speed=network_speed,
         time_in_driver=time_in_driver,

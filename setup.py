@@ -16,7 +16,7 @@ setup(
     description="A Python package for estimating latency in Adaptive Optics Real-time Control Systems",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/dbarr/daolite",
+    url="https://github.com/davetbarr/daolite",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",
