@@ -26,8 +26,9 @@ from PyQt5.QtWidgets import (
     QDialog,
     QFormLayout,
     QLineEdit,
+    QGraphicsItem,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QPainter, QPen
 
 from daolite.common import ComponentType
@@ -45,7 +46,7 @@ from daolite.compute.hardware import (
 )
 from daolite.config import SystemConfig, CameraConfig, OpticsConfig, PipelineConfig
 
-from .components import ComponentBlock
+from .components import ComponentBlock, ComputeBox, GPUBox
 from .connection import Connection
 from .code_generator import CodeGenerator
 from .parameter_dialog import ComponentParametersDialog
@@ -74,6 +75,12 @@ class PipelineScene(QGraphicsScene):
         self.click_connect_mode = False
         self.selected_port = None
         self.selected_block = None
+
+    def dragMoveEvent(self, event):
+        event.accept()
+
+    def dropEvent(self, event):
+        event.accept()
 
     def mousePressEvent(self, event):
         """Handle mouse press events for connection creation."""
@@ -150,14 +157,137 @@ class PipelineScene(QGraphicsScene):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        """Handle mouse move events for connection creation."""
+        """Handle mouse move events for connection creation and live box highlight."""
+        # Live highlight for ComputeBox/GPUBox when moving a ComponentBlock
+        selected = self.selectedItems()
+        moving_block = None
+        if len(selected) == 1 and isinstance(selected[0], ComponentBlock):
+            moving_block = selected[0]
+        if moving_block and moving_block.isUnderMouse():
+            # Get the block bounding rect in scene coordinates
+            block_rect = moving_block.sceneBoundingRect()
+            highlight_box = None
+            
+            # Check all items that might be under the block
+            for item in self.items():
+                if isinstance(item, (ComputeBox, GPUBox)) and item is not moving_block:
+                    # Check if the block significantly overlaps with the container
+                    container_rect = item.sceneBoundingRect()
+                    intersection = block_rect.intersected(container_rect)
+                    
+                    # If the intersection area is more than 30% of the block area,
+                    # consider it a potential parent
+                    if (intersection.width() * intersection.height()) > 0.3 * (block_rect.width() * block_rect.height()):
+                        highlight_box = item
+                        break
+            
+            # Highlight the potential parent container
+            for item in self.items():
+                if hasattr(item, 'set_highlight'):
+                    item.set_highlight(item is highlight_box)
+        else:
+            for item in self.items():
+                if hasattr(item, 'set_highlight'):
+                    item.set_highlight(False)
+                    
+        # Update the end point of the current connection
         if self.current_connection:
-            # Update the end point of the current connection
             self.current_connection.set_temp_end_point(event.scenePos())
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        """Handle mouse release events for connection completion."""
+        """Handle mouse release events for connection completion and grouping."""
+        # Grouping logic: after moving a ComponentBlock, set parent if over a box
+        selected = self.selectedItems()
+        if len(selected) == 1 and isinstance(selected[0], ComponentBlock):
+            block = selected[0]
+            # Store the original scene position before any parent changes
+            orig_scene_pos = block.scenePos()
+            
+            # Get the block's scene bounding rectangle
+            block_scene_rect = block.sceneBoundingRect()
+            
+            # Find the best candidate container (computer box or GPU)
+            parent_box = None
+            max_overlap_area = 0
+            
+            for item in self.items():
+                if isinstance(item, (ComputeBox, GPUBox)) and item is not block:
+                    container_rect = item.sceneBoundingRect()
+                    intersection = block_scene_rect.intersected(container_rect)
+                    overlap_area = intersection.width() * intersection.height()
+                    
+                    # If there's meaningful overlap, consider this container
+                    if overlap_area > max_overlap_area:
+                        max_overlap_area = overlap_area
+                        parent_box = item
+            
+            # Only consider it a drop into container if at least 25% of the component overlaps
+            block_area = block_scene_rect.width() * block_scene_rect.height()
+            if parent_box and max_overlap_area > (0.25 * block_area):
+                # Convert position to parent coordinates
+                local_pos = parent_box.mapFromScene(block.scenePos())
+                block.setParentItem(parent_box)
+                block.setPos(local_pos)
+                # Assign compute resource
+                if hasattr(parent_box, 'compute'):
+                    block.compute = parent_box.compute
+                elif hasattr(parent_box, 'gpu_resource'):
+                    block.compute = parent_box.gpu_resource
+                if hasattr(parent_box, 'child_items') and block not in parent_box.child_items:
+                    parent_box.child_items.append(block)
+                
+                # Only adjust position if the component is outside the container bounds
+                # or overlapping with other components
+                is_outside = False
+                box_rect = QRectF(0, 0, parent_box.size.width(), parent_box.size.height())
+                block_rect = block.boundingRect()
+                block_pos_rect = QRectF(block.pos().x(), block.pos().y(), 
+                                        block_rect.width(), block_rect.height())
+                
+                # Check if block is outside parent bounds
+                if not box_rect.contains(block_pos_rect):
+                    is_outside = True
+                
+                # Check for overlaps with siblings
+                is_overlapping = False
+                for sibling in parent_box.childItems():
+                    if sibling is not block and isinstance(sibling, ComponentBlock):
+                        sibling_rect = QRectF(sibling.pos().x(), sibling.pos().y(),
+                                            sibling.boundingRect().width(), 
+                                            sibling.boundingRect().height())
+                        if block_pos_rect.intersects(sibling_rect):
+                            is_overlapping = True
+                            break
+                
+                # Only adjust position if necessary
+                if is_outside or is_overlapping:
+                    if hasattr(parent_box, 'snap_child_fully_inside'):
+                        parent_box.snap_child_fully_inside(block)
+            else:
+                # We're moving to no parent (dragging out of a container)
+                # Preserve the exact scene position
+                old_parent = block.parentItem()
+                if old_parent:
+                    block.setParentItem(None)
+                    block.setPos(orig_scene_pos)
+                    # Remove from previous parent's child_items list if applicable
+                    if hasattr(old_parent, 'child_items') and block in old_parent.child_items:
+                        old_parent.child_items.remove(block)
+                    
+                    # Reset block compute resource if it came from the parent
+                    if hasattr(old_parent, 'compute') and block.compute is old_parent.compute:
+                        # Reset to a default based on component type
+                        app = self.parent()
+                        if app and hasattr(app, '_get_default_compute_for_type'):
+                            block.compute = app._get_default_compute_for_type(block.component_type)
+                        
+            # Remove all highlights
+            for item in self.items():
+                if hasattr(item, 'set_highlight'):
+                    item.set_highlight(False)
+        
+        # Connection completion logic
         if self.current_connection and event.button() == Qt.LeftButton:
             pos = event.scenePos()
             item = self.itemAt(pos, self.views()[0].transform())
@@ -255,15 +385,27 @@ class PipelineScene(QGraphicsScene):
         super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event):
-        """Handle key press events for deleting connections."""
+        """Handle key press events for deleting items and zooming."""
         if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
             for item in self.selectedItems():
+                # Delete connections
                 if isinstance(item, Connection):
                     item.disconnect()
                     if item in self.connections:
                         self.connections.remove(item)
                     self.removeItem(item)
+                # Delete components
+                elif hasattr(item, '_on_delete'):
+                    item._on_delete()
             self.update()
+        elif event.key() in (Qt.Key_Plus, Qt.Key_Equal):
+            # Zoom in
+            for view in self.views():
+                view.scale(1.2, 1.2)
+        elif event.key() in (Qt.Key_Minus, Qt.Key_Underscore):
+            # Zoom out
+            for view in self.views():
+                view.scale(0.8, 0.8)
         else:
             super().keyPressEvent(event)
 
@@ -482,6 +624,22 @@ class PipelineDesignerApp(QMainWindow):
         self.toolbar = QToolBar("Components")
         self.addToolBar(Qt.LeftToolBarArea, self.toolbar)
 
+        # === Compute Section ===
+        compute_label = QLabel("<b>Compute/Hardware</b>")
+        self.toolbar.addWidget(compute_label)
+
+        add_computer_btn = QPushButton("Add Computer")
+        add_computer_btn.clicked.connect(self._add_compute_box)
+        add_computer_btn.setToolTip("Add a compute box (computer node) to the scene")
+        self.toolbar.addWidget(add_computer_btn)
+
+        add_gpu_btn = QPushButton("Add GPU to Computer")
+        add_gpu_btn.clicked.connect(self._add_gpu_box)
+        add_gpu_btn.setToolTip("Add a GPU block inside a selected computer")
+        self.toolbar.addWidget(add_gpu_btn)
+
+        self.toolbar.addSeparator()
+
         # Add buttons for each component type
         camera_btn = QPushButton("Camera")
         camera_btn.clicked.connect(lambda: self._add_component(ComponentType.CAMERA))
@@ -547,6 +705,47 @@ class PipelineDesignerApp(QMainWindow):
         params_btn.clicked.connect(self._configure_params)
         params_btn.setToolTip("Configure parameters for selected component")
         self.toolbar.addWidget(params_btn)
+
+    def _add_compute_box(self):
+        """Add a ComputeBox (computer node) to the scene."""
+        name, ok = QInputDialog.getText(self, "Add Computer", "Enter computer name:", text="Computer")
+        if not ok or not name:
+            return
+        # Prompt for compute resource
+        dlg = ResourceSelectionDialog(self)
+        compute_resource = None
+        if dlg.exec_():
+            compute_resource = dlg.get_selected_resource()
+        compute_box = ComputeBox(name, compute=compute_resource)
+        view_center = self.view.mapToScene(self.view.viewport().rect().center())
+        compute_box.setPos(view_center.x() - 160, view_center.y() - 110)
+        self.scene.addItem(compute_box)
+
+    def _add_gpu_box(self):
+        """Add a GPUBox inside a selected ComputeBox."""
+        # Find selected ComputeBox
+        selected = self.scene.selectedItems()
+        compute_box = None
+        for item in selected:
+            if isinstance(item, ComputeBox):
+                compute_box = item
+                break
+        if not compute_box:
+            QMessageBox.information(self, "No Computer Selected", "Please select a computer box to add a GPU to.")
+            return
+        name, ok = QInputDialog.getText(self, "Add GPU", "Enter GPU name:", text="GPU")
+        if not ok or not name:
+            return
+        # Prompt for GPU resource
+        dlg = ResourceSelectionDialog(self)
+        gpu_resource = None
+        if dlg.exec_():
+            gpu_resource = dlg.get_selected_resource()
+        gpu_box = GPUBox(name, gpu_resource=gpu_resource)
+        # Place GPUBox at a default offset inside the ComputeBox
+        gpu_box.setPos(30, 60 + 40 * len(compute_box.child_items))
+        compute_box.add_child(gpu_box)
+        self.scene.addItem(gpu_box)
 
     def _create_menu(self):
         """Create application menu."""

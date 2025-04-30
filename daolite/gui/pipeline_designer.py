@@ -1,9 +1,4 @@
-from daolite.gui.designer import PipelineDesignerApp
-
-
-def main():
-    PipelineDesignerApp.run()
-
+from daolite.gui.designer.pipeline_designer import PipelineDesignerApp
 
 if __name__ == "__main__":
-    main()
+    PipelineDesignerApp.run()

@@ -58,14 +58,14 @@ class Connection(QGraphicsPathItem):
         """Update the connection path between source and destination ports."""
         path = QPainterPath()
 
-        # Get start point
+        # Get start point - use get_scene_position which handles parent-child nesting
         if self.start_port:
             start_pos = self.start_port.get_scene_position()
         else:
             # Default start point if we don't have a port yet
             start_pos = QPointF(0, 0)
 
-        # Get end point
+        # Get end point - use get_scene_position which handles parent-child nesting
         if self.end_port:
             end_pos = self.end_port.get_scene_position()
         elif self.temp_end_point:
