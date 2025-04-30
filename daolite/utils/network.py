@@ -30,6 +30,131 @@ def TimeOnNetwork(
     return time
 
 
+def network_transfer(
+    n_bits: int, compute_resources: ComputeResources, debug: bool = False,
+    use_dest_network: bool = False, dest_network_speed: float = None,
+    dest_time_in_driver: float = None, start_times=None, group=None, **kwargs
+) -> np.ndarray:
+    """
+    Calculate time spent on network transfer.
+
+    Args:
+        n_bits: Number of bits to transfer
+        compute_resources: ComputeResources instance 
+        debug: Enable debug output
+        use_dest_network: If True, use destination network speed (for camera connections)
+        dest_network_speed: Network speed of destination compute (for camera connections)
+        dest_time_in_driver: Time in driver of destination compute (for camera connections)
+        start_times: Array of start/end times from source component (for timing propagation)
+        group: Number of groups to process (used with start_times)
+        **kwargs: Additional parameters
+
+    Returns:
+        float or np.ndarray: Network transfer time in microseconds or array of transfer timings
+    """
+    # Check if we're dealing with a camera or other component that passes timing data
+    if start_times is not None and isinstance(start_times, np.ndarray) and len(start_times.shape) == 2:
+        # We're propagating timing data through the network
+        if group is None:
+            group = len(start_times)
+        
+        # Calculate bits per group
+        bits_per_group = n_bits // group
+        
+        # Determine which network speed to use
+        if use_dest_network and dest_network_speed is not None:
+            network_speed = dest_network_speed
+            driver_overhead = dest_time_in_driver if dest_time_in_driver is not None else 5.0
+        else:
+            network_speed = compute_resources.network_speed
+            driver_overhead = compute_resources.time_in_driver
+            
+        # Calculate transfer time per group
+        transfer_time = (bits_per_group / network_speed) * 1e6  # Convert to microseconds
+        total_time_per_group = transfer_time + (driver_overhead * 2)  # Driver overhead at both ends
+        
+        # Create timing array for network transfers
+        network_timings = np.zeros_like(start_times)
+        
+        # First group starts transfer as soon as source data is available
+        network_timings[0, 0] = start_times[0, 1]  # Start when source data is ready
+        network_timings[0, 1] = network_timings[0, 0] + total_time_per_group
+        
+        # Subsequent groups start when previous transfer ends AND source data is available
+        for i in range(1, len(start_times)):
+            # Start when both previous transfer is complete AND source data is available
+            network_timings[i, 0] = max(network_timings[i-1, 1], start_times[i, 1])
+            network_timings[i, 1] = network_timings[i, 0] + total_time_per_group
+        
+        if debug:
+            print(f"Camera network transfer for {n_bits/8:.2f} bytes: {total_time_per_group:.2f} µs per group")
+            print(f"  - Pure transfer: {transfer_time:.2f} µs at {network_speed/1e9:.1f} Gbps")
+            print(f"  - Driver overhead: {(total_time_per_group-transfer_time):.2f} µs")
+            print(f"  - Total time across all groups: {network_timings[-1, 1] - network_timings[0, 0]:.2f} µs")
+        
+        return network_timings
+    
+    # SPECIAL CASE: For camera components without timing data, we use the destination compute's network speed
+    elif use_dest_network and dest_network_speed is not None:
+        # Calculate transfer time based on bits and network speed
+        transfer_time = (n_bits / dest_network_speed) * 1e6  # Convert to microseconds
+        
+        # Add driver overhead if specified
+        if dest_time_in_driver is not None:
+            total_time = transfer_time + (dest_time_in_driver * 2)  # Driver overhead at both ends
+        else:
+            total_time = transfer_time + 10.0  # Default 10µs overhead
+            
+        if debug:
+            print(f"Camera network transfer for {n_bits/8:.2f} bytes: {total_time:.2f} µs")
+            print(f"  - Pure transfer: {transfer_time:.2f} µs at {dest_network_speed/1e9:.1f} Gbps")
+            print(f"  - Driver overhead: {(total_time-transfer_time):.2f} µs")
+        return total_time
+    
+    # Standard case: use the compute_resources of the source component
+    time = compute_resources.network_time(n_bits)
+    if debug:
+        print(f"Network transfer for {n_bits/8:.2f} bytes: {time:.2f} µs")
+    return time
+
+
+def pcie_transfer(
+    n_bits: int, compute_resources: ComputeResources, debug: bool = False
+) -> float:
+    """
+    Calculate time spent on PCIe transfer between CPU and GPU.
+
+    Args:
+        n_bits: Number of bits to transfer
+        compute_resources: ComputeResources instance
+        debug: Enable debug output
+
+    Returns:
+        float: PCIe transfer time in microseconds
+    """
+    # For PCIe transfers, we assume:
+    # 1. A basic driver overhead for initiating the transfer
+    # 2. The actual transfer time based on PCIe bandwidth
+    # 3. An additional overhead for completion
+    
+    # Default to PCIe Gen4 x16 if compute_resources doesn't specify
+    pcie_gen = getattr(compute_resources, 'pcie_gen', 4)
+    
+    # Calculate the transfer time using the pcie_bus function
+    transfer_time = pcie_bus(n_bits, gen=pcie_gen, debug=False) * 1e6  # Convert to µs
+    
+    # Add driver overhead
+    driver_overhead = getattr(compute_resources, 'time_in_driver', 5.0)  # µs
+    total_time = transfer_time + driver_overhead * 2  # Overhead at both ends
+    
+    if debug:
+        print(f"PCIe transfer for {n_bits/8:.2f} bytes: {total_time:.2f} µs")
+        print(f"  - Pure transfer: {transfer_time:.2f} µs")
+        print(f"  - Driver overhead: {driver_overhead * 2:.2f} µs")
+    
+    return total_time
+
+
 def calculate_memory_bandwidth(
     memory_speed_mts: float = 4800, bus_width_bits: int = 64
 ) -> float:

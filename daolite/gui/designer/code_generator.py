@@ -4,7 +4,7 @@ Code generator for the daolite pipeline designer.
 This module generates executable Python code from a visual pipeline design.
 """
 
-from typing import List
+from typing import List, Dict, Tuple, Optional
 
 from daolite.common import ComponentType
 from .components import ComponentBlock
@@ -34,6 +34,10 @@ class CodeGenerator:
                 "from daolite import Pipeline, PipelineComponent, ComponentType",
             ]
         )
+        
+        # Add transfer components between components on different resources
+        self.generated_transfer_components = []
+        self._add_transfer_components()
 
     def generate_code(self) -> str:
         """
@@ -81,13 +85,19 @@ class CodeGenerator:
         self.import_statements.add(
             "from daolite.compute import create_compute_resources"
         )
-
+        
+        # ALWAYS add hardware import - it's required for standard compute resources
+        self.import_statements.add(
+            "from daolite.compute import hardware"
+        )
+        
         # Track which camera functions are used
         used_camera_funcs = set()
         for component in self.components:
             if component.component_type == ComponentType.CAMERA:
                 camera_func = component.params.get("camera_function", "PCOCamLink")
                 used_camera_funcs.add(camera_func)
+                
         if used_camera_funcs:
             cam_imports = ", ".join(sorted(used_camera_funcs))
             self.import_statements.add(
@@ -128,22 +138,6 @@ class CodeGenerator:
             elif component.component_type == ComponentType.NETWORK:
                 has_network = True
 
-            # Check for compute resources
-            if component.compute:
-                compute_class = component.compute.__class__.__name__
-                if "nvidia" in compute_class.lower() or "amd" in compute_class.lower():
-                    for resource_name in [
-                        "amd_epyc_7763",
-                        "amd_epyc_9654",
-                        "nvidia_a100_80gb",
-                        "nvidia_h100_80gb",
-                        "nvidia_rtx_4090",
-                    ]:
-                        if resource_name in compute_class.lower():
-                            self.import_statements.add(
-                                f"from daolite import {resource_name}"
-                            )
-
         # For visualization
         self.import_statements.add("import matplotlib.pyplot as plt")
 
@@ -179,6 +173,10 @@ class CodeGenerator:
             str: Python code for adding this component to the pipeline
         """
         lines = []
+
+        # Skip generating code for synthetic components that aren't meant to be in the output
+        if hasattr(component, '_is_synthetic') and component._is_synthetic:
+            return ""
 
         # Add comment
         lines.append(
@@ -227,7 +225,7 @@ class CodeGenerator:
             lines.extend([f"    {param_line}" for param_line in param_lines])
 
         # Add dependencies
-        dependencies = component.get_dependencies()
+        dependencies = self._get_component_dependencies(component)
         if dependencies:
             deps_str = ", ".join([f'"{dep}"' for dep in dependencies])
             lines.append(f"    dependencies=[{deps_str}]")
@@ -252,7 +250,15 @@ class CodeGenerator:
         elif component.component_type == ComponentType.CALIBRATION:
             return "PixelCalibration"
         elif component.component_type == ComponentType.NETWORK:
-            return "TimeOnNetwork"  # Use TimeOnNetwork for network components
+            # Check if this is an auto-generated transfer component
+            if hasattr(component, 'params') and 'transfer_type' in component.params:
+                transfer_type = component.params['transfer_type'].lower()
+                if transfer_type == 'pcie':
+                    return "pcie_transfer"
+                elif transfer_type == 'network':
+                    return "network_transfer"
+            # Default to TimeOnNetwork for user-created network components
+            return "TimeOnNetwork"
         else:
             return "unknown_function"  # Default
 
@@ -348,9 +354,42 @@ class CodeGenerator:
             lines.append('    "n_pixels": 1024 * 1024,  # 1MP camera')
             lines.append('    "group": 50  # Default packet count')
         elif component.component_type == ComponentType.NETWORK:
-            lines.append('    "n_bits": 5000 * 32,  # 32 bits per actuator')
+            # Check if it's a network transfer between camera and calibration
+            # to properly handle timing array propagation
+            is_camera_calibration_transfer = False
+            if hasattr(component, '_dependencies') and len(component._dependencies) > 0:
+                # Check if this network component depends on a camera
+                src_name = component._dependencies[0]
+                src_comp = next((c for c in self.components if c.name == src_name), None)
+                if src_comp and src_comp.component_type == ComponentType.CAMERA:
+                    # Also check if destination is a calibration component
+                    for transfer in self.generated_transfer_components:
+                        if transfer["name"] == component.name and transfer["dest_comp"].component_type == ComponentType.CALIBRATION:
+                            is_camera_calibration_transfer = True
+                            break
+            
+            # Default data size if not camera-calibration transfer
+            if not is_camera_calibration_transfer:
+                lines.append('    "n_bits": 5000 * 32,  # 32 bits per actuator')
+            else:
+                # Camera-calibration transfer needs pixel count and group size for timing array handling
+                n_pixels = 1024 * 1024  # Default 1MP
+                for src_comp in self.components:
+                    if src_comp.component_type == ComponentType.CAMERA:
+                        n_pixels = src_comp.params.get("n_pixels", 1024 * 1024)
+                        break
+                
+                lines.append(f'    "n_bits": {n_pixels} * 16,  # Camera pixel data')
+                lines.append('    "group": 50,  # Group size for timing array handling')
+            
         # Add custom parameters from component
         for key, value in component.params.items():
+            # Skip keys we've already added defaults for
+            if key in ['n_pixels', 'group', 'group_size', 'n_subaps', 'pixels_per_subap', 
+                      'n_slopes', 'n_actuators', 'n_bits'] and any(
+                f'"{key}"' in line for line in lines):
+                continue
+                
             # Map group_size to group for camera functions
             if component.component_type == ComponentType.CAMERA and key == "group_size":
                 key = "group"
@@ -366,17 +405,62 @@ class CodeGenerator:
         Sort components in dependency order.
 
         Returns a list of components where all dependencies come before
-        the components that depend on them.
+        the components that depend on them. Also includes auto-generated transfer components
+        at the appropriate places in the dependency chain.
 
         Returns:
-            List[ComponentBlock]: Sorted components
+            List[ComponentBlock]: Sorted components including transfer components
         """
         # Create a name-to-component mapping
         comp_map = {comp.name: comp for comp in self.components}
-
-        # Build a dependency graph
-        graph = {comp.name: set(comp.get_dependencies()) for comp in self.components}
-
+        
+        # Create synthetic ComponentBlock objects for all transfer components
+        transfer_blocks = []
+        for transfer in self.generated_transfer_components:
+            # Create a synthetic ComponentBlock for the transfer
+            transfer_block = ComponentBlock(
+                ComponentType.NETWORK,
+                transfer["name"]
+            )
+            # Set parameters from the transfer dict
+            transfer_block.params = transfer["params"].copy()
+            # Set dependencies to include the source component
+            src_comp = transfer["src_comp"]
+            dest_comp = transfer["dest_comp"]
+            
+            # Transfer depends on source component
+            transfer_block._dependencies = [src_comp.name]
+            
+            # Add to the mapping - this will be used for dependency resolution
+            comp_map[transfer_block.name] = transfer_block
+            transfer_blocks.append(transfer_block)
+            
+            # Update destination component's dependencies to include this transfer
+            # in the dependency graph (not in the actual component)
+            if dest_comp.name in comp_map:
+                # Create modified dependencies to replace source with transfer
+                if not hasattr(dest_comp, '_modified_dependencies'):
+                    # Start with original dependencies
+                    dest_comp._modified_dependencies = dest_comp.get_dependencies().copy()
+                    
+                # Replace direct dependency on source with dependency on transfer
+                if src_comp.name in dest_comp._modified_dependencies:
+                    dest_comp._modified_dependencies.remove(src_comp.name)
+                    dest_comp._modified_dependencies.append(transfer_block.name)
+                else:
+                    # If dest doesn't have explicit dependency on source, add dependency on transfer
+                    # This handles case where UI doesn't show the dependency but code needs it
+                    dest_comp._modified_dependencies.append(transfer_block.name)
+        
+        # Build the dependency graph
+        graph = {}
+        for comp in list(self.components) + transfer_blocks:
+            # Use modified dependencies if available (for destination components with transfers)
+            if hasattr(comp, '_modified_dependencies'):
+                graph[comp.name] = set(comp._modified_dependencies)
+            else:
+                graph[comp.name] = set(comp.get_dependencies())
+        
         # Find components with no dependencies
         no_deps = [name for name, deps in graph.items() if not deps]
         sorted_names = []
@@ -395,14 +479,19 @@ class CodeGenerator:
                         no_deps.append(dep_name)
 
         # Check for circular dependencies
-        if len(sorted_names) < len(self.components):
+        if len(sorted_names) < len(graph):
             # Some components couldn't be sorted
             # Add remaining components in any order
-            remaining = set(comp.name for comp in self.components) - set(sorted_names)
+            remaining = set(comp_map.keys()) - set(sorted_names)
             sorted_names.extend(remaining)
 
         # Convert back to component objects
-        return [comp_map[name] for name in sorted_names if name in comp_map]
+        sorted_components = []
+        for name in sorted_names:
+            if name in comp_map:
+                sorted_components.append(comp_map[name])
+                
+        return sorted_components
 
     def export_to_file(self, filename: str):
         """
@@ -415,3 +504,235 @@ class CodeGenerator:
 
         with open(filename, "w") as f:
             f.write(code)
+
+    def _add_transfer_components(self):
+        """
+        Analyze component connections and add appropriate transfer components
+        when connections cross different compute resources.
+        """
+        # Get connections between components
+        connections = []
+        for src_comp in self.components:
+            for port in src_comp.output_ports:
+                for dest_comp, _ in port.connected_to:
+                    connections.append((src_comp, dest_comp))
+        
+        # Analyze each connection for resource boundaries
+        for src_comp, dest_comp in connections:
+            # SPECIAL CASE: Always add network transfer for camera components
+            if src_comp.component_type == ComponentType.CAMERA:
+                transfer_type = "Network"
+                transfer_comp = self._create_transfer_component(src_comp, dest_comp, transfer_type)
+                self.generated_transfer_components.append(transfer_comp)
+                continue
+                
+            # Normal case: check for different compute resources
+            src_res = src_comp.get_compute_resource()
+            dest_res = dest_comp.get_compute_resource()
+            
+            # Skip if either component has no compute resource
+            if not src_res or not dest_res:
+                continue
+                
+            # Skip if same compute resource
+            if src_res is dest_res:
+                continue
+                
+            # Determine transfer type based on resource types
+            transfer_type = self._determine_transfer_type(src_comp, dest_comp)
+            
+            if transfer_type:
+                # Create a transfer component
+                transfer_comp = self._create_transfer_component(src_comp, dest_comp, transfer_type)
+                self.generated_transfer_components.append(transfer_comp)
+    
+    def _determine_transfer_type(self, src_comp: ComponentBlock, dest_comp: ComponentBlock) -> Optional[str]:
+        """
+        Determine the type of transfer needed between two components.
+        
+        Args:
+            src_comp: Source component
+            dest_comp: Destination component
+            
+        Returns:
+            str: "PCIe" for CPU-GPU transfers, "Network" for network transfers, None if same resource
+        """
+        # SPECIAL CASE: Camera components always connect via network to compute components
+        if src_comp.component_type == ComponentType.CAMERA:
+            return "Network"
+        
+        src_res = src_comp.get_compute_resource()
+        dest_res = dest_comp.get_compute_resource()
+        
+        if not src_res or not dest_res:
+            return None
+            
+        # Get parent containers to determine resource types
+        src_parent = src_comp.parentItem()
+        dest_parent = dest_comp.parentItem()
+        
+        # If parents are different computers, it's a network transfer
+        if src_parent and dest_parent and src_parent != dest_parent:
+            from .components import ComputeBox
+            if isinstance(src_parent, ComputeBox) and isinstance(dest_parent, ComputeBox):
+                return "Network"
+        
+        # Check for CPU-GPU transfer
+        src_is_gpu = getattr(src_res, 'hardware', '').lower() == 'gpu'
+        dest_is_gpu = getattr(dest_res, 'hardware', '').lower() == 'gpu'
+        
+        if src_is_gpu != dest_is_gpu:
+            return "PCIe"
+            
+        return None
+    
+    def _create_transfer_component(self, src_comp: ComponentBlock, dest_comp: ComponentBlock, 
+                                transfer_type: str) -> dict:
+        """
+        Create a transfer component between two components.
+        
+        Args:
+            src_comp: Source component
+            dest_comp: Destination component
+            transfer_type: "PCIe" or "Network"
+            
+        Returns:
+            dict: Dictionary representing the transfer component
+        """
+        # Add network/PCIe imports
+        if transfer_type == "Network":
+            self.import_statements.add("from daolite.utils.network import network_transfer")
+        else:  # PCIe
+            self.import_statements.add("from daolite.utils.network import pcie_transfer")
+        
+        # Determine data size based on source and destination components
+        data_size = self._estimate_data_size(src_comp, dest_comp)
+        
+        # Create a synthetic component with appropriate data
+        transfer_name = f"{transfer_type}_Transfer_{src_comp.name}_to_{dest_comp.name}"
+        
+        # Create component dict with all necessary information
+        transfer_comp = {
+            "name": transfer_name,
+            "type": ComponentType.NETWORK,
+            "src_comp": src_comp,
+            "dest_comp": dest_comp,
+            "transfer_type": transfer_type,
+            "data_size": data_size,
+            "params": {
+                "n_bits": data_size,
+                "transfer_type": transfer_type.lower()
+            }
+        }
+        
+        # SPECIAL CASE: For camera components, use the destination compute's network characteristics
+        # since camera is just a generator and the compute component defines the network properties
+        if src_comp.component_type == ComponentType.CAMERA and transfer_type == "Network":
+            dest_compute = dest_comp.get_compute_resource()
+            if dest_compute:
+                # Add extra parameters to use the destination compute's network speed
+                transfer_comp["params"]["use_dest_network"] = True
+                transfer_comp["params"]["dest_network_speed"] = getattr(dest_compute, 'network_speed', 100e9)
+                transfer_comp["params"]["dest_time_in_driver"] = getattr(dest_compute, 'time_in_driver', 5.0)
+                
+                # For camera-to-calibration pipelines, ensure group size is passed through
+                # This is needed for timing array propagation
+                if dest_comp.component_type == ComponentType.CALIBRATION:
+                    # Get group size from camera or use default
+                    group_size = src_comp.params.get("group", src_comp.params.get("group_size", 50))
+                    transfer_comp["params"]["group"] = group_size
+        
+        # Update destination component dependencies to include this transfer
+        for port in dest_comp.input_ports:
+            for i, (comp, port2) in enumerate(port.connected_to):
+                if comp == src_comp:
+                    # Replace direct dependency with transfer component
+                    port.connected_to[i] = (src_comp, port2)  # Keep the same, just for tracking
+        
+        return transfer_comp
+    
+    def _estimate_data_size(self, src_comp: ComponentBlock, dest_comp: ComponentBlock) -> int:
+        """
+        Estimate the data size transferred between components based on their types.
+        
+        Args:
+            src_comp: Source component
+            dest_comp: Destination component
+            
+        Returns:
+            int: Estimated data size in bits
+        """
+        # Default size
+        data_size = 1024 * 1024 * 8  # 1MB in bits
+        
+        # Estimate based on source component type
+        if src_comp.component_type == ComponentType.CAMERA:
+            # Camera typically outputs pixel data
+            n_pixels = src_comp.params.get("n_pixels", 1024 * 1024)
+            bit_depth = src_comp.params.get("bit_depth", 16)
+            data_size = n_pixels * bit_depth
+            
+        elif src_comp.component_type == ComponentType.CENTROIDER:
+            # Centroider outputs slopes
+            n_subaps = src_comp.params.get("n_subaps", 5120)
+            data_size = n_subaps * 2 * 32  # X and Y slopes, 32 bits per value
+            
+        elif src_comp.component_type == ComponentType.RECONSTRUCTION:
+            # Reconstruction outputs actuator commands
+            n_actuators = src_comp.params.get("n_actuators", 5000)
+            data_size = n_actuators * 32  # 32 bits per actuator
+            
+        # Estimate based on destination component if source estimation failed
+        if data_size <= 0:
+            if dest_comp.component_type == ComponentType.CENTROIDER:
+                n_pixels = dest_comp.params.get("n_subaps", 5120) * dest_comp.params.get("pixels_per_subap", 256)
+                data_size = n_pixels * 16  # 16 bits per pixel
+                
+            elif dest_comp.component_type == ComponentType.RECONSTRUCTION:
+                n_slopes = dest_comp.params.get("n_slopes", 5120 * 2)
+                data_size = n_slopes * 32  # 32 bits per slope
+                
+            elif dest_comp.component_type == ComponentType.CONTROL:
+                n_actuators = dest_comp.params.get("n_actuators", 5000)
+                data_size = n_actuators * 32  # 32 bits per actuator
+        
+        return max(data_size, 1024)  # Ensure minimum data size
+
+    def _get_component_dependencies(self, component: ComponentBlock) -> List[str]:
+        """
+        Get the component's dependencies, taking into account network transfers.
+        
+        This method handles the modified dependency graph created for transfer components.
+        
+        Args:
+            component: The component to get dependencies for
+            
+        Returns:
+            List[str]: List of component names that this component depends on
+        """
+        # Use modified dependencies if available (these account for transfer components)
+        if hasattr(component, '_modified_dependencies'):
+            return component._modified_dependencies
+            
+        # Find if this component is a destination of any transfer
+        for transfer in self.generated_transfer_components:
+            if transfer["dest_comp"] == component:
+                # This component should depend on the transfer, not the original source
+                deps = component.get_dependencies().copy()
+                src_comp = transfer["src_comp"]
+                transfer_name = transfer["name"]
+                
+                # Replace source dependency with transfer dependency
+                if src_comp.name in deps:
+                    deps.remove(src_comp.name)
+                    deps.append(transfer_name)
+                else:
+                    # Special case: Camera connections may not have explicit dependencies
+                    # but still need the transfer component in the dependency chain
+                    if src_comp.component_type == ComponentType.CAMERA:
+                        deps.append(transfer_name)
+                        
+                return deps
+                
+        # Regular case: use the component's normal dependencies
+        return component.get_dependencies()

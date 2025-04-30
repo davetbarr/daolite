@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QGraphicsPathItem
 from PyQt5.QtCore import Qt, QPointF
 from PyQt5.QtGui import QPen, QPainterPath, QColor
 
-from .components import Port, ComponentBlock, PortType
+from .components import Port, ComponentBlock, PortType, TransferIndicator
 
 
 class Connection(QGraphicsPathItem):
@@ -41,6 +41,9 @@ class Connection(QGraphicsPathItem):
         self.start_port = start_port
         self.end_block = end_block
         self.end_port = end_port
+        
+        # For tracking transfer indicators
+        self.transfer_indicators = []
 
         # Set up appearance
         self.setPen(
@@ -53,7 +56,7 @@ class Connection(QGraphicsPathItem):
         self.temp_end_point: Optional[QPointF] = None
 
         self.update_path()
-
+        
     def update_path(self):
         """Update the connection path between source and destination ports."""
         path = QPainterPath()
@@ -144,6 +147,13 @@ class Connection(QGraphicsPathItem):
 
     def disconnect(self):
         """Remove connection between ports."""
+        # Remove any associated transfer indicators first
+        if self.scene():
+            # Find and remove all transfer indicators associated with this connection
+            for item in self.scene().items():
+                if isinstance(item, TransferIndicator) and hasattr(item, 'connection') and item.connection is self:
+                    self.scene().removeItem(item)
+        
         if self.start_port and self.end_port:
             # Remove from start port connections
             self.start_port.connected_to = [
@@ -174,3 +184,26 @@ class Connection(QGraphicsPathItem):
         painter.restore()
 
         painter.drawPath(self.path())
+        
+    def add_transfer_indicator(self, indicator_type, position):
+        """Add a transfer indicator to this connection."""
+        # This method will be called by PipelineScene to associate indicators with connections
+        self.transfer_indicators.append((indicator_type, position))
+        
+    def get_path_point_at_percent(self, percent):
+        """Get a point on the path at the given percentage (0-1)."""
+        # For simple implementation, we'll use a linear interpolation between start and end
+        # A more accurate version would follow the actual bezier curve
+        if not self.start_port or (not self.end_port and not self.temp_end_point):
+            return QPointF(0, 0)
+            
+        start_pos = self.start_port.get_scene_position()
+        if self.end_port:
+            end_pos = self.end_port.get_scene_position()
+        else:
+            end_pos = self.temp_end_point
+            
+        return QPointF(
+            start_pos.x() + (end_pos.x() - start_pos.x()) * percent,
+            start_pos.y() + (end_pos.y() - start_pos.y()) * percent
+        )

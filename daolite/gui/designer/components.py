@@ -6,6 +6,7 @@ This module provides classes for representing AO pipeline components visually.
 
 from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum
+import logging
 from PyQt5.QtWidgets import (
     QGraphicsItem,
     QGraphicsSceneContextMenuEvent,
@@ -13,12 +14,17 @@ from PyQt5.QtWidgets import (
     QAction,
     QInputDialog,
     QColorDialog,
+    QGraphicsTextItem,
+    QGraphicsRectItem,
 )
 from PyQt5.QtCore import Qt, QRectF, QPointF
 from PyQt5.QtGui import QPen, QBrush, QColor, QPainter, QFont, QPainterPath
 
 from daolite.common import ComponentType
 from daolite.compute import ComputeResources
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 
 class PortType(Enum):
@@ -68,6 +74,51 @@ class Port:
         if hit:
             print(f"[DEBUG] Port '{self.label}' clicked at {point}, rect center {scene_pos}, rect {debug_rect}")
         return hit
+
+
+class TransferIndicator(QGraphicsRectItem):
+    """
+    Visual indicator for network or PCIe transfers between compute resources.
+    
+    These indicators appear on connections crossing resource boundaries.
+    """
+    
+    def __init__(self, transfer_type, parent=None):
+        super().__init__(parent)
+        self.transfer_type = transfer_type  # "PCIe" or "Network"
+        self.setRect(0, 0, 24, 16)
+        self.setZValue(10)  # Above connections, above components
+        self.setCacheMode(self.DeviceCoordinateCache)
+        
+        # Create label
+        self.label = QGraphicsTextItem(self)
+        self.label.setPlainText(transfer_type)
+        self.label.setFont(QFont("Arial", 6))
+        # Center text in the indicator
+        self.label.setPos(2, 0)
+        
+        # Associate with a connection
+        self.connection = None
+        
+    def paint(self, painter, option, widget):
+        """Paint the transfer indicator with appropriate styling."""
+        # Different colors for different transfer types
+        if self.transfer_type == "PCIe":
+            brush = QBrush(QColor(255, 200, 50, 220))  # amber, more opaque
+            pen = QPen(QColor(200, 130, 0), 1.5)
+        else:  # Network
+            brush = QBrush(QColor(100, 200, 255, 220))  # light blue, more opaque
+            pen = QPen(QColor(0, 130, 200), 1.5)
+        
+        painter.setPen(pen)
+        painter.setBrush(brush)
+        painter.drawRoundedRect(self.rect(), 4, 4)
+        
+    def set_connection(self, connection):
+        """Associate this indicator with a specific connection."""
+        self.connection = connection
+        if connection:
+            connection.add_transfer_indicator(self.transfer_type, self.pos())
 
 
 class ComponentBlock(QGraphicsItem):
@@ -844,30 +895,38 @@ class ComponentContainer(QGraphicsItem):
 
 class ComputeBox(ComponentContainer):
     """
-    A visual container for grouping components that share the same compute resource (e.g., a CPU).
-    Can contain ComponentBlock and GPUBox items as children.
-    """
-    def __init__(self, name: str, compute: Optional[ComputeResources] = None):
-        super().__init__(name, compute, z_value=-10)
-        # CPU specific properties
-        self.box_color = QColor(70, 120, 220)  # Blue for CPU
-        self.fill_color = QColor(200, 220, 255, 60)
-        self.size = QRectF(0, 0, 320, 220)
+    A visual container representing a computer.
 
-    def paint(self, painter: QPainter, option, widget):
-        """Paint with CPU-specific customizations."""
+    Contains computational components and can have GPUs attached.
+    """
+
+    def __init__(self, name="Computer", size=None, compute=None):
+        """Initialize a computer box."""
+        super().__init__(name, compute, z_value=-10)
+        # CPU specific properties 
+        self.box_color = QColor(30, 70, 140)
+        self.fill_color = QColor(220, 230, 240, 160)
+        self.size = QRectF(0, 0, 320, 240) if size is None else size
+        
+        # Track child items
+        self.child_items = []
+
+    def paint(self, painter, option, widget):
+        """Custom paint method with optional highlighting."""
         super().paint(painter, option, widget)
         
-        # Override resource label with CPU-specific label
+        # Add CPU-specific label
         if self.compute:
-            compute_name = getattr(self.compute, "name", str(type(self.compute).__name__))
+            # Safely get compute resource information
+            cpu_name = getattr(self.compute, "name", "Unknown")
+            if hasattr(self.compute, 'cores'):
+                cpu_name += f", {self.compute.cores} cores"
+            painter.setPen(QPen(QColor(70, 70, 70)))
             painter.setFont(QFont("Arial", 8))
-            painter.setPen(Qt.black)
-            painter.drawText(10, 45, f"CPU: {compute_name}")
-            
+            painter.drawText(10, 45, f"CPU: {cpu_name}")
+
     def _check_resize_boundaries(self, new_width, new_height):
-        """Check resize boundaries for CPU box - no parent constraints."""
-        # CPUs don't have parent constraints, just return the values
+        """No parent restrictions for ComputeBox."""
         return new_width, new_height
 
 
