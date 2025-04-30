@@ -197,7 +197,31 @@ class PipelineScene(QGraphicsScene):
 
     def mouseReleaseEvent(self, event):
         """Handle mouse release events for connection completion and grouping."""
-        # Grouping logic: after moving a ComponentBlock, set parent if over a box
+        # GPU containment check - ensure all GPUs are fully inside their parent CPUs
+        # and expand the parent CPU if needed
+        for item in self.items():
+            if isinstance(item, GPUBox) and item.parentItem() and isinstance(item.parentItem(), ComputeBox):
+                gpu = item
+                cpu = item.parentItem()
+                
+                # Get GPU bounds relative to the parent CPU
+                gpu_rect = gpu.mapToParent(gpu.boundingRect()).boundingRect()
+                cpu_rect = QRectF(0, 0, cpu.size.width(), cpu.size.height())
+                
+                # Check if GPU is partially outside CPU
+                if not cpu_rect.contains(gpu_rect):
+                    # Calculate how much to expand the CPU
+                    margin = 20
+                    new_width = max(cpu.size.width(), gpu_rect.right() + margin)
+                    new_height = max(cpu.size.height(), gpu_rect.bottom() + margin)
+                    
+                    # Resize the CPU if needed
+                    if new_width > cpu.size.width() or new_height > cpu.size.height():
+                        cpu.size = QRectF(0, 0, new_width, new_height)
+                        cpu.prepareGeometryChange()
+                        cpu.update()
+        
+        # Original mouseReleaseEvent logic for grouping
         selected = self.selectedItems()
         if len(selected) == 1 and isinstance(selected[0], ComponentBlock):
             block = selected[0]
@@ -933,16 +957,39 @@ class PipelineDesignerApp(QMainWindow):
 
                 self.scene.removeItem(item)
 
-    def _get_compute_resource(self, component: ComponentBlock):
+    def _get_compute_resource(self, item):
         """
         Show a dialog to select a compute resource.
 
         Args:
-            component: The component to configure
+            item: The container or component to configure
         """
         dlg = ResourceSelectionDialog(self)
         if dlg.exec_():
-            component.compute = dlg.get_selected_resource()
+            # Apply the resource to the container, not to individual components
+            if isinstance(item, ComponentContainer):
+                item.compute = dlg.get_selected_resource()
+                
+                # If this is a container, update all its child components' display
+                for child in item.childItems():
+                    if isinstance(child, ComponentBlock):
+                        # We just need to trigger a repaint, the compute is inherited
+                        child.update()
+            else:
+                # For individual components, find their parent container and set it there
+                parent = item.parentItem()
+                if parent and isinstance(parent, ComponentContainer):
+                    parent.compute = dlg.get_selected_resource()
+                    # Trigger an update of the component display
+                    item.update()
+                else:
+                    # If no parent container, warn the user
+                    QMessageBox.warning(
+                        self, 
+                        "No Container", 
+                        "This component is not in a compute container. Please add it to a CPU or GPU container first."
+                    )
+            
             self.scene.update()
 
     def _get_all_components(self) -> List[ComponentBlock]:
@@ -986,20 +1033,82 @@ class PipelineDesignerApp(QMainWindow):
         if filename:
             import json
 
-            data = {"components": [], "connections": []}
+            data = {
+                "containers": [],
+                "components": [], 
+                "connections": []
+            }
+            
+            # Save compute and GPU boxes first
+            for item in self.scene.items():
+                if isinstance(item, ComputeBox):
+                    container_data = {
+                        "type": "ComputeBox",
+                        "name": item.name,
+                        "pos": (item.pos().x(), item.pos().y()),
+                        "size": (item.size.width(), item.size.height()),
+                    }
+                    if item.compute is not None:
+                        compute_dict = item.compute.to_dict().copy()
+                        if "name" in compute_dict:
+                            container_data["resource_name"] = compute_dict["name"]
+                            del compute_dict["name"]
+                        container_data["compute"] = compute_dict
+                    
+                    # Store GPU boxes inside this compute box
+                    gpu_boxes = []
+                    for child in item.childItems():
+                        if isinstance(child, GPUBox):
+                            gpu_data = {
+                                "type": "GPUBox",
+                                "name": child.name,
+                                "pos": (child.pos().x(), child.pos().y()),
+                                "size": (child.size.width(), child.size.height()),
+                            }
+                            if child.compute is not None:
+                                gpu_compute_dict = child.compute.to_dict().copy()
+                                if "name" in gpu_compute_dict:
+                                    gpu_data["resource_name"] = gpu_compute_dict["name"]
+                                    del gpu_compute_dict["name"]
+                                gpu_data["compute"] = gpu_compute_dict
+                            gpu_boxes.append(gpu_data)
+                    
+                    container_data["gpu_boxes"] = gpu_boxes
+                    data["containers"].append(container_data)
+            
+            # Save components
             for comp in self._get_all_components():
+                parent_container = None
+                parent_type = None
+                parent_name = None
+                gpu_parent_name = None
+                
+                # Find which container this component belongs to
+                parent = comp.parentItem()
+                if parent:
+                    if isinstance(parent, ComputeBox):
+                        parent_type = "ComputeBox"
+                        parent_name = parent.name
+                    elif isinstance(parent, GPUBox):
+                        parent_type = "GPUBox"
+                        parent_name = parent.name
+                        # Also get the grandparent (ComputeBox) if it exists
+                        grandparent = parent.parentItem()
+                        if grandparent and isinstance(grandparent, ComputeBox):
+                            gpu_parent_name = grandparent.name
+                
                 comp_data = {
                     "type": comp.component_type.name,
                     "name": comp.name,
                     "pos": (comp.pos().x(), comp.pos().y()),
                     "params": comp.params,
+                    "parent_type": parent_type,
+                    "parent_name": parent_name,
+                    "gpu_parent_name": gpu_parent_name
                 }
-                if comp.compute is not None:
-                    compute_dict = comp.compute.to_dict().copy()
-                    if "name" in compute_dict:
-                        del compute_dict["name"]
-                    comp_data["compute"] = compute_dict
                 data["components"].append(comp_data)
+            
+            # Save connections
             for conn in self.scene.connections:
                 data["connections"].append(
                     {
@@ -1007,6 +1116,7 @@ class PipelineDesignerApp(QMainWindow):
                         "end": conn.end_block.name,
                     }
                 )
+            
             with open(filename, "w") as f:
                 json.dump(data, f, indent=2)
             QMessageBox.information(
@@ -1023,36 +1133,146 @@ class PipelineDesignerApp(QMainWindow):
 
             with open(filename, "r") as f:
                 data = json.load(f)
+                
+            # Clear existing scene
             self.scene.clear()
             self.scene.connections = []
             self.component_counts = {key: 0 for key in self.component_counts}
+            
+            # Store mappings for reconstruction
+            name_to_container = {}
             name_to_block = {}
-            # Recreate components
+            
+            # First recreate container structure - ComputeBoxes and GPUBoxes
+            if "containers" in data:
+                from daolite.compute.base_resources import ComputeResources
+                
+                # First create all ComputeBoxes
+                for container_data in data["containers"]:
+                    if container_data["type"] == "ComputeBox":
+                        # Create ComputeBox
+                        compute_box = ComputeBox(container_data["name"])
+                        compute_box.setPos(*container_data["pos"])
+                        
+                        # Set size if specified
+                        if "size" in container_data:
+                            compute_box.size = QRectF(0, 0, *container_data["size"])
+                        
+                        # Set compute resource if specified
+                        if "compute" in container_data:
+                            compute_dict = container_data["compute"]
+                            # If there's a resource name, try to look it up in common hardware
+                            if "resource_name" in container_data:
+                                resource_name = container_data["resource_name"].lower()
+                                hardware_map = {
+                                    "amd epyc 7763": amd_epyc_7763,
+                                    "amd epyc 9654": amd_epyc_9654, 
+                                    "intel xeon 8480": intel_xeon_8480,
+                                    "intel xeon 8462": intel_xeon_8462,
+                                    "amd ryzen 9 7950x": amd_ryzen_7950x
+                                }
+                                for hw_name, hw_func in hardware_map.items():
+                                    if hw_name in resource_name:
+                                        compute_box.compute = hw_func()
+                                        break
+                                else:
+                                    # If no match found, create from dict
+                                    compute_box.compute = ComputeResources.from_dict(compute_dict)
+                            else:
+                                # Create from dict if no resource name
+                                compute_box.compute = ComputeResources.from_dict(compute_dict)
+                        
+                        # Add to scene and mapping
+                        self.scene.addItem(compute_box)
+                        name_to_container[container_data["name"]] = compute_box
+                        
+                # Now create GPUBoxes inside ComputeBoxes
+                for container_data in data["containers"]:
+                    if container_data["type"] == "ComputeBox" and "gpu_boxes" in container_data:
+                        parent_box = name_to_container.get(container_data["name"])
+                        if parent_box:
+                            for gpu_data in container_data["gpu_boxes"]:
+                                # Create GPUBox
+                                gpu_box = GPUBox(gpu_data["name"])
+                                gpu_box.setPos(*gpu_data["pos"])
+                                
+                                # Set size if specified
+                                if "size" in gpu_data:
+                                    gpu_box.size = QRectF(0, 0, *gpu_data["size"])
+                                
+                                # Set compute resource if specified
+                                if "compute" in gpu_data:
+                                    compute_dict = gpu_data["compute"]
+                                    # If there's a resource name, try to look it up in common hardware
+                                    if "resource_name" in gpu_data:
+                                        resource_name = gpu_data["resource_name"].lower()
+                                        hardware_map = {
+                                            "nvidia a100 80gb": nvidia_a100_80gb,
+                                            "nvidia h100 80gb": nvidia_h100_80gb,
+                                            "nvidia rtx 4090": nvidia_rtx_4090,
+                                            "amd instinct mi300x": amd_mi300x
+                                        }
+                                        for hw_name, hw_func in hardware_map.items():
+                                            if hw_name in resource_name:
+                                                gpu_box.compute = hw_func()
+                                                break
+                                        else:
+                                            # If no match found, create from dict
+                                            gpu_box.compute = ComputeResources.from_dict(compute_dict)
+                                    else:
+                                        # Create from dict if no resource name
+                                        gpu_box.compute = ComputeResources.from_dict(compute_dict)
+                                
+                                # Add to parent container and scene
+                                parent_box.add_child(gpu_box)
+                                name_to_container[gpu_data["name"]] = gpu_box
+            
+            # Now create component blocks
             for comp_data in data["components"]:
                 comp_type = ComponentType[comp_data["type"]]
                 block = ComponentBlock(comp_type, comp_data["name"])
-                block.setPos(*comp_data["pos"])
+                
+                # Place component in appropriate container
+                if comp_data.get("parent_type") == "ComputeBox" and comp_data.get("parent_name"):
+                    # Component belongs in a ComputeBox
+                    parent_box = name_to_container.get(comp_data["parent_name"])
+                    if parent_box:
+                        # Convert position to ComputeBox coordinates if saved in scene coordinates
+                        parent_box.add_child(block)
+                        block.setPos(*comp_data["pos"])
+                elif comp_data.get("parent_type") == "GPUBox" and comp_data.get("parent_name"):
+                    # Component belongs in a GPUBox
+                    gpu_box = name_to_container.get(comp_data["parent_name"])
+                    if gpu_box:
+                        gpu_box.add_child(block)
+                        block.setPos(*comp_data["pos"])
+                else:
+                    # No parent container, place directly in scene
+                    block.setPos(*comp_data["pos"])
+                    self.scene.addItem(block)
+                
+                # Set parameters
                 block.params = comp_data.get("params", {})
-                # Restore compute resource if present
-                compute_dict = comp_data.get("compute")
-                if compute_dict is not None:
-                    from daolite.compute.base_resources import ComputeResources
-                    block.compute = ComputeResources.from_dict(compute_dict)
-                self.scene.addItem(block)
+                
+                # Store block in mapping
                 name_to_block[block.name] = block
                 self.component_counts[comp_type] += 1
+            
             # Recreate connections
-            for conn_data in data["connections"]:
-                start = name_to_block.get(conn_data["start"])
-                end = name_to_block.get(conn_data["end"])
-                if start and end:
-                    out_port = start.output_ports[0] if start.output_ports else None
-                    in_port = end.input_ports[0] if end.input_ports else None
-                    if out_port and in_port:
-                        conn = Connection(start, out_port)
-                        conn.complete_connection(end, in_port)
-                        self.scene.connections.append(conn)
-                        self.scene.addItem(conn)
+            if "connections" in data:
+                for conn_data in data["connections"]:
+                    start = name_to_block.get(conn_data["start"])
+                    end = name_to_block.get(conn_data["end"])
+                    if start and end:
+                        out_port = start.output_ports[0] if start.output_ports else None
+                        in_port = end.input_ports[0] if end.input_ports else None
+                        if out_port and in_port:
+                            conn = Connection(start, out_port)
+                            conn.complete_connection(end, in_port)
+                            self.scene.connections.append(conn)
+                            self.scene.addItem(conn)
+            
+            # Update the scene
             self.scene.update()
             QMessageBox.information(
                 self, "Pipeline Loaded", f"Pipeline design loaded from {filename}"

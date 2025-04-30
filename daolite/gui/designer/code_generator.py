@@ -193,7 +193,8 @@ class CodeGenerator:
         lines.append(f'    name="{component.name}",')
 
         # Add compute resource
-        if component.compute:
+        compute_resource = component.get_compute_resource()
+        if compute_resource:
             # Try to get a readable name for the compute resource
             compute_code = self._get_compute_resource_code(component)
             lines.append(f"    compute={compute_code},")
@@ -256,10 +257,45 @@ class CodeGenerator:
             return "unknown_function"  # Default
 
     def _get_compute_resource_code(self, component: ComponentBlock) -> str:
+        """
+        Get code for the component's compute resource.
+        
+        Args:
+            component: The component block
+            
+        Returns:
+            str: Python code for the compute resource
+        """
         # Always provide all required arguments for create_compute_resources
-        if component.compute:
-            # If the component has a compute object, try to extract values
-            c = component.compute
+        compute_resource = component.get_compute_resource()
+        if compute_resource:
+            # If the component has a compute resource from a parent container
+            c = compute_resource
+            # Check if it's a known hardware resource we can reference directly
+            resource_name = getattr(c, 'name', '').lower() if hasattr(c, 'name') else ''
+            
+            # Check for common hardware resources we can reference directly
+            if resource_name:
+                # Map resource names to their import names
+                resource_map = {
+                    'amd epyc 7763': 'hardware.amd_epyc_7763()',
+                    'amd epyc 9654': 'hardware.amd_epyc_9654()',
+                    'intel xeon 8480': 'hardware.intel_xeon_8480()',
+                    'intel xeon 8462': 'hardware.intel_xeon_8462()',
+                    'amd ryzen 9 7950x': 'hardware.amd_ryzen_7950x()',
+                    'nvidia a100 80gb': 'hardware.nvidia_a100_80gb()',
+                    'nvidia h100 80gb': 'hardware.nvidia_h100_80gb()',
+                    'nvidia rtx 4090': 'hardware.nvidia_rtx_4090()',
+                    'amd instinct mi300x': 'hardware.amd_mi300x()'
+                }
+                
+                # Look for matches in our resource map
+                for hw_name, hw_code in resource_map.items():
+                    if hw_name in resource_name.lower():
+                        self.import_statements.add("from daolite.compute import hardware")
+                        return hw_code
+                
+            # Otherwise, create compute resources with specific values
             return (
                 f"create_compute_resources("
                 f"cores={getattr(c, 'cores', 16)}, "
@@ -272,7 +308,7 @@ class CodeGenerator:
                 f"time_in_driver={getattr(c, 'time_in_driver', 5.0)})"
             )
         else:
-            # Use default values
+            # Use default values if no compute resource is found
             return (
                 "create_compute_resources("
                 "cores=16, core_frequency=2.6e9, flops_per_cycle=32, "
