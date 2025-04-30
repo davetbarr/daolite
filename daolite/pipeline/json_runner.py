@@ -9,6 +9,9 @@ from daolite.pipeline.reconstruction import Reconstruction
 from daolite.pipeline.control import FullFrameControl
 from daolite.pipeline.calibration import PixelCalibration
 from daolite.utils.network import TimeOnNetwork, network_transfer
+from daolite.utils import chronograph
+import numpy as np
+import matplotlib.pyplot as plt
 
 FUNCTION_MAP = {
     "PCOCamLink": PCOCamLink,
@@ -23,7 +26,16 @@ FUNCTION_MAP = {
 }
 
 
-def run_pipeline_from_json(json_path):
+def run_pipeline_and_return_pipe(json_path):
+    """
+    Run a pipeline from a JSON file and return both the pipeline object and results.
+    
+    Args:
+        json_path: Path to the JSON file defining the pipeline
+        
+    Returns:
+        tuple: (pipeline, results) - the pipeline object and execution results
+    """
     with open(json_path, "r") as f:
         data = json.load(f)
     pipeline = Pipeline()
@@ -296,6 +308,99 @@ def run_pipeline_from_json(json_path):
     
     # Run the pipeline
     results = pipeline.run(debug=True)
+    return pipeline, results
+
+
+def visualize_pipeline(pipeline, title="Pipeline Timing", save_path=None, show=True):
+    """
+    Visualize the pipeline execution timeline using the chronograph utility.
+    
+    Args:
+        pipeline: The Pipeline object to visualize
+        title: Title for the visualization
+        save_path: Path to save the visualization (if None, won't save)
+        show: Whether to display the visualization (default True)
+    """
+    try:
+        # Check if the pipeline has timing data
+        if not hasattr(pipeline, "execution_order") or not hasattr(pipeline, "timing_results"):
+            print("Error: Pipeline has no timing data to visualize.")
+            return
+            
+        # Extract timing data
+        execution_order = pipeline.execution_order
+        timing_results = pipeline.timing_results
+        
+        # Ensure we have timing results
+        if not timing_results:
+            print("Error: No timing results available for visualization.")
+            return
+        
+        # Create dataset for chronograph (matching the format used in Pipeline.visualize)
+        data_set = []
+        for name in execution_order:
+            component = pipeline.components[name]
+            timing = timing_results[name]
+
+            # Handle scalar timing results (convert to array form)
+            if not isinstance(timing, np.ndarray) or len(timing.shape) == 0:
+                # If previous component exists, use its end time as start
+                if data_set:
+                    prev_timing = data_set[-1][0]
+                    start_time = (
+                        prev_timing[-1, 1]
+                        if len(prev_timing.shape) > 1
+                        else prev_timing[1]
+                    )
+                else:
+                    start_time = 0
+
+                arr_timing = np.zeros([1, 2])
+                arr_timing[0, 0] = start_time
+                arr_timing[0, 1] = start_time + timing
+                timing = arr_timing
+
+            # Add to dataset with component name and type as label
+            data_set.append([timing, f"{name} ({component.component_type.value})"])
+
+        # Generate chronograph visualization using the same function as Pipeline.visualize
+        if data_set:
+            try:
+                fig, ax, latency = chronograph.generate_chrono_plot_packetize(
+                    data_list=data_set, 
+                    title=title, 
+                    xlabel="Time (μs)", 
+                    multiplot=False
+                )
+                
+                # Save if path provided
+                if save_path:
+                    fig.savefig(save_path, dpi=300, bbox_inches='tight')
+                    print(f"Visualization saved to {save_path}")
+                
+                # Show if requested
+                if show:
+                    plt.show()
+                else:
+                    plt.close(fig)
+                    
+                return fig, ax, latency
+            except Exception as e:
+                print(f"Error generating chronograph: {str(e)}")
+        else:
+            print("No timing data to visualize.")
+            
+    except ImportError:
+        print("Error: Matplotlib is required for visualization. Install with 'pip install matplotlib'.")
+    except Exception as e:
+        print(f"Error creating visualization: {str(e)}")
+        
+    return None, None
+
+
+def run_pipeline_from_json(json_path):
+    """Run a pipeline from a JSON file and return results."""
+    pipeline, results = run_pipeline_and_return_pipe(json_path)
     return results
 
 
@@ -304,14 +409,24 @@ def main():
         description="Run a daolite pipeline from a JSON file."
     )
     parser.add_argument("json_file", help="Path to the pipeline JSON file")
+    parser.add_argument("--show", action="store_true", help="Show visualization of pipeline execution timeline")
+    parser.add_argument("--save", help="Save visualization to specified file path", default=None)
     args = parser.parse_args()
+    
     print(f"Running pipeline from {args.json_file} ...")
-    results = run_pipeline_from_json(args.json_file)
+    pipeline, results = run_pipeline_and_return_pipe(args.json_file)
     print("Pipeline run complete.")
+    
     # Optionally print results summary
     if results is not None:
         print("Results:")
         print(results)
+    
+    # Visualize pipeline if requested
+    if args.show or args.save:
+        title = f"Pipeline Timing: {args.json_file}"
+        save_path = args.save
+        visualize_pipeline(pipeline, title, save_path, show=args.show)
 
 
 if __name__ == "__main__":

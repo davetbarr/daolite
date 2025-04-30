@@ -915,6 +915,29 @@ class PipelineDesignerApp(QMainWindow):
         generate_btn.clicked.connect(self._generate_code)
         generate_btn.setToolTip("Generate Python code for the current pipeline design")
         self.toolbar.addWidget(generate_btn)
+        
+        # Add Run Pipeline section
+        self.toolbar.addSeparator()
+        
+        # Execution method dropdown
+        run_label = QLabel("<b>Run Pipeline:</b>")
+        self.toolbar.addWidget(run_label)
+        
+        self.execution_method = QComboBox()
+        self.execution_method.addItems(["Python", "JSON"])
+        self.execution_method.setToolTip("Select pipeline execution method")
+        self.execution_method.setStyleSheet("min-width: 120px;")
+        self.toolbar.addWidget(self.execution_method)
+        
+        # Run button
+        run_pipeline_btn = QPushButton("Run Pipeline")
+        run_pipeline_btn.setStyleSheet(
+            "font-size: 14px; font-weight: bold; background: #2196F3; color: white; padding: 6px 12px;"
+        )
+        run_pipeline_btn.clicked.connect(self._run_pipeline)
+        run_pipeline_btn.setToolTip("Execute pipeline and display visualization")
+        self.toolbar.addWidget(run_pipeline_btn)
+        
         self.toolbar.addSeparator()
 
         # Add configuration buttons
@@ -1232,213 +1255,7 @@ class PipelineDesignerApp(QMainWindow):
             self, "Save Pipeline Design", "", "JSON Files (*.json)"
         )
         if filename:
-            import json
-
-            data = {
-                "containers": [],
-                "components": [], 
-                "connections": [],
-                "transfers": []  # Section for network transfers
-            }
-            
-            # Save compute and GPU boxes first
-            for item in self.scene.items():
-                if isinstance(item, ComputeBox):
-                    container_data = {
-                        "type": "ComputeBox",
-                        "name": item.name,
-                        "pos": (item.pos().x(), item.pos().y()),
-                        "size": (item.size.width(), item.size.height()),
-                    }
-                    if item.compute is not None:
-                        compute_dict = item.compute.to_dict().copy()
-                        if "name" in compute_dict:
-                            container_data["resource_name"] = compute_dict["name"]
-                            del compute_dict["name"]
-                        container_data["compute"] = compute_dict
-                    
-                    # Store GPU boxes inside this compute box
-                    gpu_boxes = []
-                    for child in item.childItems():
-                        if isinstance(child, GPUBox):
-                            gpu_data = {
-                                "type": "GPUBox",
-                                "name": child.name,
-                                "pos": (child.pos().x(), child.pos().y()),
-                                "size": (child.size.width(), child.size.height()),
-                            }
-                            if child.compute is not None:
-                                gpu_compute_dict = child.compute.to_dict().copy()
-                                if "name" in gpu_compute_dict:
-                                    gpu_data["resource_name"] = gpu_compute_dict["name"]
-                                    del gpu_compute_dict["name"]
-                                gpu_data["compute"] = gpu_compute_dict
-                            gpu_boxes.append(gpu_data)
-                    
-                    container_data["gpu_boxes"] = gpu_boxes
-                    data["containers"].append(container_data)
-            
-            # Save components
-            components_by_name = {}  # Map names to components for easier lookup
-            for comp in self._get_all_components():
-                parent_container = None
-                parent_type = None
-                parent_name = None
-                gpu_parent_name = None
-                
-                # Find which container this component belongs to
-                parent = comp.parentItem()
-                if parent:
-                    if isinstance(parent, ComputeBox):
-                        parent_type = "ComputeBox"
-                        parent_name = parent.name
-                    elif isinstance(parent, GPUBox):
-                        parent_type = "GPUBox"
-                        parent_name = parent.name
-                        # Also get the grandparent (ComputeBox) if it exists
-                        grandparent = parent.parentItem()
-                        if grandparent and isinstance(grandparent, ComputeBox):
-                            gpu_parent_name = grandparent.name
-                
-                comp_data = {
-                    "type": comp.component_type.name,
-                    "name": comp.name,
-                    "pos": (comp.pos().x(), comp.pos().y()),
-                    "params": comp.params,
-                    "parent_type": parent_type,
-                    "parent_name": parent_name,
-                    "gpu_parent_name": gpu_parent_name
-                }
-                data["components"].append(comp_data)
-                components_by_name[comp.name] = comp
-            
-            # Process connections and explicitly check for network transfers
-            for conn in self.scene.connections:
-                # Save basic connection information
-                data["connections"].append({
-                    "start": conn.start_block.name,
-                    "end": conn.end_block.name,
-                })
-                
-                # Handle camera connections as network
-                if conn.start_block.component_type == ComponentType.CAMERA:
-                    # Camera components always output via network
-                    logger.debug(f"Detected camera connection from {conn.start_block.name} to {conn.end_block.name}")
-                    
-                    # Get destination compute resource details
-                    dest_comp = conn.end_block
-                    dest_res = dest_comp.get_compute_resource()
-                    network_speed = None
-                    if dest_res:
-                        network_speed = getattr(dest_res, 'network_speed', 100e9)
-                    
-                    # Determine data size based on camera parameters
-                    n_pixels = conn.start_block.params.get("n_pixels", 1024 * 1024)  # Default 1MP
-                    bit_depth = conn.start_block.params.get("bit_depth", 16)  # Default 16-bit
-                    data_size = n_pixels * bit_depth
-                    
-                    # Generate a unique name for the transfer component
-                    transfer_name = f"Network_Transfer_{conn.start_block.name}_to_{conn.end_block.name}"
-                    
-                    # Create transfer record
-                    transfer_data = {
-                        "type": "NETWORK",
-                        "name": transfer_name,
-                        "transfer_type": "Network",
-                        "source": conn.start_block.name,
-                        "destination": conn.end_block.name,
-                        "data_size": data_size,
-                        "params": {
-                            "n_bits": data_size,
-                            "transfer_type": "network",
-                            "use_dest_network": True
-                        }
-                    }
-                    
-                    # Add network speed if available
-                    if network_speed:
-                        transfer_data["params"]["dest_network_speed"] = network_speed
-                    
-                    # Always add network transfers for camera connections
-                    data["transfers"].append(transfer_data)
-                    logger.debug(f"Added network transfer for camera: {transfer_name}")
-                else:
-                    # For other components, check compute resources to determine transfer type
-                    src_comp = conn.start_block
-                    dest_comp = conn.end_block
-                    
-                    # Skip if either component doesn't exist (should never happen)
-                    if not src_comp or not dest_comp:
-                        continue
-                    
-                    # Get compute resources for source and destination
-                    src_res = src_comp.get_compute_resource()
-                    dest_res = dest_comp.get_compute_resource()
-                    
-                    # Get parent containers
-                    src_parent = src_comp.parentItem()
-                    dest_parent = dest_comp.parentItem()
-                    
-                    # Only add transfer if components are in different containers or hardware types
-                    transfer_type = None
-                    
-                    # Different compute boxes always use network
-                    if (src_parent and dest_parent and 
-                        src_parent != dest_parent and
-                        isinstance(src_parent, ComputeBox) and 
-                        isinstance(dest_parent, ComputeBox)):
-                        transfer_type = "Network"
-                    # CPU-GPU transfers use PCIe
-                    elif ((isinstance(src_parent, GPUBox) and not isinstance(dest_parent, GPUBox)) or
-                        (not isinstance(src_parent, GPUBox) and isinstance(dest_parent, GPUBox))):
-                        transfer_type = "PCIe"
-                    # Check hardware type
-                    elif src_res and dest_res:
-                        src_hw = getattr(src_res, 'hardware', 'CPU')
-                        dest_hw = getattr(dest_res, 'hardware', 'CPU')
-                        if src_hw != dest_hw:
-                            if 'GPU' in (src_hw, dest_hw):
-                                transfer_type = "PCIe"
-                            else:
-                                transfer_type = "Network"
-                    
-                    # If we've identified a transfer type, add it to the transfers list
-                    if transfer_type:
-                        # Generate a unique name
-                        transfer_name = f"{transfer_type}_Transfer_{src_comp.name}_to_{dest_comp.name}"
-                        
-                        # Estimate data size
-                        data_size = self._estimate_data_size(src_comp, dest_comp)
-                        
-                        # Create transfer record
-                        transfer_data = {
-                            "type": "NETWORK",
-                            "name": transfer_name,
-                            "transfer_type": transfer_type,
-                            "source": src_comp.name,
-                            "destination": dest_comp.name,
-                            "data_size": data_size,
-                            "params": {
-                                "n_bits": data_size,
-                                "transfer_type": transfer_type.lower(),
-                                "group": 50  # Default group size
-                            }
-                        }
-                        
-                        # Add network-specific parameters
-                        if transfer_type == "Network":
-                            # For network transfers, add destination network speed
-                            if dest_res:
-                                network_speed = getattr(dest_res, 'network_speed', 100e9)
-                                transfer_data["params"]["dest_network_speed"] = network_speed
-                                transfer_data["params"]["use_dest_network"] = True
-                                transfer_data["params"]["dest_time_in_driver"] = getattr(dest_res, 'time_in_driver', 5)
-                        
-                        data["transfers"].append(transfer_data)
-                        logger.debug(f"Added {transfer_type} transfer: {transfer_name}")
-            
-            with open(filename, "w") as f:
-                json.dump(data, f, indent=2)
+            self._save_pipeline_to_file(filename)
             QMessageBox.information(
                 self, "Pipeline Saved", f"Pipeline design saved to {filename}"
             )
@@ -1892,6 +1709,490 @@ class PipelineDesignerApp(QMainWindow):
         
         # Fallback to a reasonable default for AO data
         return 1024 * 1024 * 16  # 1MP at 16-bit
+
+    def _run_pipeline(self):
+        """Run the pipeline and display visualization in a popup window."""
+        import os
+        import subprocess
+        import tempfile
+        import sys
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QDialogButtonBox, QFileDialog, QSplitter
+        from PyQt5.QtGui import QPixmap
+        from PyQt5.QtCore import Qt, QByteArray, QBuffer, QIODevice
+        
+        components = self._get_all_components()
+        if not components:
+            QMessageBox.warning(self, "Empty Pipeline", "No components to run.")
+            return
+        
+        # Determine which execution method to use
+        method = self.execution_method.currentText()
+        
+        # First, save the pipeline to temporary files
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # For either method, we need to save the pipeline design in JSON format
+            json_path = os.path.join(temp_dir, "temp_pipeline.json")
+            self._save_pipeline_to_file(json_path)
+            
+            # For Python method, also create a Python script
+            if method == "Python":
+                py_path = os.path.join(temp_dir, "temp_pipeline.py")
+                generator = CodeGenerator(components)
+                try:
+                    generator.export_to_file(py_path)
+                    # Add visualization code to the Python file
+                    with open(py_path, 'a') as f:
+                        f.write("\n\n# Visualize pipeline\n")
+                        f.write("fig, ax, latency = pipeline.visualize('Pipeline Timing')\n")
+                        
+                        # Save the figure to a file instead of showing it
+                        vis_path = os.path.join(temp_dir, "visualization.png")
+                        f.write(f"fig.savefig('{vis_path}', dpi=300, bbox_inches='tight')\n")
+                        f.write(f"print('\\nVisualization saved to: {vis_path}')\n")
+                        f.write("print(f'Total pipeline latency: {latency:.2f} μs')\n")
+                        # Don't call plt.show() - instead, just save the figure
+                except Exception as e:
+                    QMessageBox.critical(self, "Code Generation Error", f"Failed to generate Python code: {str(e)}")
+                    return
+            
+            # Determine the visualization image path
+            vis_path = os.path.join(temp_dir, "visualization.png")
+            
+            # Create a dialog to show execution progress
+            progress_dialog = QDialog(self)
+            progress_dialog.setWindowTitle("Running Pipeline")
+            progress_dialog.resize(500, 300)
+            
+            layout = QVBoxLayout()
+            status_label = QLabel("Executing pipeline, please wait...")
+            layout.addWidget(status_label)
+            
+            button_box = QDialogButtonBox(QDialogButtonBox.Cancel)
+            button_box.rejected.connect(progress_dialog.reject)
+            layout.addWidget(button_box)
+            
+            progress_dialog.setLayout(layout)
+            progress_dialog.show()
+            
+            # Construct the command based on execution method
+            if method == "Python":
+                # Set environment variable to force matplotlib to use Agg backend (non-interactive)
+                my_env = os.environ.copy()
+                my_env["MPLBACKEND"] = "Agg"  # Force non-interactive matplotlib backend
+                cmd = [sys.executable, py_path]
+            else:  # JSON
+                my_env = os.environ.copy()
+                my_env["MPLBACKEND"] = "Agg"  # Force non-interactive matplotlib backend
+                cmd = [sys.executable, "-m", "daolite.pipeline.json_runner", json_path, "--save", vis_path, "--no-show"]
+            
+            # Run the command
+            try:
+                process = subprocess.Popen(
+                    cmd, 
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    cwd=temp_dir,
+                    env=my_env
+                )
+                
+                # Update status with output from the process
+                output = []
+                while True:
+                    line = process.stdout.readline()
+                    if not line and process.poll() is not None:
+                        break
+                    if line:
+                        output.append(line.strip())
+                        status_label.setText("\n".join(output[-10:]))  # Show last 10 lines
+                        QApplication.processEvents()  # Update UI
+                
+                return_code = process.wait()
+                
+                # Check if execution was successful
+                if return_code != 0:
+                    # Show error dialog with full output
+                    progress_dialog.close()
+                    error_msg = "\n".join(output)
+                    QMessageBox.critical(
+                        self, 
+                        "Pipeline Execution Failed", 
+                        f"Pipeline execution returned code {return_code}.\n\nOutput:\n{error_msg}"
+                    )
+                    return
+                
+                # Close progress dialog
+                progress_dialog.close()
+                
+                # Check if visualization file was created
+                if not os.path.exists(vis_path):
+                    QMessageBox.warning(
+                        self, 
+                        "Visualization Not Found", 
+                        "Pipeline executed successfully, but no visualization was generated."
+                    )
+                    return
+                
+                # Show visualization in a new dialog
+                self._show_visualization(vis_path, "\n".join(output))
+                
+            except Exception as e:
+                progress_dialog.close()
+                QMessageBox.critical(self, "Execution Error", f"Failed to execute pipeline: {str(e)}")
+                return
+
+    def _save_pipeline_to_file(self, filename):
+        """Save pipeline to a JSON file without showing dialog."""
+        import json
+
+        data = {
+            "containers": [],
+            "components": [], 
+            "connections": [],
+            "transfers": []
+        }
+        
+        # Save compute and GPU boxes first
+        for item in self.scene.items():
+            if isinstance(item, ComputeBox):
+                container_data = {
+                    "type": "ComputeBox",
+                    "name": item.name,
+                    "pos": (item.pos().x(), item.pos().y()),
+                    "size": (item.size.width(), item.size.height()),
+                }
+                if item.compute is not None:
+                    compute_dict = item.compute.to_dict().copy()
+                    if "name" in compute_dict:
+                        container_data["resource_name"] = compute_dict["name"]
+                        del compute_dict["name"]
+                    container_data["compute"] = compute_dict
+                
+                # Store GPU boxes inside this compute box
+                gpu_boxes = []
+                for child in item.childItems():
+                    if isinstance(child, GPUBox):
+                        gpu_data = {
+                            "type": "GPUBox",
+                            "name": child.name,
+                            "pos": (child.pos().x(), child.pos().y()),
+                            "size": (child.size.width(), child.size.height()),
+                        }
+                        if child.compute is not None:
+                            gpu_compute_dict = child.compute.to_dict().copy()
+                            if "name" in gpu_compute_dict:
+                                gpu_data["resource_name"] = gpu_compute_dict["name"]
+                                del gpu_compute_dict["name"]
+                            gpu_data["compute"] = gpu_compute_dict
+                        gpu_boxes.append(gpu_data)
+                
+                container_data["gpu_boxes"] = gpu_boxes
+                data["containers"].append(container_data)
+        
+        # Save components
+        components_by_name = {}  # Map names to components for easier lookup
+        for comp in self._get_all_components():
+            parent_container = None
+            parent_type = None
+            parent_name = None
+            gpu_parent_name = None
+            
+            # Find which container this component belongs to
+            parent = comp.parentItem()
+            if parent:
+                if isinstance(parent, ComputeBox):
+                    parent_type = "ComputeBox"
+                    parent_name = parent.name
+                elif isinstance(parent, GPUBox):
+                    parent_type = "GPUBox"
+                    parent_name = parent.name
+                    # Also get the grandparent (ComputeBox) if it exists
+                    grandparent = parent.parentItem()
+                    if grandparent and isinstance(grandparent, ComputeBox):
+                        gpu_parent_name = grandparent.name
+            
+            comp_data = {
+                "type": comp.component_type.name,
+                "name": comp.name,
+                "pos": (comp.pos().x(), comp.pos().y()),
+                "params": comp.params,
+                "parent_type": parent_type,
+                "parent_name": parent_name,
+                "gpu_parent_name": gpu_parent_name
+            }
+            data["components"].append(comp_data)
+            components_by_name[comp.name] = comp
+        
+        # Save connections
+        for conn in self.scene.connections:
+            # Save basic connection information
+            data["connections"].append({
+                "start": conn.start_block.name,
+                "end": conn.end_block.name,
+            })
+            
+            # Handle camera connections as network
+            if conn.start_block.component_type == ComponentType.CAMERA:
+                # Camera components always output via network
+                logger.debug(f"Detected camera connection from {conn.start_block.name} to {conn.end_block.name}")
+                
+                # Get destination compute resource details
+                dest_comp = conn.end_block
+                dest_res = dest_comp.get_compute_resource()
+                network_speed = None
+                if dest_res:
+                    network_speed = getattr(dest_res, 'network_speed', 100e9)
+                
+                # Determine data size based on camera parameters
+                n_pixels = conn.start_block.params.get("n_pixels", 1024 * 1024)  # Default 1MP
+                bit_depth = conn.start_block.params.get("bit_depth", 16)  # Default 16-bit
+                data_size = n_pixels * bit_depth
+                
+                # Generate a unique name for the transfer component
+                transfer_name = f"Network_Transfer_{conn.start_block.name}_to_{conn.end_block.name}"
+                
+                # Create transfer record
+                transfer_data = {
+                    "type": "NETWORK",
+                    "name": transfer_name,
+                    "transfer_type": "Network",
+                    "source": conn.start_block.name,
+                    "destination": conn.end_block.name,
+                    "data_size": data_size,
+                    "params": {
+                        "n_bits": data_size,
+                        "transfer_type": "network",
+                        "use_dest_network": True
+                    }
+                }
+                
+                # Add network speed if available
+                if network_speed:
+                    transfer_data["params"]["dest_network_speed"] = network_speed
+                
+                # Always add network transfers for camera connections
+                data["transfers"].append(transfer_data)
+                logger.debug(f"Added network transfer for camera: {transfer_name}")
+            else:
+                # For other components, check compute resources to determine transfer type
+                src_comp = conn.start_block
+                dest_comp = conn.end_block
+                
+                # Skip if either component doesn't exist (should never happen)
+                if not src_comp or not dest_comp:
+                    continue
+                
+                # Get compute resources for source and destination
+                src_res = src_comp.get_compute_resource()
+                dest_res = dest_comp.get_compute_resource()
+                
+                # Get parent containers
+                src_parent = src_comp.parentItem()
+                dest_parent = dest_comp.parentItem()
+                
+                # Only add transfer if components are in different containers or hardware types
+                transfer_type = None
+                
+                # Different compute boxes always use network
+                if (src_parent and dest_parent and 
+                    src_parent != dest_parent and
+                    isinstance(src_parent, ComputeBox) and 
+                    isinstance(dest_parent, ComputeBox)):
+                    transfer_type = "Network"
+                # CPU-GPU transfers use PCIe
+                elif ((isinstance(src_parent, GPUBox) and not isinstance(dest_parent, GPUBox)) or
+                    (not isinstance(src_parent, GPUBox) and isinstance(dest_parent, GPUBox))):
+                    transfer_type = "PCIe"
+                # Check hardware type
+                elif src_res and dest_res:
+                    src_hw = getattr(src_res, 'hardware', 'CPU')
+                    dest_hw = getattr(dest_res, 'hardware', 'CPU')
+                    if src_hw != dest_hw:
+                        if 'GPU' in (src_hw, dest_hw):
+                            transfer_type = "PCIe"
+                        else:
+                            transfer_type = "Network"
+                
+                # If we've identified a transfer type, add it to the transfers list
+                if transfer_type:
+                    # Generate a unique name
+                    transfer_name = f"{transfer_type}_Transfer_{src_comp.name}_to_{dest_comp.name}"
+                    
+                    # Estimate data size
+                    data_size = self._estimate_data_size(src_comp, dest_comp)
+                    
+                    # Create transfer record
+                    transfer_data = {
+                        "type": "NETWORK",
+                        "name": transfer_name,
+                        "transfer_type": transfer_type,
+                        "source": src_comp.name,
+                        "destination": dest_comp.name,
+                        "data_size": data_size,
+                        "params": {
+                            "n_bits": data_size,
+                            "transfer_type": transfer_type.lower(),
+                            "group": 50  # Default group size
+                        }
+                    }
+                    
+                    # Add network-specific parameters
+                    if transfer_type == "Network":
+                        # For network transfers, add destination network speed
+                        if dest_res:
+                            network_speed = getattr(dest_res, 'network_speed', 100e9)
+                            transfer_data["params"]["dest_network_speed"] = network_speed
+                            transfer_data["params"]["use_dest_network"] = True
+                            transfer_data["params"]["dest_time_in_driver"] = getattr(dest_res, 'time_in_driver', 5)
+                    
+                    data["transfers"].append(transfer_data)
+                    logger.debug(f"Added {transfer_type} transfer: {transfer_name}")
+        
+        try:
+            with open(filename, "w") as f:
+                json.dump(data, f, indent=2)
+            return True
+        except Exception as e:
+            logger.error(f"Error saving pipeline to {filename}: {str(e)}")
+            return False
+
+    def _show_visualization(self, image_path, output_text):
+        """Show the visualization image in a dialog with embedded matplotlib figure."""
+        from PyQt5.QtWidgets import (
+            QDialog, QVBoxLayout, QLabel, QDialogButtonBox, QScrollArea, 
+            QFileDialog, QTextEdit, QSplitter, QWidget, QPushButton, QHBoxLayout
+        )
+        from PyQt5.QtGui import QPixmap
+        from PyQt5.QtCore import Qt
+        import matplotlib
+        matplotlib.use('Qt5Agg')
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+        from matplotlib.figure import Figure
+        import matplotlib.pyplot as plt
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Pipeline Visualization")
+        dialog.resize(1000, 700)
+        
+        # Main layout
+        main_layout = QVBoxLayout(dialog)
+        
+        # Create a splitter to allow resizing between visualization and text
+        splitter = QSplitter(Qt.Vertical)
+        splitter.setChildrenCollapsible(True)  # Allow sections to be collapsed
+        
+        # Top widget for visualization
+        viz_widget = QWidget()
+        viz_layout = QVBoxLayout(viz_widget)
+        
+        # Try to display the figure directly if possible, otherwise use the saved image
+        try:
+            # Load the image as a matplotlib figure
+            img = plt.imread(image_path)
+            fig = Figure(figsize=(10, 6))
+            ax = fig.add_subplot(111)
+            ax.imshow(img)
+            ax.axis('off')  # Hide axes
+            
+            # Create a canvas to display the figure
+            canvas = FigureCanvasQTAgg(fig)
+            viz_layout.addWidget(canvas)
+        except Exception as e:
+            # Fallback to QPixmap if matplotlib embedding fails
+            print(f"Error embedding matplotlib figure: {str(e)}")
+            scroll_area = QScrollArea()
+            scroll_area.setWidgetResizable(True)
+            
+            image_label = QLabel()
+            pixmap = QPixmap(image_path)
+            image_label.setPixmap(pixmap)
+            image_label.setAlignment(Qt.AlignCenter)
+            
+            scroll_area.setWidget(image_label)
+            viz_layout.addWidget(scroll_area)
+        
+        # Add the visualization widget to the splitter
+        splitter.addWidget(viz_widget)
+        
+        # Bottom widget for text output
+        text_widget = QWidget()
+        text_layout = QVBoxLayout(text_widget)
+        
+        # Add a header with toggle button for the text section
+        text_header = QWidget()
+        header_layout = QHBoxLayout(text_header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        
+        header_label = QLabel("<b>Pipeline Execution Output</b>")
+        header_layout.addWidget(header_label)
+        
+        toggle_button = QPushButton("▼")  # Down arrow to indicate collapsible
+        toggle_button.setMaximumWidth(30)
+        toggle_button.setToolTip("Toggle output visibility")
+        header_layout.addWidget(toggle_button)
+        
+        text_layout.addWidget(text_header)
+        
+        # Add the output text widget
+        output_edit = QTextEdit()
+        output_edit.setReadOnly(True)
+        output_edit.setText(output_text)
+        output_edit.setLineWrapMode(QTextEdit.NoWrap)  # Preserve formatting
+        output_edit.setMinimumHeight(100)
+        text_layout.addWidget(output_edit)
+        
+        # Add the text widget to the splitter
+        splitter.addWidget(text_widget)
+        
+        # Set the initial sizes of the splitter (visualization larger than text)
+        splitter.setSizes([700, 300])
+        
+        # Connect toggle button to hide/show text section
+        def toggle_text_visibility():
+            current_sizes = splitter.sizes()
+            if current_sizes[1] == 0:  # If text is hidden
+                # Show text (roughly 1/3 of the space)
+                total_height = sum(current_sizes)
+                splitter.setSizes([int(total_height * 0.7), int(total_height * 0.3)])
+                toggle_button.setText("▼")  # Down arrow
+            else:  # If text is visible
+                # Hide text (save current proportions first)
+                splitter.setSizes([current_sizes[0] + current_sizes[1], 0])
+                toggle_button.setText("▲")  # Up arrow
+        
+        toggle_button.clicked.connect(toggle_text_visibility)
+        
+        # Add the splitter to the main layout
+        main_layout.addWidget(splitter)
+        
+        # Add buttons
+        button_box = QDialogButtonBox()
+        
+        # Add a save button
+        save_button = button_box.addButton("Save Image", QDialogButtonBox.ActionRole)
+        save_button.clicked.connect(lambda: self._save_visualization_image(image_path))
+        
+        # Add close button
+        close_button = button_box.addButton(QDialogButtonBox.Close)
+        close_button.clicked.connect(dialog.accept)
+        
+        main_layout.addWidget(button_box)
+        
+        dialog.exec_()
+
+    def _save_visualization_image(self, source_path):
+        """Save the visualization image to a user-selected location."""
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Save Visualization", "", "PNG Files (*.png);;All Files (*)"
+        )
+        
+        if filename:
+            from shutil import copyfile
+            try:
+                copyfile(source_path, filename)
+                QMessageBox.information(self, "Image Saved", f"Visualization saved to {filename}")
+            except Exception as e:
+                QMessageBox.critical(self, "Save Error", f"Error saving image: {str(e)}")
 
     @staticmethod
     def run():
