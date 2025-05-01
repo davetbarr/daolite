@@ -36,6 +36,7 @@ setup(
         'console_scripts': [
             'daolite-pipeline-designer=daolite.gui.pipeline_designer:main',
             'daolite-json-runner=daolite.pipeline.json_runner:main',
+            'daolite-centroid-agenda=daolite.gui.centroid_agenda_tool:main',
         ],
     },
 )
