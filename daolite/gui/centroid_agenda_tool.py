@@ -7,6 +7,7 @@ This tool allows users to load a readout order and sub-aperture map, set sub-ape
 import sys
 import numpy as np
 import logging
+import tempfile
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFileDialog, QMessageBox, QSpinBox, QComboBox, QStatusBar, QDialog
 )
@@ -337,6 +338,10 @@ def show_centroid_agenda_tool(parent=None):
     dlg.exec_()
 
 def main():
+    import logging
+    logfile = tempfile.NamedTemporaryFile(prefix="daolite_", suffix=".log", delete=False)
+    logging.basicConfig(filename=logfile.name, level=logging.INFO, filemode='w')
+    print(f"Logging to {logfile.name}")
     from PyQt5.QtWidgets import QApplication
     import sys
     app = QApplication(sys.argv)

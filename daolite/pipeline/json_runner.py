@@ -13,6 +13,9 @@ from daolite.utils.network import TimeOnNetwork, network_transfer
 from daolite.utils import chronograph
 import numpy as np
 import matplotlib.pyplot as plt
+import tempfile
+
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 FUNCTION_MAP = {
     "PCOCamLink": PCOCamLink,
@@ -437,6 +440,11 @@ def run_pipeline_from_json(json_path):
 
 
 def main():
+    import logging
+    logfile = tempfile.NamedTemporaryFile(prefix="daolite_", suffix=".log", delete=False)
+    logging.basicConfig(filename=logfile.name, level=logging.INFO, filemode='w')
+    print(f"Logging to {logfile.name}")
+    
     parser = argparse.ArgumentParser(
         description="Run a daolite pipeline from a JSON file."
     )

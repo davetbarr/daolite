@@ -7,6 +7,7 @@ This module provides functions for displaying and saving pipeline visualizations
 import os
 import logging
 import matplotlib
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QDialogButtonBox, QScrollArea, 
     QFileDialog, QTextEdit, QSplitter, QWidget, QPushButton, QHBoxLayout

@@ -310,36 +310,19 @@ class CodeGenerator:
         Returns:
             str: Python code for the compute resource
         """
-        # Always provide all required arguments for create_compute_resources
         compute_resource = component.get_compute_resource()
         if compute_resource:
-            # If the component has a compute resource from a parent container
             c = compute_resource
-            # Check if it's a known hardware resource we can reference directly
             resource_name = getattr(c, 'name', '').lower() if hasattr(c, 'name') else ''
-            
-            # Check for common hardware resources we can reference directly
+            # Use new hardware resource loader: check for YAML-based hardware resource
+            import os
+            hardware_dir = os.path.join(os.path.dirname(__file__), '../../compute/hardware')
             if resource_name:
-                # Map resource names to their import names
-                resource_map = {
-                    'amd epyc 7763': 'hardware.amd_epyc_7763()',
-                    'amd epyc 9654': 'hardware.amd_epyc_9654()',
-                    'intel xeon 8480': 'hardware.intel_xeon_8480()',
-                    'intel xeon 8462': 'hardware.intel_xeon_8462()',
-                    'amd ryzen 9 7950x': 'hardware.amd_ryzen_7950x()',
-                    'nvidia a100 80gb': 'hardware.nvidia_a100_80gb()',
-                    'nvidia h100 80gb': 'hardware.nvidia_h100_80gb()',
-                    'nvidia rtx 4090': 'hardware.nvidia_rtx_4090()',
-                    'amd instinct mi300x': 'hardware.amd_mi300x()'
-                }
-                
-                # Look for matches in our resource map
-                for hw_name, hw_code in resource_map.items():
-                    if hw_name in resource_name.lower():
-                        self.import_statements.add("from daolite.compute import hardware")
-                        return hw_code
-                
-            # Otherwise, create compute resources with specific values
+                yaml_path = os.path.join(hardware_dir, f'{resource_name}.yaml')
+                if os.path.exists(yaml_path):
+                    self.import_statements.add("from daolite.compute import hardware")
+                    return f"hardware.{resource_name}()"
+            # Fallback to explicit resource fields if not a known YAML hardware
             return (
                 f"create_compute_resources("
                 f"cores={getattr(c, 'cores', 16)}, "
@@ -351,53 +334,67 @@ class CodeGenerator:
                 f"network_speed={getattr(c, 'network_speed', 100e9)}, "
                 f"time_in_driver={getattr(c, 'time_in_driver', 5.0)})"
             )
-        else:
-            # Use default values if no compute resource is found
-            return (
-                "create_compute_resources("
-                "cores=16, core_frequency=2.6e9, flops_per_cycle=32, "
-                "memory_frequency=3.2e9, memory_width=64, memory_channels=8, "
-                "network_speed=100e9, time_in_driver=5.0)"
-            )
+        # Try to get parent container compute resource
+        parent = getattr(component, 'parentItem', lambda: None)()
+        if parent and hasattr(parent, 'get_compute_resource'):
+            c = parent.get_compute_resource()
+            if c:
+                resource_name = getattr(c, 'name', '').lower() if hasattr(c, 'name') else ''
+                import os
+                hardware_dir = os.path.join(os.path.dirname(__file__), '../../compute/hardware')
+                if resource_name:
+                    yaml_path = os.path.join(hardware_dir, f'{resource_name}.yaml')
+                    if os.path.exists(yaml_path):
+                        self.import_statements.add("from daolite.compute import hardware")
+                        return f"hardware.{resource_name}()"
+                return (
+                    f"create_compute_resources("
+                    f"cores={getattr(c, 'cores', 16)}, "
+                    f"core_frequency={getattr(c, 'core_frequency', 2.6e9)}, "
+                    f"flops_per_cycle={getattr(c, 'flops_per_cycle', 32)}, "
+                    f"memory_frequency={getattr(c, 'memory_frequency', 3.2e9)}, "
+                    f"memory_width={getattr(c, 'memory_width', 64)}, "
+                    f"memory_channels={getattr(c, 'memory_channels', 8)}, "
+                    f"network_speed={getattr(c, 'network_speed', 100e9)}, "
+                    f"time_in_driver={getattr(c, 'time_in_driver', 5.0)})"
+                )
+        # Fallback to default
+        return (
+            "create_compute_resources("
+            "cores=16, core_frequency=2.6e9, flops_per_cycle=32, "
+            "memory_frequency=3.2e9, memory_width=64, memory_channels=8, "
+            "network_speed=100e9, time_in_driver=5.0)"
+        )
 
     def _generate_params_code(self, component: ComponentBlock) -> List[str]:
         lines = []
         lines.append("params={")
-        # Add default parameters based on component type
+        # --- Use json_runner.py logic for parameter defaults ---
+        # CAMERA
         if component.component_type == ComponentType.CAMERA:
             camera_func = component.params.get("camera_function", "PCOCamLink")
-            if camera_func == "PCOCamLink":
-                lines.append('    "n_pixels": 1024 * 1024,  # 1MP camera')
-                lines.append('    "group": 50,  # Default packet count (was group_size)')
-            elif (
-                camera_func == "GigeVisionCamera"
-                or camera_func == "RollingShutterCamera"
-            ):
-                lines.append('    "n_pixels": 1024 * 1024,  # 1MP camera')
-                lines.append('    "group": 50,  # Default packet count (was group_size)')
-            # Add more camera types here as needed
-        elif component.component_type == ComponentType.CENTROIDER:
-            lines.append('    "n_valid_subaps": 5120,  # Valid subapertures (80x80 * 0.8)')
-            lines.append('    "n_pix_per_subap": 256,  # 16x16 pixels per subaperture')
+            n_pixels = component.params.get("n_pixels", 1024 * 1024)
+            group = component.params.get("group", 50)
+            lines.append(f'    "n_pixels": {n_pixels},  # 1MP camera')
+            lines.append(f'    "group": {group},  # Default packet count (was group_size)')
+        # CALIBRATION
         elif component.component_type == ComponentType.CALIBRATION:
-            # Defaults for PixelCalibration
-            lines.append('    "n_pixels": 1024 * 1024,  # 1MP sensor')
-            lines.append('    "group": 50,  # Default group size')
-        # Add custom parameters from component
+            n_pixels = component.params.get("n_pixels", 1024 * 1024)
+            group = component.params.get("group", 50)
+            lines.append(f'    "n_pixels": {n_pixels},  # 1MP sensor')
+            lines.append(f'    "group": {group},  # Default group size')
+        # CENTROIDER
+        elif component.component_type == ComponentType.CENTROIDER:
+            n_valid_subaps = component.params.get("n_valid_subaps", 6400)
+            n_pix_per_subap = component.params.get("n_pix_per_subap", 16)
+            group = component.params.get("group", 50)
+            lines.append(f'    "n_valid_subaps": {n_valid_subaps},  # 80x80')
+            lines.append(f'    "n_pix_per_subap": {n_pix_per_subap},  # 16 pixels per subap')
+            lines.append(f'    "group": {group},  # Default group size')
+        # Add custom parameters from component, skipping those already added
+        already = {"n_pixels", "group", "n_valid_subaps", "n_pix_per_subap"}
         for key, value in component.params.items():
-            # Map group_size to group for camera functions
-            if component.component_type == ComponentType.CAMERA and key == "group_size":
-                key = "group"
-            # Map CENTROIDER keys to correct names
-            if component.component_type == ComponentType.CENTROIDER:
-                if key == "n_subaps":
-                    key = "n_valid_subaps"
-                if key == "pixels_per_subap":
-                    key = "n_pix_per_subap"
-            # Skip keys we've already added defaults for
-            if key in ['n_pixels', 'group', 'n_valid_subaps', 'n_pix_per_subap', 
-                      'n_slopes', 'n_actuators', 'n_bits'] and any(
-                f'"{key}"' in line for line in lines):
+            if key in already:
                 continue
             if isinstance(value, str):
                 lines.append(f'    "{key}": "{value}",')
@@ -624,6 +621,18 @@ class CodeGenerator:
         print(f"DEBUG: Creating transfer component {transfer_name} from {src_comp.name} to {dest_comp.name}")
         
         # Create component dict with all necessary information
+        params = {
+            "n_bits": data_size,
+            "transfer_type": transfer_type.lower(),
+        }
+        # Use json_runner.py logic for network transfer params
+        if transfer_type == "Network":
+            params["group"] = src_comp.params.get("group", src_comp.params.get("group_size", 50))
+            dest_compute = dest_comp.get_compute_resource()
+            if dest_compute:
+                params["use_dest_network"] = True
+                params["dest_network_speed"] = getattr(dest_compute, 'network_speed', 100e9)
+                params["dest_time_in_driver"] = getattr(dest_compute, 'time_in_driver', 5.0)
         transfer_comp = {
             "name": transfer_name,
             "type": ComponentType.NETWORK,
@@ -631,11 +640,7 @@ class CodeGenerator:
             "dest_comp": dest_comp,
             "transfer_type": transfer_type,
             "data_size": data_size,
-            "params": {
-                "n_bits": data_size,
-                "transfer_type": transfer_type.lower()
-            },
-            # Important: Add dependency on source component here
+            "params": params,
             "dependencies": [src_comp.name]
         }
         
