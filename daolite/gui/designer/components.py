@@ -16,6 +16,8 @@ from PyQt5.QtWidgets import (
     QColorDialog,
     QGraphicsTextItem,
     QGraphicsRectItem,
+    QFileDialog,
+    QMessageBox,
 )
 from PyQt5.QtCore import Qt, QRectF, QPointF
 from PyQt5.QtGui import QPen, QBrush, QColor, QPainter, QFont, QPainterPath
@@ -413,10 +415,11 @@ class ComponentBlock(QGraphicsItem):
         rename_action.triggered.connect(self._on_rename)
         menu.addAction(rename_action)
 
-        # Add action to configure compute resource
-        configure_action = QAction("Configure Compute Resource", menu)
-        configure_action.triggered.connect(self._on_configure)
-        menu.addAction(configure_action)
+        # Only add compute resource configuration for ComputeBox or GPUBox
+        if type(self).__name__ in ("ComputeBox", "GPUBox"):
+            configure_action = QAction("Configure Compute Resource", menu)
+            configure_action.triggered.connect(self._on_configure)
+            menu.addAction(configure_action)
 
         # Add action to configure parameters
         params_action = QAction("Configure Parameters", menu)

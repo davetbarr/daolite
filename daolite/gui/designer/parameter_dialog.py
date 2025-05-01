@@ -16,6 +16,9 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
     QSpinBox,
+    QLabel,
+    QFileDialog,
+    QMessageBox,
 )
 
 from daolite.common import ComponentType
@@ -140,63 +143,76 @@ class ComponentParametersDialog(QDialog):
                 hint="Number of packet groups",
             )
 
-        elif self.component_type == ComponentType.CENTROIDER:
-            self._add_numeric_param(
-                form_layout,
-                "n_subaps",
-                "Valid Subapertures",
-                hint="Number of valid subapertures",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "pixels_per_subap",
-                "Pixels per Subaperture",
-                hint="Pixels per subaperture (e.g., 16*16)",
-            )
-            self._add_checkbox_param(
-                form_layout,
-                "square_diff",
-                "Use Square Difference",
-                hint="Use square difference algorithm",
-            )
-            self._add_checkbox_param(
-                form_layout, "sort", "Use Sorting", hint="Apply sorting to results"
-            )
-            self._add_numeric_param(
-                form_layout,
-                "n_workers",
-                "Number of Workers",
-                default="4",
-                hint="Number of worker threads",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "scale",
-                "Scale Factor",
-                default="1.0",
-                hint="Computation scale factor",
-            )
-
-        elif self.component_type == ComponentType.RECONSTRUCTION:
-            self._add_numeric_param(
-                form_layout,
-                "n_slopes",
-                "Number of Slopes",
-                hint="Total number of slopes (usually 2 * valid subapertures)",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "n_actuators",
-                "Number of Actuators",
-                hint="Total number of DM actuators",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "scale",
-                "Scale Factor",
-                default="1.0",
-                hint="Computation scale factor",
-            )
+        elif self.component_type == ComponentType.CENTROIDER or self.component_type == ComponentType.RECONSTRUCTION:
+            if self.component_type == ComponentType.CENTROIDER:
+                self._add_numeric_param(
+                    form_layout,
+                    "n_subaps",
+                    "Valid Subapertures",
+                    hint="Number of valid subapertures",
+                )
+                self._add_numeric_param(
+                    form_layout,
+                    "n_pix_per_subap",
+                    "Pixels per Subaperture",
+                    hint="Pixels per subaperture (e.g., 16)",
+                )
+                self._add_checkbox_param(
+                    form_layout,
+                    "square_diff",
+                    "Use Square Difference",
+                    hint="Use square difference algorithm",
+                )
+                self._add_checkbox_param(
+                    form_layout, "sort", "Use Sorting", hint="Apply sorting to results"
+                )
+                self._add_numeric_param(
+                    form_layout,
+                    "n_workers",
+                    "Number of Workers",
+                    default="4",
+                    hint="Number of worker threads",
+                )
+                self._add_numeric_param(
+                    form_layout,
+                    "scale",
+                    "Scale Factor",
+                    default="1.0",
+                    hint="Computation scale factor",
+                )
+            elif self.component_type == ComponentType.RECONSTRUCTION:
+                self._add_numeric_param(
+                    form_layout,
+                    "n_slopes",
+                    "Number of Slopes",
+                    hint="Total number of slopes (usually 2 * valid subapertures)",
+                )
+                self._add_numeric_param(
+                    form_layout,
+                    "n_actuators",
+                    "Number of Actuators",
+                    hint="Total number of DM actuators",
+                )
+                self._add_numeric_param(
+                    form_layout,
+                    "scale",
+                    "Scale Factor",
+                    default="1.0",
+                    hint="Computation scale factor",
+                )
+            # Add agenda file picker
+            agenda_layout = QHBoxLayout()
+            self.agenda_label = QLabel()
+            agenda_btn = QPushButton("Select Centroid Agenda File")
+            agenda_btn.clicked.connect(self._select_agenda_file)
+            agenda_layout.addWidget(agenda_btn)
+            agenda_layout.addWidget(self.agenda_label)
+            form_layout.addRow("Centroid Agenda:", agenda_layout)
+            # If already set, show summary
+            self.agenda_array = None
+            self.agenda_path = self.current_params.get("centroid_agenda_path", None)
+            if self.agenda_path:
+                self._load_agenda(self.agenda_path)
 
         elif self.component_type == ComponentType.CONTROL:
             self._add_numeric_param(
@@ -318,6 +334,38 @@ class ComponentParametersDialog(QDialog):
         form_layout.addRow(f"{label}:", checkbox)
         self.param_widgets[name] = checkbox
 
+    def _select_agenda_file(self):
+        """
+        Open a file dialog to select a centroid agenda file.
+        """
+        import numpy as np
+        filename, _ = QFileDialog.getOpenFileName(self, "Select Centroid Agenda File", "", "NumPy files (*.npy);;CSV files (*.csv);;All Files (*)")
+        if not filename:
+            return
+        self._load_agenda(filename)
+
+    def _load_agenda(self, filename):
+        """
+        Load the selected centroid agenda file and display its summary.
+
+        Args:
+            filename: Path to the agenda file
+        """
+        import numpy as np
+        try:
+            if filename.endswith(".npy"):
+                agenda = np.load(filename)
+            elif filename.endswith(".csv"):
+                agenda = np.loadtxt(filename, delimiter=",")
+            else:
+                agenda = np.load(filename)
+            self.agenda_array = agenda
+            self.agenda_path = filename
+            self.agenda_label.setText(f"Loaded: {filename.split('/')[-1]} (shape: {agenda.shape})")
+        except Exception as e:
+            self.agenda_label.setText("Load failed")
+            QMessageBox.critical(self, "Load Error", f"Failed to load agenda: {e}")
+
     def get_parameters(self) -> Dict[str, Any]:
         """
         Get the configured parameters.
@@ -354,5 +402,10 @@ class ComponentParametersDialog(QDialog):
 
             elif isinstance(widget, QSpinBox):
                 params[name] = widget.value()
+
+        # Add agenda if present
+        if hasattr(self, 'agenda_array') and self.agenda_array is not None:
+            params["centroid_agenda"] = self.agenda_array
+            params["centroid_agenda_path"] = self.agenda_path
 
         return params

@@ -4,7 +4,7 @@ import inspect
 from daolite import Pipeline, PipelineComponent, ComponentType
 from daolite.compute import create_compute_resources
 from daolite.simulation.camera import PCOCamLink, GigeVisionCamera, RollingShutterCamera
-from daolite.pipeline.centroider import CrossCorrelate
+from daolite.pipeline.centroider import Centroider
 from daolite.pipeline.reconstruction import Reconstruction
 from daolite.pipeline.control import FullFrameControl
 from daolite.pipeline.calibration import PixelCalibration
@@ -17,7 +17,7 @@ FUNCTION_MAP = {
     "PCOCamLink": PCOCamLink,
     "GigeVisionCamera": GigeVisionCamera,
     "RollingShutterCamera": RollingShutterCamera,
-    "cross_correlation_centroider": CrossCorrelate,
+    "cross_correlation_centroider": Centroider,
     "mvr_reconstruction": Reconstruction,
     "dm_control": FullFrameControl,
     "PixelCalibration": PixelCalibration,
@@ -410,6 +410,7 @@ def main():
     )
     parser.add_argument("json_file", help="Path to the pipeline JSON file")
     parser.add_argument("--show", action="store_true", help="Show visualization of pipeline execution timeline")
+    parser.add_argument("--no-show", action="store_true", help="Don't show visualization (overrides --show)")
     parser.add_argument("--save", help="Save visualization to specified file path", default=None)
     args = parser.parse_args()
     
@@ -423,10 +424,12 @@ def main():
         print(results)
     
     # Visualize pipeline if requested
-    if args.show or args.save:
+    if args.save or args.show:
         title = f"Pipeline Timing: {args.json_file}"
         save_path = args.save
-        visualize_pipeline(pipeline, title, save_path, show=args.show)
+        # Only show if --show is set and --no-show is not set
+        show_viz = args.show and not args.no_show
+        visualize_pipeline(pipeline, title, save_path, show=show_viz)
 
 
 if __name__ == "__main__":
