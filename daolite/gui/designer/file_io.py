@@ -29,6 +29,17 @@ from .data_transfer import estimate_data_size
 # Set up logging
 logger = logging.getLogger('FileIO')
 
+def _to_dict_recursive(obj):
+    if hasattr(obj, 'to_dict') and callable(obj.to_dict):
+        d = obj.to_dict().copy()
+        # Recursively convert attached_gpus if present
+        if 'attached_gpus' in d and isinstance(d['attached_gpus'], list):
+            d['attached_gpus'] = [_to_dict_recursive(g) for g in d['attached_gpus']]
+        return d
+    elif isinstance(obj, list):
+        return [_to_dict_recursive(i) for i in obj]
+    return obj
+
 def save_pipeline_to_file(scene, components, connections, filename):
     """
     Save pipeline design to a JSON file.
@@ -59,7 +70,7 @@ def save_pipeline_to_file(scene, components, connections, filename):
                 "size": (item.size.width(), item.size.height()),
             }
             if item.compute is not None:
-                compute_dict = item.compute.to_dict().copy()
+                compute_dict = _to_dict_recursive(item.compute)
                 if "name" in compute_dict:
                     container_data["resource_name"] = compute_dict["name"]
                     del compute_dict["name"]
@@ -76,7 +87,7 @@ def save_pipeline_to_file(scene, components, connections, filename):
                         "size": (child.size.width(), child.size.height()),
                     }
                     if child.compute is not None:
-                        gpu_compute_dict = child.compute.to_dict().copy()
+                        gpu_compute_dict = _to_dict_recursive(child.compute)
                         if "name" in gpu_compute_dict:
                             gpu_data["resource_name"] = gpu_compute_dict["name"]
                             del gpu_compute_dict["name"]
@@ -146,6 +157,12 @@ def save_pipeline_to_file(scene, components, connections, filename):
             elif not isinstance(params["centroid_agenda"], str):
                 # Remove if not a string (should not save numpy array)
                 del params["centroid_agenda"]
+        
+        # Ensure all params are JSON serializable
+        for k, v in list(params.items()):
+            # Convert ComputeResources or similar objects to dict
+            if hasattr(v, 'to_dict') and callable(v.to_dict):
+                params[k] = v.to_dict()
         
         comp_data = {
             "type": comp.component_type.name,

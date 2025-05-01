@@ -2,6 +2,7 @@ name: "NVIDIA RTX 4090"
 description: "NVIDIA GeForce RTX 4090 GPU"
 
 # Hardware specifications
+hardware: GPU
 cores: 128               # Streaming Multiprocessors
 core_frequency: 2.23e9   # 2.23 GHz base clock
 flops_per_cycle: 5632    # FP32 FLOPS per cycle

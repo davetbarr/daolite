@@ -880,7 +880,7 @@ class PipelineDesignerApp(QMainWindow):
         self.view = QGraphicsView(self.scene)
         self.view.setRenderHint(
             QPainter.Antialiasing
-        )  # Fixed: Using QPainter.Antialiasing instead of self.view.Antialiasing
+        ) 
         self.view.setDragMode(self.view.RubberBandDrag)
         self.view.setViewportUpdateMode(self.view.FullViewportUpdate)
         self.setCentralWidget(self.view)
@@ -1236,8 +1236,7 @@ class PipelineDesignerApp(QMainWindow):
             self.scene,
             self._get_all_components(),
             self.scene.connections,
-            default_path,
-            pipeline_title=self.pipeline_title
+            default_path
         )
         self.statusBar().showMessage(f"Pipeline quick-saved to {default_path}", 3000)
 
@@ -1412,8 +1411,7 @@ class PipelineDesignerApp(QMainWindow):
                 self.scene, 
                 self._get_all_components(), 
                 self.scene.connections, 
-                filename,
-                pipeline_title=self.pipeline_title
+                filename
             )
             if success:
                 QMessageBox.information(

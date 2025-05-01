@@ -2,6 +2,7 @@ name: "NVIDIA H100 80GB"
 description: "NVIDIA H100 80GB Tensor Core GPU"
 
 # Hardware specifications
+hardware: GPU
 cores: 132               # SMX count (each with multiple cores)
 core_frequency: 1.83e9   # 1.83 GHz base clock
 flops_per_cycle: 39321   # FP64 tensor core FLOPS per cycle

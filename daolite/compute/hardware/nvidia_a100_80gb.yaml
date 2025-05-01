@@ -2,6 +2,7 @@ name: "NVIDIA A100 80GB"
 description: "NVIDIA A100 80GB Tensor Core GPU"
 
 # Hardware specifications
+hardware: GPU
 cores: 108               # SMX count (each with multiple cores)
 core_frequency: 1.41e9   # 1.41 GHz base clock
 flops_per_cycle: 19456   # FP64 tensor core FLOPS per cycle

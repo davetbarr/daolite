@@ -2,6 +2,7 @@ name: "AMD Instinct MI300X"
 description: "AMD Instinct MI300X Accelerator"
 
 # Hardware specifications
+hardware: GPU
 cores: 304               # Compute Units
 core_frequency: 1.7e9    # 1.7 GHz base clock
 flops_per_cycle: 9728    # FP64 FLOPS per cycle
