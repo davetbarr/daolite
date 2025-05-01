@@ -73,12 +73,19 @@ def Reconstruction(
         group: Number of slopes per group (default: 50)
         scale: Scaling factor for computation time (default: 1.0)
         n_workers: Number of parallel workers (default: 1)
-        agenda: Optional array specifying slopes per iteration
+        agenda: Optional array or filename specifying slopes per iteration
         debug: Enable debug output (default: False)
 
     Returns:
         np.ndarray: Array of shape (rows, 2) with processing start/end times
     """
+    # Support agenda as filename or array
+    if agenda is not None and isinstance(agenda, str):
+        try:
+            agenda = np.load(agenda)
+        except Exception:
+            agenda = np.genfromtxt(agenda)
+
     n_slopes_per_group = _calculate_n_slopes(n_slopes, group, n_workers, agenda)
     timings = np.zeros([start_times.shape[0], 2])
 

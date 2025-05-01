@@ -81,197 +81,58 @@ class ComponentParametersDialog(QDialog):
 
     def _add_component_params(self, form_layout: QFormLayout):
         """
-        Add component-specific parameters to the form.
-
-        Args:
-            form_layout: Form layout to add parameters to
+        Add component-specific parameters to the form, dynamically based on the function signature.
         """
-        if self.component_type == ComponentType.CAMERA:
-            # --- Camera simulation function dropdown ---
-            from daolite.simulation import __all__ as camera_funcs
+        import inspect
+        import importlib
+        from daolite.common import ComponentType
 
-            camera_func_names = [
-                f for f in camera_funcs if f.endswith("Camera") or f == "PCOCamLink"
-            ]
-            camera_func_combo = QComboBox()
-            camera_func_combo.addItems(camera_func_names)
-            # Set current value if present
-            current_func = self.current_params.get("camera_function", "PCOCamLink")
-            idx = camera_func_combo.findText(current_func)
-            if idx >= 0:
-                camera_func_combo.setCurrentIndex(idx)
-            form_layout.addRow("Camera Simulation Type:", camera_func_combo)
-            self.param_widgets["camera_function"] = camera_func_combo
-            # --- End camera simulation function dropdown ---
-            self._add_numeric_param(
-                form_layout,
-                "n_pixels",
-                "Number of Pixels",
-                hint="Total number of pixels (e.g., 1024*1024 for 1MP)",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "n_subapertures",
-                "Number of Subapertures",
-                hint="Total subapertures (e.g., 80*80 for an 80×80 grid)",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "pixels_per_subaperture",
-                "Pixels per Subaperture",
-                hint="Pixels per subaperture (e.g., 16*16)",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "bit_depth",
-                "Bit Depth",
-                default="16",
-                hint="Pixel bit depth",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "readout_time",
-                "Readout Time (μs)",
-                default="500",
-                hint="Camera readout time in microseconds",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "group_size",
-                "Group Size",
-                default="50",
-                hint="Number of packet groups",
-            )
-
-        elif self.component_type == ComponentType.CENTROIDER or self.component_type == ComponentType.RECONSTRUCTION:
-            if self.component_type == ComponentType.CENTROIDER:
-                self._add_numeric_param(
-                    form_layout,
-                    "n_subaps",
-                    "Valid Subapertures",
-                    hint="Number of valid subapertures",
-                )
-                self._add_numeric_param(
-                    form_layout,
-                    "n_pix_per_subap",
-                    "Pixels per Subaperture",
-                    hint="Pixels per subaperture (e.g., 16)",
-                )
-                self._add_checkbox_param(
-                    form_layout,
-                    "square_diff",
-                    "Use Square Difference",
-                    hint="Use square difference algorithm",
-                )
-                self._add_checkbox_param(
-                    form_layout, "sort", "Use Sorting", hint="Apply sorting to results"
-                )
-                self._add_numeric_param(
-                    form_layout,
-                    "n_workers",
-                    "Number of Workers",
-                    default="4",
-                    hint="Number of worker threads",
-                )
-                self._add_numeric_param(
-                    form_layout,
-                    "scale",
-                    "Scale Factor",
-                    default="1.0",
-                    hint="Computation scale factor",
-                )
-            elif self.component_type == ComponentType.RECONSTRUCTION:
-                self._add_numeric_param(
-                    form_layout,
-                    "n_slopes",
-                    "Number of Slopes",
-                    hint="Total number of slopes (usually 2 * valid subapertures)",
-                )
-                self._add_numeric_param(
-                    form_layout,
-                    "n_actuators",
-                    "Number of Actuators",
-                    hint="Total number of DM actuators",
-                )
-                self._add_numeric_param(
-                    form_layout,
-                    "scale",
-                    "Scale Factor",
-                    default="1.0",
-                    hint="Computation scale factor",
-                )
-            # Add agenda file picker
-            agenda_layout = QHBoxLayout()
-            self.agenda_label = QLabel()
-            agenda_btn = QPushButton("Select Centroid Agenda File")
-            agenda_btn.clicked.connect(self._select_agenda_file)
-            agenda_layout.addWidget(agenda_btn)
-            agenda_layout.addWidget(self.agenda_label)
-            form_layout.addRow("Centroid Agenda:", agenda_layout)
-            # If already set, show summary
-            self.agenda_array = None
-            self.agenda_path = self.current_params.get("centroid_agenda_path", None)
-            if self.agenda_path:
-                self._load_agenda(self.agenda_path)
-
-        elif self.component_type == ComponentType.CONTROL:
-            self._add_numeric_param(
-                form_layout,
-                "n_actuators",
-                "Number of Actuators",
-                hint="Total number of DM actuators",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "combine",
-                "Number to Combine",
-                default="1",
-                hint="Number of frames to combine",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "scale",
-                "Scale Factor",
-                default="1.0",
-                hint="Computation scale factor",
-            )
-
-        elif self.component_type == ComponentType.CALIBRATION:
-            self._add_numeric_param(
-                form_layout,
-                "n_pixels",
-                "Number of Pixels",
-                hint="Total number of pixels to calibrate",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "group",
-                "Group Size",
-                default="50",
-                hint="Number of packet groups",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "scale",
-                "Scale Factor",
-                default="1.0",
-                hint="Computation scale factor",
-            )
-
-        elif self.component_type == ComponentType.NETWORK:
-            self._add_numeric_param(
-                form_layout,
-                "n_bits",
-                "Number of Bits",
-                hint="Total bits to transfer (e.g., actuators * 32)",
-            )
-            self._add_numeric_param(
-                form_layout,
-                "time_in_driver",
-                "Driver Time (μs)",
-                default="5",
-                hint="Time spent in driver in microseconds",
-            )
+        # Map component type to function import path
+        func_map = {
+            ComponentType.CAMERA: ("daolite.simulation.camera", "PCOCamLink"),
+            ComponentType.CENTROIDER: ("daolite.pipeline.centroider", "Centroider"),
+            ComponentType.RECONSTRUCTION: ("daolite.pipeline.reconstruction", "Reconstruction"),
+            ComponentType.CALIBRATION: ("daolite.pipeline.calibration", "PixelCalibration"),
+            ComponentType.CONTROL: ("daolite.pipeline.control", "FullFrameControl"),
+            ComponentType.NETWORK: ("daolite.utils.network", "network_transfer"),
+        }
+        func_info = func_map.get(self.component_type)
+        if not func_info:
+            return  # Unknown component type
+        module_name, func_name = func_info
+        try:
+            module = importlib.import_module(module_name)
+            func = getattr(module, func_name)
+        except Exception:
+            return  # Could not import function
+        sig = inspect.signature(func)
+        # Build form fields for each parameter (skip self, debug, compute_resources, and start_times)
+        for param in sig.parameters.values():
+            if param.name in ("self", "debug", "compute_resources", "start_times"):  # skip
+                continue
+            # Special handling for agenda/centroid_agenda
+            if param.name in ("agenda", "centroid_agenda"):
+                agenda_layout = QHBoxLayout()
+                self.agenda_lineedit = QLineEdit()
+                self.agenda_lineedit.setReadOnly(True)
+                if self.current_params.get("centroid_agenda_path"):
+                    self.agenda_lineedit.setText(self.current_params["centroid_agenda_path"])
+                agenda_btn = QPushButton("Select Centroid Agenda File")
+                agenda_btn.clicked.connect(self._select_agenda_file)
+                agenda_layout.addWidget(self.agenda_lineedit)
+                agenda_layout.addWidget(agenda_btn)
+                form_layout.addRow("Centroid Agenda:", agenda_layout)
+                self.agenda_array = None
+                self.agenda_path = self.current_params.get("centroid_agenda_path", None)
+                if self.agenda_path:
+                    self._load_agenda(self.agenda_path)
+                continue
+            # Checkbox for bools
+            if param.annotation is bool or param.default is False or param.default is True:
+                self._add_checkbox_param(form_layout, param.name, param.name.replace("_", " ").title())
+            else:
+                default = str(param.default) if param.default is not inspect.Parameter.empty else ""
+                self._add_numeric_param(form_layout, param.name, param.name.replace("_", " ").title(), default=default)
 
     def _add_numeric_param(
         self,
@@ -342,6 +203,9 @@ class ComponentParametersDialog(QDialog):
         filename, _ = QFileDialog.getOpenFileName(self, "Select Centroid Agenda File", "", "NumPy files (*.npy);;CSV files (*.csv);;All Files (*)")
         if not filename:
             return
+        self.agenda_path = filename
+        if hasattr(self, 'agenda_lineedit'):
+            self.agenda_lineedit.setText(filename)
         self._load_agenda(filename)
 
     def _load_agenda(self, filename):

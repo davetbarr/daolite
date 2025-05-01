@@ -201,12 +201,19 @@ def Centroider(
         n_workers: Number of parallel workers
         delay_start: Delay start time by N groups
         sort: Whether to sort centroids
-        agenda: Optional array specifying number of subaps per iteration
+        agenda: Optional array or filename specifying number of subaps per iteration
         debug: Enable debug output
 
     Returns:
         np.ndarray: Array of shape (rows, 2) with processing start/end times
     """
+    # Support agenda as filename or array
+    if agenda is not None and isinstance(agenda, str):
+        try:
+            agenda = np.load(agenda)
+        except Exception:
+            agenda = np.genfromtxt(agenda)
+
     if n_valid_subaps == 1:
         total_time = (
             Centroid(n_valid_subaps, n_pix_per_subap, compute_resources, sort, debug)

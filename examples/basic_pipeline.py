@@ -6,6 +6,7 @@ from daolite.pipeline.centroider import Centroider
 from daolite.pipeline.reconstruction import Reconstruction
 from daolite.pipeline.control import FullFrameControl
 from daolite.pipeline.calibration import PixelCalibration
+import numpy as np
 
 pipeline = Pipeline()
 
@@ -15,6 +16,8 @@ n_pix_per_subap = 16 * 16
 n_valid_subaps = int(n_subaps * 0.8)
 n_acts = 5000
 n_groups = 50
+
+centroid_agenda = np.ones(n_groups) * (n_valid_subaps / n_groups)
 
 pipeline.add_component(
     PipelineComponent(
@@ -43,7 +46,11 @@ pipeline.add_component(
         name="Centroider",
         compute=hardware.nvidia_rtx_4090(),
         function=Centroider,
-        params={"n_valid_subaps": n_valid_subaps, "n_pix_per_subap": n_pix_per_subap},
+        params={
+            "n_valid_subaps": n_valid_subaps,
+            "n_pix_per_subap": n_pix_per_subap,
+            "agenda": centroid_agenda,  # Pass agenda as numpy array
+        },
         dependencies=["Calibration"],
     )
 )
@@ -53,7 +60,11 @@ pipeline.add_component(
         name="Reconstructor",
         compute=hardware.nvidia_rtx_4090(),
         function=Reconstruction,
-        params={"n_slopes": n_valid_subaps * 2, "n_acts": n_acts},
+        params={
+            "n_slopes": n_valid_subaps * 2,
+            "n_acts": n_acts,
+            "agenda": centroid_agenda,  # Pass agenda as numpy array
+        },
         dependencies=["Centroider"],
     )
 )

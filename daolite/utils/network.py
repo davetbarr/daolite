@@ -83,7 +83,7 @@ def network_transfer(
         # Subsequent groups start when previous transfer ends AND source data is available
         for i in range(1, len(start_times)):
             # Start when both previous transfer is complete AND source data is available
-            network_timings[i, 0] = max(network_timings[i-1, 1], start_times[i, 1])
+            network_timings[i, 0] = start_times[i, 1]
             network_timings[i, 1] = network_timings[i, 0] + total_time_per_group
         
         if debug:

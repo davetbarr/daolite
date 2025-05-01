@@ -18,73 +18,6 @@ from daolite.compute.base_resources import (
 HARDWARE_DIR = os.path.join(os.path.dirname(__file__))
 
 
-# CPU resource factories
-def amd_epyc_7763() -> ComputeResources:
-    """Create AMD EPYC 7763 (Milan) compute resource."""
-    return _load_hardware("amd_epyc_7763.yaml")
-
-
-def amd_epyc_9654() -> ComputeResources:
-    """Create AMD EPYC 9654 (Genoa) compute resource."""
-    return _load_hardware("amd_epyc_9654.yaml")
-
-
-def intel_xeon_8480() -> ComputeResources:
-    """Create Intel Xeon Platinum 8480+ (Sapphire Rapids) compute resource."""
-    return _load_hardware("intel_xeon_8480.yaml")
-
-
-def intel_xeon_8462() -> ComputeResources:
-    """Create Intel Xeon 8462Y+ (Emerald Rapids) compute resource."""
-    return _load_hardware("intel_xeon_8462.yaml")
-
-
-def amd_ryzen_7950x() -> ComputeResources:
-    """Create AMD Ryzen 9 7950X compute resource."""
-    return _load_hardware("amd_ryzen_7950x.yaml")
-
-
-# GPU resource factories
-def nvidia_a100_80gb() -> ComputeResources:
-    """Create NVIDIA A100 80GB compute resource."""
-    return _load_hardware("nvidia_a100_80gb.yaml")
-
-
-def nvidia_a100_40gb() -> ComputeResources:
-    """Create NVIDIA A100 40GB compute resource."""
-    return _load_hardware("nvidia_a100_40gb.yaml")
-
-
-def nvidia_h100_80gb() -> ComputeResources:
-    """Create NVIDIA H100 80GB compute resource."""
-    return _load_hardware("nvidia_h100_80gb.yaml")
-
-
-def nvidia_rtx_6000_ada() -> ComputeResources:
-    """Create NVIDIA RTX 6000 Ada compute resource."""
-    return _load_hardware("nvidia_rtx_6000_ada.yaml")
-
-
-def nvidia_rtx_4090() -> ComputeResources:
-    """Create NVIDIA RTX 4090 compute resource."""
-    return _load_hardware("nvidia_rtx_4090.yaml")
-
-
-def nvidia_v100_32gb() -> ComputeResources:
-    """Create NVIDIA V100 32GB compute resource."""
-    return _load_hardware("nvidia_v100_32gb.yaml")
-
-
-def amd_mi250x() -> ComputeResources:
-    """Create AMD Instinct MI250X compute resource."""
-    return _load_hardware("amd_mi250x.yaml")
-
-
-def amd_mi300x() -> ComputeResources:
-    """Create AMD Instinct MI300X compute resource."""
-    return _load_hardware("amd_mi300x.yaml")
-
-
 def _load_hardware(filename: str) -> ComputeResources:
     """
     Load hardware configuration from YAML file.
@@ -139,3 +72,21 @@ def _load_hardware(filename: str) -> ComputeResources:
         )
         resource.name = os.path.splitext(filename)[0]
         return resource
+
+
+# --- Auto-discover YAML hardware files and create factory functions ---
+import types
+
+def _make_factory(yaml_filename):
+    def factory():
+        return _load_hardware(yaml_filename)
+    factory.__name__ = os.path.splitext(yaml_filename)[0]
+    factory.__doc__ = f"Create compute resource from {yaml_filename}"
+    return factory
+
+for fname in os.listdir(HARDWARE_DIR):
+    if fname.endswith('.yaml') and not fname.startswith('_'):
+        func_name = os.path.splitext(fname)[0]
+        # Only add if not already defined (manual overrides allowed)
+        if func_name not in globals():
+            globals()[func_name] = _make_factory(fname)

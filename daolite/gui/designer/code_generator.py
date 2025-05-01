@@ -129,17 +129,17 @@ class CodeGenerator:
             # Add component-specific imports
             if component.component_type == ComponentType.CENTROIDER:
                 self.import_statements.add(
-                    "from daolite.pipeline.centroider import Centroider, cross_correlation_centroider"
+                    "from daolite.pipeline.centroider import Centroider"
                 )
 
             elif component.component_type == ComponentType.RECONSTRUCTION:
                 self.import_statements.add(
-                    "from daolite.pipeline.reconstruction import Reconstruction, mvr_reconstruction"
+                    "from daolite.pipeline.reconstruction import Reconstruction"
                 )
 
             elif component.component_type == ComponentType.CONTROL:
                 self.import_statements.add(
-                    "from daolite.pipeline.control import FullFrameControl, dm_control"
+                    "from daolite.pipeline.control import FullFrameControl"
                 )
 
             elif component.component_type == ComponentType.CALIBRATION:
@@ -280,11 +280,11 @@ class CodeGenerator:
         if component.component_type == ComponentType.CAMERA:
             return "simulate_camera_readout"
         elif component.component_type == ComponentType.CENTROIDER:
-            return "cross_correlation_centroider"
+            return "Centroider"
         elif component.component_type == ComponentType.RECONSTRUCTION:
-            return "mvr_reconstruction"
+            return "Reconstruction"
         elif component.component_type == ComponentType.CONTROL:
-            return "dm_control"
+            return "FullFrameControl"
         elif component.component_type == ComponentType.CALIBRATION:
             return "PixelCalibration"
         elif component.component_type == ComponentType.NETWORK:
@@ -378,7 +378,11 @@ class CodeGenerator:
             # Add more camera types here as needed
         elif component.component_type == ComponentType.CENTROIDER:
             lines.append('    "n_valid_subaps": 5120,  # Valid subapertures (80x80 * 0.8)')
-            lines.append('    "n_pix_per_subap": 256  # 16x16 pixels per subaperture')
+            lines.append('    "n_pix_per_subap": 256,  # 16x16 pixels per subaperture')
+        elif component.component_type == ComponentType.CALIBRATION:
+            # Defaults for PixelCalibration
+            lines.append('    "n_pixels": 1024 * 1024,  # 1MP sensor')
+            lines.append('    "group": 50,  # Default group size')
         # Add custom parameters from component
         for key, value in component.params.items():
             # Map group_size to group for camera functions
@@ -681,8 +685,7 @@ class CodeGenerator:
         if src_comp.component_type == ComponentType.CAMERA:
             # Camera typically outputs pixel data
             n_pixels = src_comp.params.get("n_pixels", 1024 * 1024)
-            bit_depth = src_comp.params.get("bit_depth", 16)
-            data_size = n_pixels * bit_depth
+            data_size = n_pixels * 16  # 16 bits per pixel
             
         elif src_comp.component_type == ComponentType.CENTROIDER:
             # Centroider outputs slopes

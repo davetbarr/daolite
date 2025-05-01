@@ -1,6 +1,7 @@
 import json
 import argparse
 import inspect
+import logging
 from daolite import Pipeline, PipelineComponent, ComponentType
 from daolite.compute import create_compute_resources
 from daolite.simulation.camera import PCOCamLink, GigeVisionCamera, RollingShutterCamera
@@ -17,35 +18,46 @@ FUNCTION_MAP = {
     "PCOCamLink": PCOCamLink,
     "GigeVisionCamera": GigeVisionCamera,
     "RollingShutterCamera": RollingShutterCamera,
-    "cross_correlation_centroider": Centroider,
-    "mvr_reconstruction": Reconstruction,
-    "dm_control": FullFrameControl,
+    "Centroider": Centroider,
+    "Reconstruction": Reconstruction,
+    "FullFrameControl": FullFrameControl,
     "PixelCalibration": PixelCalibration,
     "TimeOnNetwork": TimeOnNetwork,
     "network_transfer": network_transfer,
 }
 
 
-def run_pipeline_and_return_pipe(json_path):
+def run_pipeline_and_return_pipe(json_path, debug=False):
     """
     Run a pipeline from a JSON file and return both the pipeline object and results.
     
     Args:
         json_path: Path to the JSON file defining the pipeline
+        debug: Enable debug output for pipeline components
         
     Returns:
         tuple: (pipeline, results) - the pipeline object and execution results
     """
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger("json_runner")
+
     with open(json_path, "r") as f:
         data = json.load(f)
     pipeline = Pipeline()
     name_to_component = {}
     
+    # Build a lookup for container compute resources
+    container_compute = {}
+    for container in data.get("containers", []):
+        if container.get("type") == "ComputeBox" and "name" in container and "compute" in container:
+            container_compute[container["name"]] = container["compute"]
+
     # Create components
     for comp in data["components"]:
         comp_type = ComponentType[comp["type"]]
         name = comp["name"]
         params = comp.get("params", {})
+        logger.debug(f"Processing component: {name} ({comp_type})")
         
         # Add default parameters for specific component types if they're missing
         if comp_type == ComponentType.CAMERA and not params:
@@ -53,7 +65,6 @@ def run_pipeline_and_return_pipe(json_path):
             params = {
                 "n_pixels": 1024 * 1024,  # 1MP camera
                 "group": 50,              # Default packet count
-                "bit_depth": 16           # Default bit depth
             }
         elif comp_type == ComponentType.CALIBRATION and not params:
             # Default calibration parameters
@@ -71,7 +82,6 @@ def run_pipeline_and_return_pipe(json_path):
         compute = None
         if "compute" in comp:
             from daolite.compute.base_resources import ComputeResources
-            # Only use fields that are valid for ComputeResources
             valid_fields = {
                 'hardware', 'memory_bandwidth', 'flops', 'network_speed', 'time_in_driver',
                 'core_fudge', 'mem_fudge', 'network_fudge', 'adjust', 'cores', 'core_frequency',
@@ -79,17 +89,39 @@ def run_pipeline_and_return_pipe(json_path):
             }
             compute_dict = {k: v for k, v in comp["compute"].items() if k in valid_fields}
             compute = ComputeResources.from_dict(compute_dict)
+            logger.info(f"Component '{name}' uses direct compute resource: {compute_dict}")
         else:
-            compute = create_compute_resources(
-                cores=16,
-                core_frequency=2.6e9,
-                flops_per_cycle=32,
-                memory_frequency=3.2e9,
-                memory_width=64,
-                memory_channels=8,
-                network_speed=100e9,
-                time_in_driver=5.0,
-            )
+            parent_type = comp.get("parent_type")
+            parent_name = comp.get("parent_name")
+            parent_compute = None
+            if parent_type == "ComputeBox" and parent_name in container_compute:
+                compute_dict = container_compute[parent_name]
+                valid_fields = {
+                    'hardware', 'memory_bandwidth', 'flops', 'network_speed', 'time_in_driver',
+                    'core_fudge', 'mem_fudge', 'network_fudge', 'adjust', 'cores', 'core_frequency',
+                    'flops_per_cycle', 'memory_frequency', 'memory_width', 'memory_channels'
+                }
+                compute_dict = {k: v for k, v in compute_dict.items() if k in valid_fields}
+                from daolite.compute.base_resources import ComputeResources
+                parent_compute = ComputeResources.from_dict(compute_dict)
+                logger.info(f"Component '{name}' inherits compute resource from parent '{parent_name}': {compute_dict}")
+            # Always use parent compute if found, else fallback
+            if parent_compute is not None:
+                compute = parent_compute
+            else:
+                compute = create_compute_resources(
+                    cores=16,
+                    core_frequency=2.6e9,
+                    flops_per_cycle=32,
+                    memory_frequency=3.2e9,
+                    memory_width=64,
+                    memory_channels=8,
+                    network_speed=100e9,
+                    time_in_driver=5.0,
+                )
+                logger.warning(f"Component '{name}' uses default compute resource.")
+        logger.debug(f"Final compute resource for '{name}': {getattr(compute, 'hardware', None)}, {vars(compute) if compute else None}")
+        
         func_name = (
             params.get("camera_function", None)
             if comp_type == ComponentType.CAMERA
@@ -98,9 +130,9 @@ def run_pipeline_and_return_pipe(json_path):
         if not func_name:
             func_name = {
                 ComponentType.CAMERA: "PCOCamLink",
-                ComponentType.CENTROIDER: "cross_correlation_centroider",
-                ComponentType.RECONSTRUCTION: "mvr_reconstruction",
-                ComponentType.CONTROL: "dm_control",
+                ComponentType.CENTROIDER: "Centroider",
+                ComponentType.RECONSTRUCTION: "Reconstruction",
+                ComponentType.CONTROL: "FullFrameControl",
                 ComponentType.CALIBRATION: "PixelCalibration",
                 ComponentType.NETWORK: "TimeOnNetwork",
             }.get(comp_type, None)
@@ -118,33 +150,33 @@ def run_pipeline_and_return_pipe(json_path):
             param.name for param in sig.parameters.values() 
             if param.default == inspect.Parameter.empty and param.name != 'self'
         }
-        
-        # Check if we're missing any required parameters and try to provide sensible defaults
-        missing_params = required_params - set(params.keys())
+        # Remove parameters that will be injected later
+        ignorable_params = {"compute_resources", "start_times"}
+        missing_params = required_params - set(params.keys()) - ignorable_params
         if missing_params:
             print(f"Warning: Missing required parameters for {name} ({comp_type.name}): {missing_params}")
-            
-            # Add sensible defaults based on component type
-            if comp_type == ComponentType.CAMERA:
-                if "n_pixels" in missing_params:
-                    params["n_pixels"] = 1024 * 1024  # 1MP
-                if "group" in missing_params:
-                    params["group"] = 50
-            elif comp_type == ComponentType.CALIBRATION:
-                if "n_pixels" in missing_params:
-                    params["n_pixels"] = 1024 * 1024
-            elif comp_type == ComponentType.CENTROIDER:
-                if "n_valid_subaps" in missing_params:
-                    params["n_valid_subaps"] = 6400  # 80x80
-            elif comp_type == ComponentType.RECONSTRUCTION:
-                if "n_acts" in missing_params:
-                    params["n_acts"] = 5000  # Default actuator count for ELT
-            
+        # Add sensible defaults based on component type (no duplicate warning)
+        missing_params_for_defaults = required_params - set(params.keys())
+        if comp_type == ComponentType.CAMERA:
+            if "n_pixels" in missing_params_for_defaults:
+                params["n_pixels"] = 1024 * 1024  # 1MP
+            if "group" in missing_params_for_defaults:
+                params["group"] = 50
+        elif comp_type == ComponentType.CALIBRATION:
+            if "n_pixels" in missing_params_for_defaults:
+                params["n_pixels"] = 1024 * 1024
+        elif comp_type == ComponentType.CENTROIDER:
+            if "n_valid_subaps" in missing_params_for_defaults:
+                params["n_valid_subaps"] = 6400  # 80x80
+        elif comp_type == ComponentType.RECONSTRUCTION:
+            if "n_acts" in missing_params_for_defaults:
+                params["n_acts"] = 5000  # Default actuator count for ELT
+        
         filtered_params = {k: v for k, v in params.items() if k in sig.parameters}
         
-        # Double-check we've got all required parameters
+        # Double-check we've got all required parameters (excluding ignorable)
         for param in required_params:
-            if param not in filtered_params:
+            if param not in filtered_params and param not in ignorable_params:
                 print(f"Error: Required parameter '{param}' is missing for {name} ({comp_type.name})")
         
         pipeline_comp = PipelineComponent(
@@ -307,7 +339,7 @@ def run_pipeline_and_return_pipe(json_path):
                 pipeline_comp.dependencies.append(dep)
     
     # Run the pipeline
-    results = pipeline.run(debug=True)
+    results = pipeline.run(debug=debug)
     return pipeline, results
 
 
@@ -412,16 +444,59 @@ def main():
     parser.add_argument("--show", action="store_true", help="Show visualization of pipeline execution timeline")
     parser.add_argument("--no-show", action="store_true", help="Don't show visualization (overrides --show)")
     parser.add_argument("--save", help="Save visualization to specified file path", default=None)
+    parser.add_argument("--debug", action="store_true", help="Enable debug output for pipeline components")
     args = parser.parse_args()
     
     print(f"Running pipeline from {args.json_file} ...")
-    pipeline, results = run_pipeline_and_return_pipe(args.json_file)
+    pipeline, results = run_pipeline_and_return_pipe(args.json_file, debug=args.debug)
     print("Pipeline run complete.")
     
     # Optionally print results summary
     if results is not None:
-        print("Results:")
-        print(results)
+        # print("Results:")
+        # print(results)
+        # Print a basic summary
+        print("\nPipeline Summary:")
+        end_to_end_start = None
+        end_to_end_end = None
+        # Find the last pixel received (end of network transfer to calibration)
+        network_key = None
+        for k in results:
+            if k.lower().startswith("network_transfer") and "cal" in k.lower():
+                network_key = k
+                break
+        if network_key and hasattr(results[network_key], 'shape') and results[network_key].ndim == 2:
+            end_to_end_start = results[network_key][-1, 1]
+        # Find the last command calculated (end of last control or reconstruction)
+        ctrl_end = None
+        recn_end = None
+        if 'Ctrl' in results and not isinstance(results['Ctrl'], np.ndarray):
+            # Scalar, use Recn if available
+            if 'Recn' in results and hasattr(results['Recn'], 'shape') and results['Recn'].ndim == 2:
+                recn_end = results['Recn'][-1, 1]
+        elif 'Ctrl' in results and hasattr(results['Ctrl'], 'shape') and results['Ctrl'].ndim == 2:
+            ctrl_end = results['Ctrl'][-1, 1]
+        elif 'Recn' in results and hasattr(results['Recn'], 'shape') and results['Recn'].ndim == 2:
+            recn_end = results['Recn'][-1, 1]
+        # Print per-component summary (true compute time: sum of durations)
+        for name, result in results.items():
+            if hasattr(result, 'shape') and result.ndim == 2 and result.shape[1] == 2:
+                durations = result[:, 1] - result[:, 0]
+                total_compute = durations.sum()
+                print(f"  {name}: {total_compute:.2f} μs (sum of group durations)")
+            elif hasattr(result, 'shape') and result.ndim == 1:
+                print(f"  {name}: array shape {result.shape}")
+            else:
+                try:
+                    print(f"  {name}: {float(result):.2f} μs")
+                except Exception:
+                    print(f"  {name}: {result}")
+        # Print end-to-end latency
+        if end_to_end_start is not None:
+            final_end = ctrl_end if ctrl_end is not None else recn_end
+            if final_end is not None:
+                end_to_end_latency = final_end - end_to_end_start
+                print(f"\nEnd-to-end latency (last pixel received to last command calculated): {end_to_end_latency:.2f} μs")
     
     # Visualize pipeline if requested
     if args.save or args.show:

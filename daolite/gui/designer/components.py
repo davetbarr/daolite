@@ -903,30 +903,25 @@ class ComputeBox(ComponentContainer):
     Contains computational components and can have GPUs attached.
     """
 
-    def __init__(self, name="Computer", size=None, compute=None):
+    def __init__(self, name="Computer", size=None, compute=None, cpu_resource=None):
         """Initialize a computer box."""
         super().__init__(name, compute, z_value=-10)
         # CPU specific properties 
         self.box_color = QColor(30, 70, 140)
         self.fill_color = QColor(220, 230, 240, 160)
         self.size = QRectF(0, 0, 320, 240) if size is None else size
+        self.cpu_resource = cpu_resource
         
         # Track child items
         self.child_items = []
 
     def paint(self, painter, option, widget):
-        """Custom paint method with optional highlighting."""
         super().paint(painter, option, widget)
-        
-        # Add CPU-specific label
-        if self.compute:
-            # Safely get compute resource information
-            cpu_name = getattr(self.compute, "name", "Unknown")
-            if hasattr(self.compute, 'cores'):
-                cpu_name += f", {self.compute.cores} cores"
-            painter.setPen(QPen(QColor(70, 70, 70)))
-            painter.setFont(QFont("Arial", 8))
-            painter.drawText(10, 45, f"CPU: {cpu_name}")
+        # Draw 'Resource: Computer' label
+        painter.setPen(QPen(QColor(70, 70, 70)))
+        painter.setFont(QFont("Arial", 9, QFont.Bold))
+        if self.cpu_resource:
+            painter.drawText(10, 50, f"CPU: {self.cpu_resource}")
 
     def _check_resize_boundaries(self, new_width, new_height):
         """No parent restrictions for ComputeBox."""

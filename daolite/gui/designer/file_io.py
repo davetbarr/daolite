@@ -108,11 +108,42 @@ def save_pipeline_to_file(scene, components, connections, filename):
                 if grandparent and isinstance(grandparent, ComputeBox):
                     gpu_parent_name = grandparent.name
         
+        # Fill in default params if missing
+        params = comp.params.copy() if comp.params else {}
+        ctype = comp.component_type.name if hasattr(comp, 'component_type') else comp.type
+        if ctype == "CAMERA":
+            if "n_pixels" not in params:
+                params["n_pixels"] = 1048576
+            if "group" not in params:
+                params["group"] = 50
+        elif ctype == "CALIBRATION":
+            if "n_pixels" not in params:
+                params["n_pixels"] = 1048576
+            if "group" not in params:
+                params["group"] = 50
+        elif ctype == "CENTROIDER":
+            if "n_valid_subaps" not in params:
+                params["n_valid_subaps"] = 6400
+            if "n_pix_per_subap" not in params:
+                params["n_pix_per_subap"] = 16
+            if "group" not in params:
+                params["group"] = 50
+        elif ctype == "RECONSTRUCTION":
+            if "n_slopes" not in params:
+                params["n_slopes"] = 12800
+            if "n_acts" not in params:
+                params["n_acts"] = 5000
+            if "group" not in params:
+                params["group"] = 50
+        elif ctype == "CONTROL":
+            if "n_acts" not in params:
+                params["n_acts"] = 5000
+        
         comp_data = {
             "type": comp.component_type.name,
             "name": comp.name,
             "pos": (comp.pos().x(), comp.pos().y()),
-            "params": comp.params,
+            "params": params,
             "parent_type": parent_type,
             "parent_name": parent_name,
             "gpu_parent_name": gpu_parent_name
@@ -288,53 +319,20 @@ def load_pipeline(scene, filename, component_counts):
                 # Create compute resource if provided
                 compute_resource = None
                 if "compute" in container:
-                    # Clean up compute dict to avoid duplicate parameters
                     compute_dict = container["compute"].copy()
-                    
-                    # Handle resource_name separately
-                    if "resource_name" in container:
-                        resource_name = container["resource_name"]
-                        
-                        # Check for predefined hardware resources
-                        if "AMD EPYC 7763" in resource_name:
-                            compute_resource = amd_epyc_7763()
-                        elif "AMD EPYC 9654" in resource_name:
-                            compute_resource = amd_epyc_9654()
-                        elif "Intel Xeon 8480" in resource_name:
-                            compute_resource = intel_xeon_8480()
-                        elif "Intel Xeon 8462" in resource_name:
-                            compute_resource = intel_xeon_8462()
-                        elif "AMD Ryzen 7950X" in resource_name:
-                            compute_resource = amd_ryzen_7950x()
-                        elif "NVIDIA A100" in resource_name:
-                            compute_resource = nvidia_a100_80gb()
-                        elif "NVIDIA H100" in resource_name:
-                            compute_resource = nvidia_h100_80gb()
-                        elif "NVIDIA RTX 4090" in resource_name:
-                            compute_resource = nvidia_rtx_4090()
-                        elif "AMD MI300X" in resource_name:
-                            compute_resource = amd_mi300x()
-                    
-                    # If no predefined resource was found, create from parameters
-                    if compute_resource is None:
-                        # Ensure only valid parameters are passed to create_compute_resources
-                        valid_params = {
-                            'hardware', 'cores', 'core_frequency', 'flops_per_cycle',
-                            'memory_channels', 'memory_width', 'memory_frequency',
-                            'network_speed', 'time_in_driver', 'core_fudge', 
-                            'mem_fudge', 'network_fudge', 'adjust'
-                        }
-                        
-                        # Filter to include only valid parameters
-                        filtered_dict = {k: v for k, v in compute_dict.items() if k in valid_params}
-                        
-                        # Create resource
-                        try:
-                            compute_resource = create_compute_resources(**filtered_dict)
-                        except Exception as e:
-                            logger.error(f"Error creating compute resource: {str(e)}")
-                            # Fallback to default
-                            compute_resource = amd_epyc_7763()
+                    # Always reconstruct from parameters if present
+                    valid_params = {
+                        'hardware', 'cores', 'core_frequency', 'flops_per_cycle',
+                        'memory_channels', 'memory_width', 'memory_frequency',
+                        'network_speed', 'time_in_driver', 'core_fudge', 
+                        'mem_fudge', 'network_fudge', 'adjust'
+                    }
+                    filtered_dict = {k: v for k, v in compute_dict.items() if k in valid_params}
+                    try:
+                        compute_resource = create_compute_resources(**filtered_dict)
+                    except Exception as e:
+                        logger.error(f"Error creating compute resource: {str(e)}")
+                        compute_resource = amd_epyc_7763()
                 
                 # Create the compute box
                 compute_box = ComputeBox(name, compute=compute_resource)
@@ -352,38 +350,21 @@ def load_pipeline(scene, filename, component_counts):
                     # Create GPU resource if provided
                     gpu_resource = None
                     if "compute" in gpu_data:
-                        # Similar handling for GPU resources
-                        if "resource_name" in gpu_data:
-                            resource_name = gpu_data["resource_name"]
-                            if "NVIDIA A100" in resource_name:
-                                gpu_resource = nvidia_a100_80gb()
-                            elif "NVIDIA H100" in resource_name:
-                                gpu_resource = nvidia_h100_80gb()
-                            elif "NVIDIA RTX 4090" in resource_name:
-                                gpu_resource = nvidia_rtx_4090()
-                            elif "AMD MI300X" in resource_name:
-                                gpu_resource = amd_mi300x()
-                        
-                        # Create custom GPU resource if needed
-                        if gpu_resource is None:
-                            gpu_dict = gpu_data["compute"].copy()
-                            valid_params = {
-                                'hardware', 'cores', 'core_frequency', 'flops_per_cycle',
-                                'memory_channels', 'memory_width', 'memory_frequency',
-                                'network_speed', 'time_in_driver', 'core_fudge', 
-                                'mem_fudge', 'network_fudge', 'adjust'
-                            }
-                            filtered_dict = {k: v for k, v in gpu_dict.items() if k in valid_params}
-                            
-                            try:
-                                # Ensure hardware type is set for GPUs
-                                if 'hardware' not in filtered_dict:
-                                    filtered_dict['hardware'] = 'GPU'
-                                gpu_resource = create_compute_resources(**filtered_dict)
-                            except Exception as e:
-                                logger.error(f"Error creating GPU resource: {str(e)}")
-                                # Fallback to default
-                                gpu_resource = nvidia_rtx_4090()
+                        gpu_dict = gpu_data["compute"].copy()
+                        valid_params = {
+                            'hardware', 'cores', 'core_frequency', 'flops_per_cycle',
+                            'memory_channels', 'memory_width', 'memory_frequency',
+                            'network_speed', 'time_in_driver', 'core_fudge', 
+                            'mem_fudge', 'network_fudge', 'adjust'
+                        }
+                        filtered_dict = {k: v for k, v in gpu_dict.items() if k in valid_params}
+                        try:
+                            if 'hardware' not in filtered_dict:
+                                filtered_dict['hardware'] = 'GPU'
+                            gpu_resource = create_compute_resources(**filtered_dict)
+                        except Exception as e:
+                            logger.error(f"Error creating GPU resource: {str(e)}")
+                            gpu_resource = nvidia_rtx_4090()
                     
                     # Create the GPU box
                     gpu_box = GPUBox(gpu_name, gpu_resource=gpu_resource)

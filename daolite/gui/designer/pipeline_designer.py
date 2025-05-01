@@ -30,9 +30,16 @@ from PyQt5.QtWidgets import (
     QGraphicsItem,
     QGraphicsRectItem,
     QGraphicsTextItem,
+    QListWidget,
+    QListWidgetItem,
+    QWidget,
+    QCheckBox,  # Add QCheckBox for Add GPU
 )
 from PyQt5.QtCore import Qt, QRectF, QPointF
 from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QBrush
+
+import inspect
+import daolite.compute.hardware as hardware
 
 from daolite.common import ComponentType
 from daolite.compute import create_compute_resources
@@ -48,6 +55,7 @@ from daolite.compute.hardware import (
     amd_mi300x,
 )
 from daolite.config import SystemConfig, CameraConfig, OpticsConfig, PipelineConfig
+from daolite.gui.centroid_agenda_tool import show_centroid_agenda_tool
 
 from .components import ComponentBlock, ComputeBox, GPUBox, TransferIndicator
 from .connection import Connection
@@ -648,147 +656,171 @@ class PipelineScene(QGraphicsScene):
 class ResourceSelectionDialog(QDialog):
     """
     Dialog for selecting or configuring compute resources.
-
-    Allows users to choose from predefined resources or specify custom ones.
+    Cleaned up: CPU dropdown (with custom), optional GPU (with custom),
+    and only shows custom fields when needed.
+    Now supports editing: pass existing_resource to pre-populate fields.
     """
-
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, existing_resource=None):
         super().__init__(parent)
-        self.setWindowTitle("Select Compute Resource")
-        self.resize(400, 300)
-
+        self.setWindowTitle("Configure Computer Resource")
+        self.resize(440, 420)
+        self.cpu_name_string = None
         layout = QVBoxLayout()
-
-        # Predefined resources section
-        layout.addWidget(QLabel("<b>Predefined Resources</b>"))
-
-        # CPUs
-        layout.addWidget(QLabel("CPUs:"))
+        # Name field
+        name_layout = QFormLayout()
+        self.name_edit = QLineEdit("Computer")
+        name_layout.addRow("Computer Name:", self.name_edit)
+        layout.addLayout(name_layout)
+        # --- Dynamic CPU list ---
+        cpu_factories = [(name, func) for name, func in inspect.getmembers(hardware, inspect.isfunction) if name.startswith("amd_") or name.startswith("intel_")]
+        self.cpu_names = []
+        self.cpu_funcs = []
+        for name, func in cpu_factories:
+            try:
+                res = func()
+                label = getattr(res, "name", name.replace("_", " ").title())
+            except Exception:
+                label = name.replace("_", " ").title()
+            self.cpu_names.append(label)
+            self.cpu_funcs.append(func)
+        self.cpu_names.append("Custom…")
+        layout.addWidget(QLabel("CPU Model:"))
         self.cpu_combo = QComboBox()
-        self.cpu_combo.addItems(
-            [
-                "AMD EPYC 7763 (Milan)",
-                "AMD EPYC 9654 (Genoa)",
-                "Intel Xeon 8480+ (Sapphire Rapids)",
-                "Intel Xeon 8462Y+ (Emerald Rapids)",
-                "AMD Ryzen 9 7950X",
-            ]
-        )
+        self.cpu_combo.addItems(self.cpu_names)
         layout.addWidget(self.cpu_combo)
-
-        # GPUs
-        layout.addWidget(QLabel("GPUs:"))
-        self.gpu_combo = QComboBox()
-        self.gpu_combo.addItems(
-            [
-                "NVIDIA A100 80GB",
-                "NVIDIA H100 80GB",
-                "NVIDIA RTX 4090",
-                "AMD Instinct MI300X",
-            ]
-        )
-        layout.addWidget(self.gpu_combo)
-
-        # Custom resource section
-        layout.addWidget(QLabel("<b>Custom Resource</b>"))
-
-        form_layout = QFormLayout()
-
+        # Custom CPU fields (hidden by default)
+        self.cpu_custom_fields = QFormLayout()
         self.cores_edit = QLineEdit("16")
-        form_layout.addRow("Cores:", self.cores_edit)
-
+        self.cpu_custom_fields.addRow("Cores:", self.cores_edit)
         self.freq_edit = QLineEdit("2.6e9")
-        form_layout.addRow("Core Frequency (Hz):", self.freq_edit)
-
+        self.cpu_custom_fields.addRow("Core Frequency (Hz):", self.freq_edit)
         self.flops_edit = QLineEdit("32")
-        form_layout.addRow("FLOPS per cycle:", self.flops_edit)
-
+        self.cpu_custom_fields.addRow("FLOPS per cycle:", self.flops_edit)
         self.mem_channels_edit = QLineEdit("4")
-        form_layout.addRow("Memory Channels:", self.mem_channels_edit)
-
+        self.cpu_custom_fields.addRow("Memory Channels:", self.mem_channels_edit)
         self.mem_width_edit = QLineEdit("64")
-        form_layout.addRow("Memory Width (bits):", self.mem_width_edit)
-
+        self.cpu_custom_fields.addRow("Memory Width (bits):", self.mem_width_edit)
         self.mem_freq_edit = QLineEdit("3200e6")
-        form_layout.addRow("Memory Frequency (Hz):", self.mem_freq_edit)
-
+        self.cpu_custom_fields.addRow("Memory Frequency (Hz):", self.mem_freq_edit)
         self.network_edit = QLineEdit("100e9")
-        form_layout.addRow("Network Speed (bps):", self.network_edit)
-
-        layout.addLayout(form_layout)
-
-        # Buttons
+        self.cpu_custom_fields.addRow("Network Speed (bps):", self.network_edit)
+        self.cpu_custom_fields_widget = QWidget()
+        self.cpu_custom_fields_widget.setLayout(self.cpu_custom_fields)
+        self.cpu_custom_fields_widget.setVisible(False)
+        layout.addWidget(self.cpu_custom_fields_widget)
+        self.cpu_name_string = self.cpu_combo.currentText()
+        # --- Add GPU checkbox ---
+        self.add_gpu_checkbox = QCheckBox("Add GPU")
+        layout.addWidget(self.add_gpu_checkbox)
+        # --- GPU dropdown (hidden by default) ---
+        gpu_factories = [(name, func) for name, func in inspect.getmembers(hardware, inspect.isfunction) if name.startswith("nvidia_") or name.startswith("amd_mi")]
+        self.gpu_names = []
+        self.gpu_funcs = []
+        for name, func in gpu_factories:
+            try:
+                res = func()
+                label = getattr(res, "name", name.replace("_", " ").title())
+            except Exception:
+                label = name.replace("_", " ").title()
+            self.gpu_names.append(label)
+            self.gpu_funcs.append(func)
+        self.gpu_names.append("Custom…")
+        self.gpu_combo = QComboBox()
+        self.gpu_combo.addItems(self.gpu_names)
+        self.gpu_combo.setVisible(False)
+        layout.addWidget(self.gpu_combo)
+        # Custom GPU fields (hidden by default)
+        self.gpu_custom_fields = QFormLayout()
+        self.gpu_flops_edit = QLineEdit("1e12")
+        self.gpu_custom_fields.addRow("FLOPS:", self.gpu_flops_edit)
+        self.gpu_mem_bw_edit = QLineEdit("300e9")
+        self.gpu_custom_fields.addRow("Memory Bandwidth (B/s):", self.gpu_mem_bw_edit)
+        self.gpu_network_edit = QLineEdit("100e9")
+        self.gpu_custom_fields.addRow("Network Speed (bps):", self.gpu_network_edit)
+        self.gpu_time_in_driver_edit = QLineEdit("8")
+        self.gpu_custom_fields.addRow("Time in Driver (us):", self.gpu_time_in_driver_edit)
+        self.gpu_custom_fields_widget = QWidget()
+        self.gpu_custom_fields_widget.setLayout(self.gpu_custom_fields)
+        self.gpu_custom_fields_widget.setVisible(False)
+        layout.addWidget(self.gpu_custom_fields_widget)
+        # --- Button row ---
         button_layout = QHBoxLayout()
-
-        self.use_cpu_btn = QPushButton("Use Selected CPU")
-        self.use_cpu_btn.clicked.connect(self.accept_cpu)
-        button_layout.addWidget(self.use_cpu_btn)
-
-        self.use_gpu_btn = QPushButton("Use Selected GPU")
-        self.use_gpu_btn.clicked.connect(self.accept_gpu)
-        button_layout.addWidget(self.use_gpu_btn)
-
-        self.use_custom_btn = QPushButton("Use Custom Resource")
-        self.use_custom_btn.clicked.connect(self.accept_custom)
-        button_layout.addWidget(self.use_custom_btn)
-
+        self.add_btn = QPushButton("Add")
+        self.add_btn.clicked.connect(self.accept)
+        button_layout.addWidget(self.add_btn)
         cancel_btn = QPushButton("Cancel")
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
-
         layout.addLayout(button_layout)
-
         self.setLayout(layout)
-
+        # --- Signals ---
+        self.cpu_combo.currentIndexChanged.connect(self._on_cpu_changed)
+        self.add_gpu_checkbox.toggled.connect(self._on_add_gpu_toggled)
+        self.gpu_combo.currentIndexChanged.connect(self._on_gpu_changed)
+        # State
         self.result_type = None
         self.result_index = None
-
-    def accept_cpu(self):
-        """Accept with CPU selection."""
-        self.result_type = "cpu"
-        self.result_index = self.cpu_combo.currentIndex()
-        self.accept()
-
-    def accept_gpu(self):
-        """Accept with GPU selection."""
-        self.result_type = "gpu"
-        self.result_index = self.gpu_combo.currentIndex()
-        self.accept()
-
-    def accept_custom(self):
-        """Accept with custom resource."""
-        self.result_type = "custom"
-        self.accept()
-
+        # After all widgets are created, pre-populate if editing
+        if existing_resource is not None:
+            # Set name
+            self.name_edit.setText(getattr(existing_resource, 'name', 'Computer'))
+            # Try to match CPU in dropdown
+            cpu_name = getattr(existing_resource, 'name', None)
+            cpu_idx = None
+            for i, label in enumerate(self.cpu_names):
+                if label == cpu_name:
+                    cpu_idx = i
+                    break
+            if cpu_idx is not None:
+                self.cpu_combo.setCurrentIndex(cpu_idx)
+            else:
+                # Custom CPU
+                self.cpu_combo.setCurrentIndex(len(self.cpu_names) - 1)
+                self.cpu_custom_fields_widget.setVisible(True)
+                # Fill custom fields if present
+                self.cores_edit.setText(str(getattr(existing_resource, 'cores', '16')))
+                self.freq_edit.setText(str(getattr(existing_resource, 'core_frequency', '2.6e9')))
+                self.flops_edit.setText(str(getattr(existing_resource, 'flops_per_cycle', '32')))
+                self.mem_channels_edit.setText(str(getattr(existing_resource, 'memory_channels', '4')))
+                self.mem_width_edit.setText(str(getattr(existing_resource, 'memory_width', '64')))
+                self.mem_freq_edit.setText(str(getattr(existing_resource, 'memory_frequency', '3200e6')))
+                self.network_edit.setText(str(getattr(existing_resource, 'network_speed', '100e9')))
+            # GPU
+            attached_gpus = getattr(existing_resource, 'attached_gpus', [])
+            if attached_gpus:
+                self.add_gpu_checkbox.setChecked(True)
+                self.gpu_combo.setVisible(True)
+                gpu = attached_gpus[0]
+                gpu_name = getattr(gpu, 'name', None)
+                gpu_idx = None
+                for i, label in enumerate(self.gpu_names):
+                    if label == gpu_name:
+                        gpu_idx = i
+                        break
+                if gpu_idx is not None:
+                    self.gpu_combo.setCurrentIndex(gpu_idx)
+                else:
+                    # Custom GPU
+                    self.gpu_combo.setCurrentIndex(len(self.gpu_names) - 1)
+                    self.gpu_custom_fields_widget.setVisible(True)
+                    self.gpu_flops_edit.setText(str(getattr(gpu, 'flops', '1e12')))
+                    self.gpu_mem_bw_edit.setText(str(getattr(gpu, 'memory_bandwidth', '300e9')))
+                    self.gpu_network_edit.setText(str(getattr(gpu, 'network_speed', '100e9')))
+                    self.gpu_time_in_driver_edit.setText(str(getattr(gpu, 'time_in_driver', '8')))
+    def _on_cpu_changed(self, idx):
+        self.cpu_custom_fields_widget.setVisible(idx == len(self.cpu_names) - 1)
+        self.cpu_name_string = self.cpu_combo.currentText()
+    def _on_add_gpu_toggled(self, checked):
+        self.gpu_combo.setVisible(checked)
+        self.gpu_custom_fields_widget.setVisible(checked and self.gpu_combo.currentIndex() == len(self.gpu_names) - 1)
+    def _on_gpu_changed(self, idx):
+        self.gpu_custom_fields_widget.setVisible(idx == len(self.gpu_names) - 1 and self.add_gpu_checkbox.isChecked())
     def get_selected_resource(self):
-        """
-        Get the selected compute resource.
-
-        Returns:
-            ComputeResources: The selected compute resource
-        """
-        if self.result_type == "cpu":
-            cpu_map = {
-                0: amd_epyc_7763,
-                1: amd_epyc_9654,
-                2: intel_xeon_8480,
-                3: intel_xeon_8462,
-                4: amd_ryzen_7950x,
-            }
-            return cpu_map.get(self.result_index, amd_epyc_7763)()
-
-        elif self.result_type == "gpu":
-            gpu_map = {
-                0: nvidia_a100_80gb,
-                1: nvidia_h100_80gb,
-                2: nvidia_rtx_4090,
-                3: amd_mi300x,
-            }
-            return gpu_map.get(self.result_index, nvidia_rtx_4090)()
-
-        elif self.result_type == "custom":
-            # Create custom compute resource
-            return create_compute_resources(
+        # CPU
+        cpu_idx = self.cpu_combo.currentIndex()
+        if cpu_idx == len(self.cpu_names) - 1:
+            # Custom CPU
+            cpu_resource = create_compute_resources(
                 cores=int(self.cores_edit.text()),
                 core_frequency=float(self.freq_edit.text()),
                 flops_per_cycle=int(self.flops_edit.text()),
@@ -798,9 +830,35 @@ class ResourceSelectionDialog(QDialog):
                 network_speed=float(self.network_edit.text()),
                 time_in_driver=5,
             )
+        else:
+            cpu_func = self.cpu_funcs[cpu_idx]
+            cpu_resource = cpu_func()
+        cpu_resource.name = self.name_edit.text().strip()
+        # GPU
+        attached_gpus = []
+        if self.add_gpu_checkbox.isChecked():
+            gpu_idx = self.gpu_combo.currentIndex()
+            if gpu_idx == len(self.gpu_names) - 1:
+                # Custom GPU
+                from daolite.compute.base_resources import create_gpu_resource
+                gpu_resource = create_gpu_resource(
+                    flops=float(self.gpu_flops_edit.text()),
+                    memory_bandwidth=float(self.gpu_mem_bw_edit.text()),
+                    network_speed=float(self.gpu_network_edit.text()),
+                    time_in_driver=float(self.gpu_time_in_driver_edit.text()),
+                )
+            else:
+                gpu_func = self.gpu_funcs[gpu_idx]
+                gpu_resource = gpu_func()
+            attached_gpus.append(gpu_resource)
+        # Always update attached_gpus, even if empty (removes GPU if unchecked)
+        cpu_resource.attached_gpus = attached_gpus
+        return cpu_resource
+    def get_name(self):
+        return self.name_edit.text().strip()
 
-        # Default
-        return create_compute_resources()
+    def cpu_name(self):
+        return self.cpu_name_string
 
 
 class PipelineDesignerApp(QMainWindow):
@@ -811,7 +869,7 @@ class PipelineDesignerApp(QMainWindow):
     network and multi-compute node configurations.
     """
 
-    def __init__(self):
+    def __init__(self, json_path=None):
         super().__init__()
 
         self.setWindowTitle("daolite Pipeline Designer")
@@ -848,6 +906,16 @@ class PipelineDesignerApp(QMainWindow):
         self.centroid_agenda_path = None
         self.centroid_agenda = None
 
+        # If a JSON path is provided, try to load the pipeline
+        if json_path:
+            from .file_io import load_pipeline
+            try:
+                success = load_pipeline(self.scene, json_path, self.component_counts)
+                if not success:
+                    QMessageBox.warning(self, "Load Error", f"Failed to load pipeline from {json_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Load Error", f"Error loading pipeline: {e}")
+
     def _create_toolbar(self):
         """Create component toolbar."""
         self.toolbar = QToolBar("Components")
@@ -862,10 +930,7 @@ class PipelineDesignerApp(QMainWindow):
         add_computer_btn.setToolTip("Add a compute box (computer node) to the scene")
         self.toolbar.addWidget(add_computer_btn)
 
-        add_gpu_btn = QPushButton("Add GPU to Computer")
-        add_gpu_btn.clicked.connect(self._add_gpu_box)
-        add_gpu_btn.setToolTip("Add a GPU block inside a selected computer")
-        self.toolbar.addWidget(add_gpu_btn)
+        # Removed Add GPU to Computer button
 
         self.toolbar.addSeparator()
 
@@ -944,34 +1009,49 @@ class PipelineDesignerApp(QMainWindow):
         
         self.toolbar.addSeparator()
 
-        # Add configuration buttons
-        if_selected = QLabel("With selected component:")
-        self.toolbar.addWidget(if_selected)
-
-        compute_btn = QPushButton("Set Compute")
-        compute_btn.clicked.connect(self._configure_compute)
-        compute_btn.setToolTip("Configure compute resource for selected component")
-        self.toolbar.addWidget(compute_btn)
-
-        params_btn = QPushButton("Set Parameters")
-        params_btn.clicked.connect(self._configure_params)
-        params_btn.setToolTip("Configure parameters for selected component")
-        self.toolbar.addWidget(params_btn)
+        # --- UI Improvements ---
+        # 1. Toolbar grouping: Add section headers and separators
+        self.toolbar.addSeparator()
+        actions_label = QLabel("<b>Actions</b>")
+        self.toolbar.addWidget(actions_label)
+        # 9. Zoom controls
+        zoom_in_btn = QPushButton("Zoom In")
+        zoom_in_btn.setToolTip("Zoom in on the pipeline view")
+        zoom_in_btn.clicked.connect(lambda: self.view.scale(1.2, 1.2))
+        self.toolbar.addWidget(zoom_in_btn)
+        zoom_out_btn = QPushButton("Zoom Out")
+        zoom_out_btn.setToolTip("Zoom out on the pipeline view")
+        zoom_out_btn.clicked.connect(lambda: self.view.scale(0.8, 0.8))
+        self.toolbar.addWidget(zoom_out_btn)
+        # 10. Quick-save button
+        quick_save_btn = QPushButton("Quick Save")
+        quick_save_btn.setToolTip("Quickly save the current pipeline design")
+        quick_save_btn.clicked.connect(self._quick_save_pipeline)
+        self.toolbar.addWidget(quick_save_btn)
+        # 7. Status bar for feedback
+        self.statusBar().showMessage("Ready")
 
     def _add_compute_box(self):
         """Add a ComputeBox (computer node) to the scene."""
-        name, ok = QInputDialog.getText(self, "Add Computer", "Enter computer name:", text="Computer")
-        if not ok or not name:
-            return
-        # Prompt for compute resource
         dlg = ResourceSelectionDialog(self)
-        compute_resource = None
         if dlg.exec_():
+            cpu  = dlg.cpu_name()
+            print(f"Selected CPU: {cpu}")
             compute_resource = dlg.get_selected_resource()
-        compute_box = ComputeBox(name, compute=compute_resource)
-        view_center = self.view.mapToScene(self.view.viewport().rect().center())
-        compute_box.setPos(view_center.x() - 160, view_center.y() - 110)
-        self.scene.addItem(compute_box)
+            cpu_name = getattr(compute_resource, "name", "Computer")
+            compute_box = ComputeBox(cpu_name, compute=compute_resource, cpu_resource=cpu)
+            view_center = self.view.mapToScene(self.view.viewport().rect().center())
+            compute_box.setPos(view_center.x() - 160, view_center.y() - 110)
+            self.scene.addItem(compute_box)
+            # Add GPUBox(es) if any attached_gpus
+            if hasattr(compute_resource, 'attached_gpus'):
+                for idx, gpu_resource in enumerate(compute_resource.attached_gpus):
+                    gpu_name = getattr(gpu_resource, 'name', f"GPU{idx+1}")
+                    gpu_box = GPUBox(gpu_name, gpu_resource=gpu_resource)
+                    # Place GPUBox at a default offset inside the ComputeBox
+                    gpu_box.setPos(30, 60 + 40 * idx)
+                    compute_box.add_child(gpu_box)
+                    self.scene.addItem(gpu_box)
 
     def _add_gpu_box(self):
         """Add a GPUBox inside a selected ComputeBox."""
@@ -1027,6 +1107,11 @@ class PipelineDesignerApp(QMainWindow):
         export_config_action = QAction("Export Config &YAML", self)
         export_config_action.triggered.connect(self._export_config)
         file_menu.addAction(export_config_action)
+
+        # Add Centroid Agenda Tool action
+        centroid_agenda_action = QAction("Centroid Agenda Tool", self)
+        centroid_agenda_action.triggered.connect(lambda: show_centroid_agenda_tool(self))
+        file_menu.addAction(centroid_agenda_action)
 
         file_menu.addSeparator()
 
@@ -1107,11 +1192,39 @@ class PipelineDesignerApp(QMainWindow):
     def _update_selection(self):
         """Update when selection changes."""
         selected_items = self.scene.selectedItems()
-
         if len(selected_items) == 1 and isinstance(selected_items[0], ComponentBlock):
             self.selected_component = selected_items[0]
+            # 5. Highlight connections for selected component
+            for item in self.scene.items():
+                if hasattr(item, 'set_highlight'):
+                    item.set_highlight(False)
+                if hasattr(item, 'highlight_connection'):
+                    item.highlight_connection(False)
+            for conn in getattr(self.scene, 'connections', []):
+                if conn.start_block == self.selected_component or conn.end_block == self.selected_component:
+                    if hasattr(conn, 'highlight_connection'):
+                        conn.highlight_connection(True)
         else:
             self.selected_component = None
+            # Remove all highlights
+            for item in self.scene.items():
+                if hasattr(item, 'set_highlight'):
+                    item.set_highlight(False)
+                if hasattr(item, 'highlight_connection'):
+                    item.highlight_connection(False)
+
+    def _quick_save_pipeline(self):
+        """Quickly save pipeline design to a default file."""
+        import os
+        default_path = os.path.expanduser("~/daolite_quicksave.json")
+        from .file_io import save_pipeline_to_file
+        save_pipeline_to_file(
+            self.scene,
+            self._get_all_components(),
+            self.scene.connections,
+            default_path
+        )
+        self.statusBar().showMessage(f"Pipeline quick-saved to {default_path}", 3000)
 
     def _configure_compute(self):
         """Configure compute resource for selected component."""
@@ -1192,32 +1305,46 @@ class PipelineDesignerApp(QMainWindow):
         Args:
             item: The container or component to configure
         """
-        dlg = ResourceSelectionDialog(self)
+        # Pass current resource for editing if available
+        existing_resource = item.compute if hasattr(item, 'compute') else None
+        dlg = ResourceSelectionDialog(self, existing_resource=existing_resource)
         if dlg.exec_():
-            # Apply the resource to the container, not to individual components
-            if isinstance(item, (ComputeBox, GPUBox)):
-                item.compute = dlg.get_selected_resource()
-                
-                # If this is a container, update all its child components' display
+            new_resource = dlg.get_selected_resource()
+            if isinstance(item, ComputeBox):
+                item.compute = new_resource
+                # Remove all existing GPUBox children
+                for child in list(item.childItems()):
+                    if isinstance(child, GPUBox):
+                        item.childItems().remove(child)
+                        self.scene.removeItem(child)
+                # Add GPUBox if attached_gpus present
+                if hasattr(new_resource, 'attached_gpus') and new_resource.attached_gpus:
+                    for idx, gpu_resource in enumerate(new_resource.attached_gpus):
+                        gpu_name = getattr(gpu_resource, 'name', f"GPU{idx+1}")
+                        gpu_box = GPUBox(gpu_name, gpu_resource=gpu_resource)
+                        gpu_box.setPos(30, 60 + 40 * idx)
+                        item.add_child(gpu_box)
+                        self.scene.addItem(gpu_box)
+                # Update all child components' display
                 for child in item.childItems():
                     if isinstance(child, ComponentBlock):
-                        # We just need to trigger a repaint, the compute is inherited
+                        child.update()
+            elif isinstance(item, GPUBox):
+                item.compute = new_resource
+                for child in item.childItems():
+                    if isinstance(child, ComponentBlock):
                         child.update()
             else:
-                # For individual components, find their parent container and set it there
                 parent = item.parentItem()
                 if parent and isinstance(parent, (ComputeBox, GPUBox)):
-                    parent.compute = dlg.get_selected_resource()
-                    # Trigger an update of the component display
+                    parent.compute = new_resource
                     item.update()
                 else:
-                    # If no parent container, warn the user
                     QMessageBox.warning(
                         self, 
                         "No Container", 
                         "This component is not in a compute container. Please add it to a CPU or GPU container first."
                     )
-            
             self.scene.update()
 
     def _get_all_components(self) -> List[ComponentBlock]:
@@ -1276,6 +1403,27 @@ class PipelineDesignerApp(QMainWindow):
                     self, "Save Error", f"Failed to save pipeline to {filename}"
                 )
 
+    def _load_pipeline(self):
+        """Load pipeline design from a file."""
+        from .file_io import load_pipeline
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Load Pipeline Design", "", "JSON Files (*.json);;All Files (*)"
+        )
+        if filename:
+            success = load_pipeline(
+                self.scene,
+                filename,
+                self.component_counts
+            )
+            if success:
+                QMessageBox.information(
+                    self, "Pipeline Loaded", f"Pipeline design loaded from {filename}"
+                )
+            else:
+                QMessageBox.critical(
+                    self, "Load Error", f"Failed to load pipeline from {filename}"
+                )
+
     def _export_config(self):
         """Export configuration as YAML."""
         components = self._get_all_components()
@@ -1286,7 +1434,7 @@ class PipelineDesignerApp(QMainWindow):
             )
             return
 
-        # Find camera and optics components
+        # Find camera and optics componentsØ
         camera_component = None
         actuator_count = 5000  # default
 
@@ -1325,42 +1473,6 @@ class PipelineDesignerApp(QMainWindow):
         use_square_diff = False
         use_sorting = False
         n_workers = 4
-
-        for component in components:
-            if component.component_type == ComponentType.CENTROIDER:
-                if "square_diff" in component.params:
-                    use_square_diff = component.params["square_diff"]
-                if "sort" in component.params:
-                    use_sorting = component.params["sort"]
-                if "n_workers" in component.params:
-                    n_workers = component.params["n_workers"]
-
-        pipeline_config = PipelineConfig(
-            use_square_diff=use_square_diff,
-            use_sorting=use_sorting,
-            n_workers=n_workers,
-        )
-
-        # Create system config
-        system_config = SystemConfig(
-            camera=camera_config, optics=optics_config, pipeline=pipeline_config
-        )
-
-        # Get save location
-        filename, _ = QFileDialog.getSaveFileName(
-            self, "Save Configuration YAML", "", "YAML Files (*.yaml);;All Files (*)"
-        )
-
-        if filename:
-            system_config.to_yaml(filename)
-            QMessageBox.information(
-                self,
-                "Configuration Export Complete",
-                f"System configuration saved to {filename}",
-            )
-
-    def _load_pipeline(self):
-        """Load pipeline design from a file."""
         filename, _ = QFileDialog.getOpenFileName(
             self, "Load Pipeline Design", "", "JSON Files (*.json);;All Files (*)"
         )
@@ -1404,13 +1516,12 @@ class PipelineDesignerApp(QMainWindow):
         components = self._get_all_components()
         execution_method = self.execution_method.currentText()
         
-        # Pass centroid agenda if loaded
-        run_pipeline(self, components, self.scene, execution_method, centroid_agenda=self.centroid_agenda)
+        run_pipeline(self, components, self.scene, execution_method)
 
     @staticmethod
-    def run():
+    def run(json_path=None):
         """Run the pipeline designer application."""
         app = QApplication(sys.argv)
-        window = PipelineDesignerApp()
+        window = PipelineDesignerApp(json_path=json_path)
         window.show()
         sys.exit(app.exec_())
