@@ -225,9 +225,24 @@ class ComponentParametersDialog(QDialog):
                 agenda = np.load(filename)
             self.agenda_array = agenda
             self.agenda_path = filename
-            self.agenda_label.setText(f"Loaded: {filename.split('/')[-1]} (shape: {agenda.shape})")
+            if hasattr(self, 'agenda_lineedit'):
+                self.agenda_lineedit.setText(f"Loaded: {filename.split('/')[-1]} (shape: {agenda.shape})")
+            # Set group and n_valid_pixels based on loaded agenda
+            group_value = agenda.shape[0] if hasattr(agenda, 'shape') and len(agenda.shape) > 0 else len(agenda)
+            n_valid_subaps = int(np.sum(agenda))
+            print(f"Loaded agenda with {group_value} groups and {n_valid_subaps} valid subaps.")
+            # Set these values in the param widgets if present
+            if 'group' in self.param_widgets:
+                widget = self.param_widgets['group']
+                if hasattr(widget, 'setText'):
+                    widget.setText(str(group_value))
+            if 'N Valid Subaps' in self.param_widgets:
+                widget = self.param_widgets['N Valid Subaps']
+                if hasattr(widget, 'setText'):
+                    widget.setText(str(n_valid_subaps))
         except Exception as e:
-            self.agenda_label.setText("Load failed")
+            if hasattr(self, 'agenda_lineedit'):
+                self.agenda_lineedit.setText("Load failed")
             QMessageBox.critical(self, "Load Error", f"Failed to load agenda: {e}")
 
     def get_parameters(self) -> Dict[str, Any]:

@@ -39,13 +39,15 @@ def run_pipeline_and_return_pipe(json_path, debug=False):
         debug: Enable debug output for pipeline components
         
     Returns:
-        tuple: (pipeline, results) - the pipeline object and execution results
+        tuple: (pipeline, results, pipeline_title) - the pipeline object, execution results, and pipeline title
     """
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger("json_runner")
 
     with open(json_path, "r") as f:
         data = json.load(f)
+    # Get pipeline title if present
+    pipeline_title = data.get("title", "Pipeline Timing")
     pipeline = Pipeline()
     name_to_component = {}
     
@@ -343,10 +345,10 @@ def run_pipeline_and_return_pipe(json_path, debug=False):
     
     # Run the pipeline
     results = pipeline.run(debug=debug)
-    return pipeline, results
+    return pipeline, results, pipeline_title
 
 
-def visualize_pipeline(pipeline, title="Pipeline Timing", save_path=None, show=True):
+def visualize_pipeline(pipeline, title=None, save_path=None, show=True):
     """
     Visualize the pipeline execution timeline using the chronograph utility.
     
@@ -398,12 +400,13 @@ def visualize_pipeline(pipeline, title="Pipeline Timing", save_path=None, show=T
             # Add to dataset with component name and type as label
             data_set.append([timing, f"{name} ({component.component_type.value})"])
 
-        # Generate chronograph visualization using the same function as Pipeline.visualize
+        # Use title if provided, else fallback
+        plot_title = title if title else "Pipeline Timing"
         if data_set:
             try:
                 fig, ax, latency = chronograph.generate_chrono_plot_packetize(
                     data_list=data_set, 
-                    title=title, 
+                    title=plot_title, 
                     xlabel="Time (μs)", 
                     multiplot=False
                 )
@@ -435,7 +438,7 @@ def visualize_pipeline(pipeline, title="Pipeline Timing", save_path=None, show=T
 
 def run_pipeline_from_json(json_path):
     """Run a pipeline from a JSON file and return results."""
-    pipeline, results = run_pipeline_and_return_pipe(json_path)
+    pipeline, results, _ = run_pipeline_and_return_pipe(json_path)
     return results
 
 
@@ -456,7 +459,7 @@ def main():
     args = parser.parse_args()
     
     print(f"Running pipeline from {args.json_file} ...")
-    pipeline, results = run_pipeline_and_return_pipe(args.json_file, debug=args.debug)
+    pipeline, results, pipeline_title = run_pipeline_and_return_pipe(args.json_file, debug=args.debug)
     print("Pipeline run complete.")
     
     # Optionally print results summary
@@ -508,7 +511,7 @@ def main():
     
     # Visualize pipeline if requested
     if args.save or args.show:
-        title = f"Pipeline Timing: {args.json_file}"
+        title = pipeline_title
         save_path = args.save
         # Only show if --show is set and --no-show is not set
         show_viz = args.show and not args.no_show

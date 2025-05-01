@@ -40,9 +40,12 @@ class CodeGenerator:
         self.generated_transfer_components = []
         self._add_transfer_components()
 
-    def generate_code(self) -> str:
+    def generate_code(self, pipeline_title=None) -> str:
         """
         Generate executable Python code for the pipeline.
+
+        Args:
+            pipeline_title: Optional title for the pipeline visualization
 
         Returns:
             str: Python code that creates the designed pipeline
@@ -74,10 +77,16 @@ class CodeGenerator:
 
         # Generate visualization code
         code_parts.append("# Visualize the pipeline timing")
-        code_parts.append("pipeline.visualize(")
-        code_parts.append('    title="AO Pipeline Timing",')
-        code_parts.append('    save_path="ao_pipeline_timing.png"')
-        code_parts.append(")")
+        if pipeline_title:
+            code_parts.append(f'pipeline.visualize(')
+            code_parts.append(f'    title="{pipeline_title}",')
+            code_parts.append('    save_path="ao_pipeline_timing.png"')
+            code_parts.append(")")
+        else:
+            code_parts.append('pipeline.visualize(')
+            code_parts.append('    title="AO Pipeline Timing",')
+            code_parts.append('    save_path="ao_pipeline_timing.png"')
+            code_parts.append(")")
 
         return "\n".join(code_parts)
 

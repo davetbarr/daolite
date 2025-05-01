@@ -895,6 +895,8 @@ class PipelineDesignerApp(QMainWindow):
             ComponentType.NETWORK: 0,
         }
 
+        self.pipeline_title = "AO Pipeline"  # Default pipeline title
+
         self._create_toolbar()
         self._create_menu()
 
@@ -1115,6 +1117,12 @@ class PipelineDesignerApp(QMainWindow):
 
         file_menu.addSeparator()
 
+        set_title_action = QAction("Set Pipeline Title...", self)
+        set_title_action.triggered.connect(self._set_pipeline_title)
+        file_menu.addAction(set_title_action)
+
+        file_menu.addSeparator()
+
         exit_action = QAction("E&xit", self)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
@@ -1151,6 +1159,12 @@ class PipelineDesignerApp(QMainWindow):
         about_action = QAction("&About", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
+
+    def _set_pipeline_title(self):
+        title, ok = QInputDialog.getText(self, "Set Pipeline Title", "Enter pipeline title:", text=self.pipeline_title)
+        if ok and title:
+            self.pipeline_title = title
+            self.statusBar().showMessage(f"Pipeline title set to: {title}", 3000)
 
     def _add_component(self, comp_type: ComponentType):
         """
@@ -1222,7 +1236,8 @@ class PipelineDesignerApp(QMainWindow):
             self.scene,
             self._get_all_components(),
             self.scene.connections,
-            default_path
+            default_path,
+            pipeline_title=self.pipeline_title
         )
         self.statusBar().showMessage(f"Pipeline quick-saved to {default_path}", 3000)
 
@@ -1382,17 +1397,23 @@ class PipelineDesignerApp(QMainWindow):
 
     def _save_pipeline(self):
         """Save pipeline design to a file (not the code, but the design)."""
+        # Prompt for pipeline title before saving
+        title, ok = QInputDialog.getText(self, "Set Pipeline Title", "Enter pipeline title:", text=self.pipeline_title)
+        if not ok:
+            return  # User cancelled, do not proceed to save
+        if title:
+            self.pipeline_title = title
         filename, _ = QFileDialog.getSaveFileName(
             self, "Save Pipeline Design", "", "JSON Files (*.json)"
         )
         if filename:
-            # Use the extracted save_pipeline_to_file function from file_io module
             from .file_io import save_pipeline_to_file
             success = save_pipeline_to_file(
                 self.scene, 
                 self._get_all_components(), 
                 self.scene.connections, 
-                filename
+                filename,
+                pipeline_title=self.pipeline_title
             )
             if success:
                 QMessageBox.information(

@@ -139,6 +139,14 @@ def save_pipeline_to_file(scene, components, connections, filename):
             if "n_acts" not in params:
                 params["n_acts"] = 5000
         
+        # --- Fix: Only save centroid_agenda as a filename ---
+        if "centroid_agenda" in params:
+            if "centroid_agenda_path" in params:
+                params["centroid_agenda"] = params["centroid_agenda_path"]
+            elif not isinstance(params["centroid_agenda"], str):
+                # Remove if not a string (should not save numpy array)
+                del params["centroid_agenda"]
+        
         comp_data = {
             "type": comp.component_type.name,
             "name": comp.name,
