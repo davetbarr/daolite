@@ -150,12 +150,19 @@ def save_pipeline_to_file(scene, components, connections, filename):
             if "n_acts" not in params:
                 params["n_acts"] = 5000
         
-        # --- Fix: Only save centroid_agenda as a filename ---
+        # --- Fix: Only save centroid_agenda as a filename and use proper parameter name ---
         if "centroid_agenda" in params:
             if "centroid_agenda_path" in params:
-                params["centroid_agenda"] = params["centroid_agenda_path"]
-            elif not isinstance(params["centroid_agenda"], str):
-                # Remove if not a string (should not save numpy array)
+                params["agenda"] = params["centroid_agenda_path"]  # Use "agenda" to match function signature
+            elif isinstance(params["centroid_agenda"], str):
+                params["agenda"] = params["centroid_agenda"]  # Use "agenda" to match function signature
+            
+            # Keep centroid_agenda_path for backwards compatibility
+            if "centroid_agenda_path" in params:
+                params["centroid_agenda_path"] = params["centroid_agenda_path"]
+                
+            # Remove the old parameter name
+            if "centroid_agenda" in params:
                 del params["centroid_agenda"]
         
         # Ensure all params are JSON serializable

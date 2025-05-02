@@ -207,6 +207,8 @@ def Centroider(
     Returns:
         np.ndarray: Array of shape (rows, 2) with processing start/end times
     """
+    print("Agenda:", agenda)
+    
     # Support agenda as filename or array
     if agenda is not None and isinstance(agenda, str):
         try:
@@ -222,7 +224,10 @@ def Centroider(
         return np.array([[start_times[-1, 1], start_times[-1, 1] + total_time]])
 
     iterations = start_times.shape[0]
-    n_subs = _calculate_n_subs(n_valid_subaps, group, n_workers, agenda)
+    if agenda is not None:
+        n_subs = agenda[0]
+    else:
+        n_subs = _calculate_n_subs(n_valid_subaps, group, n_workers)
     timings = np.zeros([iterations, 2])
 
     # Process first group
@@ -239,10 +244,10 @@ def Centroider(
     # Process remaining groups
     for i in range(1, iterations):
         if agenda is not None:
-            n_subs = _calculate_n_subs(
-                n_valid_subaps, group, n_workers, agenda[i : i + 1]
-            )
-
+            n_subs = agenda[i]
+        else:
+            n_subs = _calculate_n_subs(n_valid_subaps, group, n_workers)
+        
         if n_subs == 0:
             total_time = 0
         else:
@@ -264,14 +269,9 @@ def Centroider(
 
 
 def _calculate_n_subs(
-    n_valid_subaps: int, group: int, n_workers: int, agenda: Optional[np.ndarray] = None
+    n_valid_subaps: int, group: int, n_workers: int
 ) -> int:
     """Helper to calculate number of subapertures to process."""
-    if agenda is not None:
-        if agenda[0] == 0:
-            return 0
-        return (agenda[0] + n_workers - 1) // n_workers
-
     return (n_valid_subaps + (group * n_workers) - 1) // (group * n_workers)
 
 

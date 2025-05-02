@@ -162,26 +162,26 @@ class CodeGenerator:
         # For visualization
         self.import_statements.add("import matplotlib.pyplot as plt")
 
-        # Only import network_transfer if it exists in network.py
+        # Add imports for transfer functions
+        has_network = False
+        has_pcie = False
+        for component in self.components:
+            if component.component_type == ComponentType.NETWORK:
+                transfer_type = component.params.get("transfer_type", "").lower()
+                if transfer_type == "pcie":
+                    has_pcie = True
+                elif transfer_type == "network":
+                    has_network = True
+        for transfer in getattr(self, 'generated_transfer_components', []):
+            ttype = transfer.get('transfer_type', '').lower()
+            if ttype == 'pcie':
+                has_pcie = True
+            elif ttype == 'network':
+                has_network = True
         if has_network:
-            try:
-                import os
-
-                network_path = os.path.join(
-                    os.path.dirname(__file__), "../../utils/network.py"
-                )
-                with open(network_path, "r") as f:
-                    network_code = f.read()
-                if "network_transfer" in network_code:
-                    self.import_statements.add(
-                        "from daolite.utils.network import network_transfer"
-                    )
-                if "TimeOnNetwork" in network_code:
-                    self.import_statements.add(
-                        "from daolite.utils.network import TimeOnNetwork"
-                    )
-            except Exception:
-                pass
+            self.import_statements.add("from daolite.utils.network import network_transfer")
+        if has_pcie:
+            self.import_statements.add("from daolite.utils.network import pcie_transfer")
 
     def _generate_component_code(self, component: ComponentBlock) -> str:
         """
@@ -304,8 +304,8 @@ class CodeGenerator:
                     return "pcie_transfer"
                 elif transfer_type == 'network':
                     return "network_transfer"
-            # Default to TimeOnNetwork for user-created network components
-            return "TimeOnNetwork"
+            # Default to network_transfer for user-created network components
+            return "network_transfer"
         else:
             return "unknown_function"  # Default
 
@@ -402,9 +402,34 @@ class CodeGenerator:
             lines.append(f'    "group": {group},  # Default group size')
         # Add custom parameters from component, skipping those already added
         already = {"n_pixels", "group", "n_valid_subaps", "n_pix_per_subap"}
+        # Process remaining parameters
+        processed_params = {}
         for key, value in component.params.items():
             if key in already:
                 continue
+                
+            # Handle parameter renaming for Centroider components
+            if component.component_type == ComponentType.CENTROIDER:
+                # Handle centroid_agenda parameter renaming for compatibility with function signature
+                if key == "centroid_agenda":
+                    key = "agenda"  # Use the correct parameter name expected by the Centroider function
+                # Skip centroid_agenda_path as it's not needed and would cause an error
+                elif key == "centroid_agenda_path":
+                    continue
+            
+            # Handle parameter renaming for Reconstruction components
+            elif component.component_type == ComponentType.RECONSTRUCTION:
+                # Handle centroid_agenda parameter renaming for compatibility with function signature
+                if key == "centroid_agenda":
+                    key = "agenda"  # Use the correct parameter name expected by the Reconstruction function
+                # Skip centroid_agenda_path as it's not needed and would cause an error
+                elif key == "centroid_agenda_path":
+                    continue
+            
+            processed_params[key] = value
+            
+        # Add processed parameters to the lines
+        for key, value in processed_params.items():
             if isinstance(value, str):
                 lines.append(f'    "{key}": "{value}",')
             else:
@@ -535,33 +560,51 @@ class CodeGenerator:
         
         # Analyze each connection for resource boundaries
         for src_comp, dest_comp in connections:
+            src_res = src_comp.get_compute_resource()
+            dest_res = dest_comp.get_compute_resource()
+            # Determine if source or dest is GPU by checking parent container type or hardware field
+            def is_gpu(comp, res):
+                # Check hardware field
+                if getattr(res, 'hardware', '').lower() == 'gpu':
+                    return True
+                # Check parent container type
+                parent = comp.parentItem() if hasattr(comp, 'parentItem') else None
+                if parent and parent.__class__.__name__.lower() == 'gpubox':
+                    return True
+                return False
+            src_is_gpu = is_gpu(src_comp, src_res)
+            dest_is_gpu = is_gpu(dest_comp, dest_res)
+            print(f"[TRANSFER LOG] Checking connection: {src_comp.name} (GPU={src_is_gpu}) -> {dest_comp.name} (GPU={dest_is_gpu})")
             # SPECIAL CASE: Always add network transfer for camera components
             if src_comp.component_type == ComponentType.CAMERA:
+                print(f"[TRANSFER LOG] Adding Network transfer for CAMERA: {src_comp.name} -> {dest_comp.name}")
                 transfer_type = "Network"
                 transfer_comp = self._create_transfer_component(src_comp, dest_comp, transfer_type)
                 self.generated_transfer_components.append(transfer_comp)
                 continue
-                
-            # Normal case: check for different compute resources
-            src_res = src_comp.get_compute_resource()
-            dest_res = dest_comp.get_compute_resource()
-            
             # Skip if either component has no compute resource
             if not src_res or not dest_res:
+                print(f"[TRANSFER LOG] Skipping connection (missing compute resource): {src_comp.name} -> {dest_comp.name}")
                 continue
-                
-            # Skip if same compute resource
-            if src_res is dest_res:
-                continue
-                
-            # Determine transfer type based on resource types
-            transfer_type = self._determine_transfer_type(src_comp, dest_comp)
-            
-            if transfer_type:
-                # Create a transfer component
+            # --- PCIe transfer: CPU <-> GPU, even if on same resource ---
+            if src_is_gpu != dest_is_gpu:
+                print(f"[TRANSFER LOG] Adding PCIe transfer: {src_comp.name} -> {dest_comp.name}")
+                transfer_type = "PCIe"
                 transfer_comp = self._create_transfer_component(src_comp, dest_comp, transfer_type)
                 self.generated_transfer_components.append(transfer_comp)
-    
+                continue
+            # --- Network transfer: different compute boxes ---
+            if src_res is dest_res:
+                print(f"[TRANSFER LOG] Skipping connection (same compute resource, not PCIe): {src_comp.name} -> {dest_comp.name}")
+                continue
+            transfer_type = self._determine_transfer_type(src_comp, dest_comp)
+            if transfer_type:
+                print(f"[TRANSFER LOG] Adding {transfer_type} transfer: {src_comp.name} -> {dest_comp.name}")
+                transfer_comp = self._create_transfer_component(src_comp, dest_comp, transfer_type)
+                self.generated_transfer_components.append(transfer_comp)
+            else:
+                print(f"[TRANSFER LOG] No transfer needed: {src_comp.name} -> {dest_comp.name}")
+
     def _determine_transfer_type(self, src_comp: ComponentBlock, dest_comp: ComponentBlock) -> Optional[str]:
         """
         Determine the type of transfer needed between two components.
@@ -618,30 +661,31 @@ class CodeGenerator:
         # Add network/PCIe imports
         if transfer_type == "Network":
             self.import_statements.add("from daolite.utils.network import network_transfer")
-        else:  # PCIe
+        elif transfer_type == "PCIe":
             self.import_statements.add("from daolite.utils.network import pcie_transfer")
-        
+
         # Determine data size based on source and destination components
         data_size = self._estimate_data_size(src_comp, dest_comp)
-        
+
         # Create a synthetic component with appropriate data
         transfer_name = f"{transfer_type}_Transfer_{src_comp.name}_to_{dest_comp.name}"
-        
+
         print(f"DEBUG: Creating transfer component {transfer_name} from {src_comp.name} to {dest_comp.name}")
-        
+
         # Create component dict with all necessary information
         params = {
-            "n_bits": data_size,
-            "transfer_type": transfer_type.lower(),
+            "n_bits": data_size
         }
-        # Use json_runner.py logic for network transfer params
         if transfer_type == "Network":
+            params["transfer_type"] = transfer_type.lower()
             params["group"] = src_comp.params.get("group", src_comp.params.get("group_size", 50))
             dest_compute = dest_comp.get_compute_resource()
             if dest_compute:
                 params["use_dest_network"] = True
                 params["dest_network_speed"] = getattr(dest_compute, 'network_speed', 100e9)
                 params["dest_time_in_driver"] = getattr(dest_compute, 'time_in_driver', 5.0)
+        elif transfer_type == "PCIe":
+            params["group"] = src_comp.params.get("group", src_comp.params.get("group_size", 50))
         transfer_comp = {
             "name": transfer_name,
             "type": ComponentType.NETWORK,
@@ -652,9 +696,9 @@ class CodeGenerator:
             "params": params,
             "dependencies": [src_comp.name]
         }
-        
+
         print(f"DEBUG: Transfer {transfer_name} dependencies set to: {transfer_comp['dependencies']}")
-        
+
         # SPECIAL CASE: For camera components, use the destination compute's network characteristics
         # since camera is just a generator and the compute component defines the network properties
         if src_comp.component_type == ComponentType.CAMERA and transfer_type == "Network":
@@ -664,21 +708,20 @@ class CodeGenerator:
                 transfer_comp["params"]["use_dest_network"] = True
                 transfer_comp["params"]["dest_network_speed"] = getattr(dest_compute, 'network_speed', 100e9)
                 transfer_comp["params"]["dest_time_in_driver"] = getattr(dest_compute, 'time_in_driver', 5.0)
-                
                 # For camera-to-calibration pipelines, ensure group size is passed through
                 # This is needed for timing array propagation
                 if dest_comp.component_type == ComponentType.CALIBRATION:
                     # Get group size from camera or use default
                     group_size = src_comp.params.get("group", src_comp.params.get("group_size", 50))
                     transfer_comp["params"]["group"] = group_size
-        
+
         # Update destination component dependencies to include this transfer
         for port in dest_comp.input_ports:
             for i, (comp, port2) in enumerate(port.connected_to):
                 if comp == src_comp:
                     # Replace direct dependency with transfer component
                     port.connected_to[i] = (src_comp, port2)  # Keep the same, just for tracking
-        
+
         return transfer_comp
     
     def _estimate_data_size(self, src_comp: ComponentBlock, dest_comp: ComponentBlock) -> int:
