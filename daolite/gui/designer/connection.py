@@ -5,7 +5,7 @@ This module provides graphical representations of connections between components
 """
 
 from typing import Optional, List, Tuple, Any
-from PyQt5.QtWidgets import QGraphicsPathItem, QMenu, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QLabel
+from PyQt5.QtWidgets import QGraphicsPathItem, QMenu, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QLabel, QVBoxLayout
 from PyQt5.QtCore import Qt, QPointF
 from PyQt5.QtGui import QPen, QPainterPath, QColor
 
@@ -15,12 +15,19 @@ from .components import Port, ComponentBlock, PortType, TransferIndicator
 class TransferPropertiesDialog(QDialog):
     def __init__(self, parent=None, data_size=None, grouping=None):
         super().__init__(parent)
+        from daolite.gui.designer.style_utils import set_app_style
+        set_app_style(self)
         self.setWindowTitle("Set Data Transfer Properties")
-        layout = QFormLayout(self)
+        self.resize(360, 140)
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
         self.data_size_edit = QLineEdit(str(data_size) if data_size is not None else "")
+        self.data_size_edit.setPlaceholderText("e.g. 4096")
         self.grouping_edit = QLineEdit(str(grouping) if grouping is not None else "")
-        layout.addRow("Data Size (bytes):", self.data_size_edit)
-        layout.addRow("Grouping:", self.grouping_edit)
+        self.grouping_edit.setPlaceholderText("e.g. 1 frame, 8 packets")
+        form.addRow("<b>Data Size (bytes):</b>", self.data_size_edit)
+        form.addRow("<b>Grouping:</b>", self.grouping_edit)
+        layout.addLayout(form)
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)

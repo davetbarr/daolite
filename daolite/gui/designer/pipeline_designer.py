@@ -886,19 +886,49 @@ class PipelineDesignerApp(QMainWindow):
 
         # --- Actions Section ---
         add_section_label("Actions")
+        # Generate button with dropdown for method selection
         btn_generate = QToolButton()
         btn_generate.setIcon(QIcon.fromTheme("document-export"))
         btn_generate.setText("Generate")
-        btn_generate.setToolTip("Generate Python code for the current pipeline design")
-        btn_generate.clicked.connect(self._generate_code)
+        btn_generate.setToolTip("Generate pipeline code")
         btn_generate.setStyleSheet("color: #222; font-weight: 500;")
+        btn_generate.setPopupMode(QToolButton.MenuButtonPopup)
+        from PyQt5.QtWidgets import QMenu
+        generate_menu = QMenu()
+        act_gen_python = generate_menu.addAction("Generate Python")
+        act_gen_json = generate_menu.addAction("Generate JSON")
+        def gen_python():
+            self.execution_method.setCurrentText("Python")
+            self._generate_code()
+        def gen_json():
+            self.execution_method.setCurrentText("JSON")
+            self._generate_code()
+        act_gen_python.triggered.connect(gen_python)
+        act_gen_json.triggered.connect(gen_json)
+        btn_generate.setMenu(generate_menu)
+        btn_generate.clicked.connect(gen_python)  # Default to Python if main button is clicked
         self.toolbar.addWidget(btn_generate)
+
+        # Run button with dropdown for method selection (unchanged)
         btn_run = QToolButton()
         btn_run.setIcon(QIcon.fromTheme("system-run"))
         btn_run.setText("Run")
         btn_run.setToolTip("Execute pipeline and display visualization")
-        btn_run.clicked.connect(self._run_pipeline)
         btn_run.setStyleSheet("color: #222; font-weight: 500;")
+        btn_run.setPopupMode(QToolButton.MenuButtonPopup)
+        run_menu = QMenu()
+        act_run_python = run_menu.addAction("Run as Python")
+        act_run_json = run_menu.addAction("Run as JSON")
+        def run_python():
+            self.execution_method.setCurrentText("Python")
+            self._run_pipeline()
+        def run_json():
+            self.execution_method.setCurrentText("JSON")
+            self._run_pipeline()
+        act_run_python.triggered.connect(run_python)
+        act_run_json.triggered.connect(run_json)
+        btn_run.setMenu(run_menu)
+        btn_run.clicked.connect(run_python)  # Default to Python if main button is clicked
         self.toolbar.addWidget(btn_run)
         add_separator()
 
