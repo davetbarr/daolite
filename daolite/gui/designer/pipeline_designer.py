@@ -33,10 +33,13 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QWidget,
-    QCheckBox,  # Add QCheckBox for Add GPU
+    QCheckBox,
+    QUndoStack,
+    QUndoCommand,
+    QTextEdit,
 )
 from PyQt5.QtCore import Qt, QRectF, QPointF
-from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QBrush
+from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QBrush, QKeySequence
 
 import inspect
 import daolite.compute.hardware as hardware
@@ -62,6 +65,7 @@ from .connection import Connection
 from .code_generator import CodeGenerator
 from .parameter_dialog import ComponentParametersDialog
 from .connection_manager import update_connection_indicators
+from .style_utils import set_app_style
 
 # Set up logging
 logging.basicConfig(
@@ -70,6 +74,39 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger('PipelineDesigner')
+
+
+class ShortcutHelpDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        set_app_style(self)
+        self.setWindowTitle("Keyboard Shortcuts")
+        layout = QVBoxLayout(self)
+        text = QTextEdit()
+        text.setReadOnly(True)
+        text.setPlainText(
+            """
+            Keyboard Shortcuts:
+            ------------------
+            ⌘N / Ctrl+N: New Pipeline
+            ⌘O / Ctrl+O: Open Pipeline
+            ⌘S / Ctrl+S: Save Pipeline
+            ⌘Z / Ctrl+Z: Undo
+            ⌘Y / Ctrl+Y: Redo
+            Delete/Backspace: Delete Selected
+            ⌘Q / Ctrl+Q: Quit
+            ⌘G / Ctrl+G: Generate Code
+            ⌘R / Ctrl+R: Run Pipeline
+            ⌘E / Ctrl+E: Export Config
+            ⌘H / Ctrl+H: Show Shortcuts
+            ⌘+: Zoom In
+            ⌘-: Zoom Out
+            ⌘0: Reset Zoom
+            """)
+        layout.addWidget(text)
+        btn = QPushButton("Close")
+        btn.clicked.connect(self.accept)
+        layout.addWidget(btn)
 
 
 class PipelineScene(QGraphicsScene):
@@ -106,7 +143,7 @@ class PipelineScene(QGraphicsScene):
         """Handle mouse press events for connection creation."""
         pos = event.scenePos()
         item = self.itemAt(pos, self.views()[0].transform())
-
+        port = None
         if event.button() == Qt.LeftButton:
             if isinstance(item, ComponentBlock):
                 port = item.find_port_at_point(pos)
@@ -450,6 +487,7 @@ class ResourceSelectionDialog(QDialog):
     """
     def __init__(self, parent=None, existing_resource=None):
         super().__init__(parent)
+        set_app_style(self)
         self.setWindowTitle("Configure Computer Resource")
         self.resize(440, 420)
         self.cpu_name_string = None
@@ -740,6 +778,8 @@ class PipelineDesignerApp(QMainWindow):
 
         self.pipeline_title = "AO Pipeline"  # Default pipeline title
 
+        self.undo_stack = QUndoStack(self)
+
         self._create_toolbar()
         self._create_menu()
 
@@ -932,24 +972,29 @@ class PipelineDesignerApp(QMainWindow):
         file_menu = menu_bar.addMenu("&File")
 
         new_action = QAction("&New Pipeline", self)
+        new_action.setShortcut(QKeySequence.New)
         new_action.triggered.connect(self._new_pipeline)
         file_menu.addAction(new_action)
 
         save_action = QAction("&Save Pipeline", self)
+        save_action.setShortcut(QKeySequence.Save)
         save_action.triggered.connect(self._save_pipeline)
         file_menu.addAction(save_action)
 
         load_action = QAction("&Load Pipeline", self)
+        load_action.setShortcut(QKeySequence.Open)
         load_action.triggered.connect(self._load_pipeline)
         file_menu.addAction(load_action)
 
         file_menu.addSeparator()
 
         generate_action = QAction("&Generate Code", self)
+        generate_action.setShortcut("Ctrl+G")
         generate_action.triggered.connect(self._generate_code)
         file_menu.addAction(generate_action)
 
         export_config_action = QAction("Export Config &YAML", self)
+        export_config_action.setShortcut("Ctrl+E")
         export_config_action.triggered.connect(self._export_config)
         file_menu.addAction(export_config_action)
 
@@ -967,17 +1012,30 @@ class PipelineDesignerApp(QMainWindow):
         file_menu.addSeparator()
 
         exit_action = QAction("E&xit", self)
+        exit_action.setShortcut(QKeySequence.Quit)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
         # Edit menu
         edit_menu = menu_bar.addMenu("&Edit")
 
+        undo_action = QAction("&Undo", self)
+        undo_action.setShortcut(QKeySequence.Undo)
+        undo_action.triggered.connect(self.undo_stack.undo)
+        edit_menu.addAction(undo_action)
+
+        redo_action = QAction("&Redo", self)
+        redo_action.setShortcut(QKeySequence.Redo)
+        redo_action.triggered.connect(self.undo_stack.redo)
+        edit_menu.addAction(redo_action)
+
         rename_action = QAction("&Rename Selected", self)
+        rename_action.setShortcut("Ctrl+R")
         rename_action.triggered.connect(self._rename_selected)
         edit_menu.addAction(rename_action)
 
         delete_action = QAction("&Delete Selected", self)
+        delete_action.setShortcut(QKeySequence.Delete)
         delete_action.triggered.connect(self._delete_selected)
         edit_menu.addAction(delete_action)
 
@@ -1002,6 +1060,25 @@ class PipelineDesignerApp(QMainWindow):
         about_action = QAction("&About", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
+
+        shortcut_action = QAction("Keyboard Shortcuts", self)
+        shortcut_action.setShortcut("Ctrl+H")
+        shortcut_action.triggered.connect(self._show_shortcuts)
+        help_menu.addAction(shortcut_action)
+
+    def _show_shortcuts(self):
+        dlg = ShortcutHelpDialog(self)
+        dlg.exec_()
+
+    def keyPressEvent(self, event):
+        # Let QUndoStack handle undo/redo
+        if event.matches(QKeySequence.Undo):
+            self.undo_stack.undo()
+            return
+        if event.matches(QKeySequence.Redo):
+            self.undo_stack.redo()
+            return
+        super().keyPressEvent(event)
 
     def _set_pipeline_title(self):
         title, ok = QInputDialog.getText(self, "Set Pipeline Title", "Enter pipeline title:", text=self.pipeline_title)

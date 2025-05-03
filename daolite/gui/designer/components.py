@@ -131,12 +131,20 @@ class ComponentBlock(QGraphicsItem):
     input/output ports and configurable properties.
     """
 
-    def __init__(self, component_type: ComponentType, name: str):
+    def __init__(self, component_type: ComponentType, name: str = None, instance_number: int = None):
         super().__init__()
         self.component_type = component_type
-        self.name = name
+        # Assign a default name if not provided
+        if name is None:
+            base = component_type.name.capitalize().replace('_', ' ')
+            if instance_number is not None:
+                self.name = f"{base} {instance_number}"
+            else:
+                self.name = base
+        else:
+            self.name = name
         self.params: Dict[str, Any] = {}
-        self.size = QRectF(0, 0, 180, 80)
+        self.size = QRectF(0, 0, 190, 90)
 
         # Create ports
         self.input_ports: List[Port] = []
@@ -224,47 +232,46 @@ class ComponentBlock(QGraphicsItem):
         painter.setBrush(brush)
         painter.drawRoundedRect(self.size, 10, 10)
 
-        # Draw title bar
-        title_rect = QRectF(0, 0, self.size.width(), 25)
+        # Draw title bar (component name)
+        title_rect = QRectF(0, 0, self.size.width(), 26)
         painter.setBrush(QBrush(self._get_title_color()))
         painter.drawRoundedRect(title_rect, 10, 10)
-
-        # Draw component name
         painter.setPen(Qt.black)
-        font = QFont("Arial", 9, QFont.Bold)
+        font = QFont("Arial", 10, QFont.Bold)
         painter.setFont(font)
         painter.drawText(title_rect, Qt.AlignCenter, self.name)
 
-        # Draw component type name more prominently
-        # Use the enum name (e.g., "CAMERA", "CENTROIDER") instead of value
-        font = QFont("Arial", 10, QFont.Bold)
+        # Draw component type
+        type_rect = QRectF(0, 28, self.size.width(), 20)
+        font = QFont("Arial", 9, QFont.Normal)
         painter.setFont(font)
-        type_rect = QRectF(5, 26, self.size.width() - 10, 24)
-        painter.drawText(
-            type_rect, Qt.AlignCenter, f"{self.component_type.name}"
-        )
+        painter.setPen(QColor(60, 60, 120))
+        painter.drawText(type_rect, Qt.AlignCenter, self.component_type.name.title())
+
+        # Draw description
+        desc = self._get_description()
+        desc_rect = QRectF(0, 48, self.size.width(), 18)
+        font = QFont("Arial", 8, QFont.StyleItalic)
+        painter.setFont(font)
+        painter.setPen(QColor(90, 90, 90))
+        painter.drawText(desc_rect, Qt.AlignCenter, desc)
 
         # Draw compute resource if assigned
         compute = self.get_compute_resource()
         if compute:
             compute_name = getattr(compute, "name", "")
-            compute_rect = QRectF(5, 50, self.size.width() - 10, 20)
-            
-            # Determine if it's a CPU or GPU resource
+            compute_rect = QRectF(5, 68, self.size.width() - 10, 16)
             resource_type = ""
-            
-            # Check parent type to determine resource type
             parent = self.parentItem()
             if parent:
                 if isinstance(parent, GPUBox):
                     resource_type = "GPU: "
                 elif isinstance(parent, ComputeBox):
                     resource_type = "CPU: "
-            
-            # Draw only if we know what type of resource it is
             if resource_type:
                 font = QFont("Arial", 7)
                 painter.setFont(font)
+                painter.setPen(QColor(60, 120, 60))
                 painter.drawText(compute_rect, Qt.AlignCenter, f"{resource_type}{compute_name}")
 
         # Draw ports

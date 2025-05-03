@@ -14,10 +14,12 @@ from PyQt5.QtWidgets import (
 from daolite.utils.sh_utility import getAvailableSubAps, genSHSubApMap
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
+from .designer.style_utils import set_app_style
 
 class CentroidAgendaTool(QWidget):
     def __init__(self):
         super().__init__()
+        set_app_style(self)
         self.setWindowTitle("Centroid Agenda Generator")
         self.readout_map = None
         self.subap_map = None
@@ -326,6 +328,7 @@ class CentroidAgendaTool(QWidget):
 class CentroidAgendaDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        set_app_style(self)
         self.setWindowTitle("Centroid Agenda Tool")
         self.widget = CentroidAgendaTool()
         layout = QVBoxLayout(self)

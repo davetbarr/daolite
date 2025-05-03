@@ -22,6 +22,7 @@ from PyQt5.QtWidgets import (
 )
 
 from daolite.common import ComponentType
+from .style_utils import set_app_style
 
 
 class ComponentParametersDialog(QDialog):
@@ -47,6 +48,7 @@ class ComponentParametersDialog(QDialog):
             parent: Parent widget
         """
         super().__init__(parent)
+        set_app_style(self)
         self.component_type = component_type
         self.current_params = current_params or {}
         self.param_widgets = {}
