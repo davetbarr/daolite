@@ -535,15 +535,20 @@ class ComponentBlock(QGraphicsItem):
         return dependencies
 
     def mouseDoubleClickEvent(self, event):
-        """Handle double-click for component renaming."""
-        # Check if double click is in the title bar area
-        title_rect = QRectF(0, 0, self.size.width(), 25)
-        if title_rect.contains(event.pos()):
-            # Show rename dialog
-            self._on_rename()
+        """Open the configure dialog for this component on double-click."""
+        # Open the parameter configuration dialog
+        if self.scene() and self.scene().parent():
+            app = self.scene().parent()
+            prev_selected = None
+            if hasattr(app, "selected_component"):
+                prev_selected = app.selected_component
+                app.selected_component = self
+            if hasattr(app, "_configure_params"):
+                app._configure_params()
+            if hasattr(app, "selected_component"):
+                app.selected_component = prev_selected
             event.accept()
             return
-        
         super().mouseDoubleClickEvent(event)
 
 

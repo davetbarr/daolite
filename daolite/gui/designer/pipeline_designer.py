@@ -37,9 +37,12 @@ from PyQt5.QtWidgets import (
     QUndoStack,
     QUndoCommand,
     QTextEdit,
+    QToolButton,
+    QFrame,
+    QSizePolicy,
 )
-from PyQt5.QtCore import Qt, QRectF, QPointF
-from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QBrush, QKeySequence
+from PyQt5.QtCore import Qt, QRectF, QPointF, QSize
+from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QBrush, QKeySequence, QIcon
 
 import inspect
 import daolite.compute.hardware as hardware
@@ -802,118 +805,121 @@ class PipelineDesignerApp(QMainWindow):
                 QMessageBox.critical(self, "Load Error", f"Error loading pipeline: {e}")
 
     def _create_toolbar(self):
-        """Create component toolbar."""
-        self.toolbar = QToolBar("Components")
-        self.addToolBar(Qt.LeftToolBarArea, self.toolbar)
+        """Create a professional, horizontal, grouped, icon+text toolbar at the top with improved contrast and 'Add Computer' first."""
+        from PyQt5.QtWidgets import QToolBar, QToolButton, QFrame, QSizePolicy
+        from PyQt5.QtGui import QIcon
+        from PyQt5.QtCore import QSize
 
-        # === Compute Section ===
-        compute_label = QLabel("<b>Compute/Hardware</b>")
-        self.toolbar.addWidget(compute_label)
+        # Remove any existing toolbars
+        for tb in self.findChildren(QToolBar):
+            self.removeToolBar(tb)
 
-        add_computer_btn = QPushButton("Add Computer")
-        add_computer_btn.clicked.connect(self._add_compute_box)
-        add_computer_btn.setToolTip("Add a compute box (computer node) to the scene")
-        self.toolbar.addWidget(add_computer_btn)
+        self.toolbar = QToolBar("Main Toolbar")
+        self.toolbar.setMovable(False)
+        self.toolbar.setFloatable(False)
+        self.toolbar.setIconSize(QSize(32, 32))
+        self.toolbar.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        self.addToolBar(Qt.TopToolBarArea, self.toolbar)
 
-        # Removed Add GPU to Computer button
+        def add_section_label(text):
+            label = QLabel(f"  <b>{text}</b>  ")
+            label.setStyleSheet("font-size: 14px; color: #1a1a1a; margin: 0 8px; letter-spacing: 0.5px;")
+            self.toolbar.addWidget(label)
 
-        self.toolbar.addSeparator()
+        def add_separator():
+            sep = QFrame()
+            sep.setFrameShape(QFrame.VLine)
+            sep.setFrameShadow(QFrame.Sunken)
+            sep.setStyleSheet("color: #b0c4de; margin: 0 8px;")
+            sep.setFixedHeight(40)
+            self.toolbar.addWidget(sep)
 
-        # Add buttons for each component type
-        camera_btn = QPushButton("Camera")
-        camera_btn.clicked.connect(lambda: self._add_component(ComponentType.CAMERA))
-        camera_btn.setToolTip("Add a camera component to the pipeline")
-        self.toolbar.addWidget(camera_btn)
+        # --- Add Computer Button (no label, prominent style) ---
+        btn_add_computer = QToolButton()
+        btn_add_computer.setIcon(QIcon.fromTheme("computer"))
+        btn_add_computer.setText("Add Computer")
+        btn_add_computer.setToolTip("Add a compute box (computer node) to the scene")
+        btn_add_computer.clicked.connect(self._add_compute_box)
+        btn_add_computer.setStyleSheet("color: #1976d2; font-weight: bold; font-size: 15px; margin-right: 12px;")
+        self.toolbar.addWidget(btn_add_computer)
+        add_separator()
 
-        network_btn = QPushButton("Network")
-        network_btn.clicked.connect(lambda: self._add_component(ComponentType.NETWORK))
-        network_btn.setToolTip(
-            "Add a network transfer component (emphasizes multi-node configurations)"
-        )
-        self.toolbar.addWidget(network_btn)
+        # --- File Dropdown (QToolButton with menu) ---
+        file_menu_btn = QToolButton()
+        file_menu_btn.setIcon(QIcon.fromTheme("document-new"))
+        file_menu_btn.setText("File")
+        file_menu_btn.setPopupMode(QToolButton.InstantPopup)
+        file_menu_btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        file_menu_btn.setStyleSheet("color: #444; font-weight: bold; font-size: 13px;")
+        from PyQt5.QtWidgets import QMenu
+        file_menu = QMenu()
+        act_new = file_menu.addAction(QIcon.fromTheme("document-new"), "New Pipeline")
+        act_new.triggered.connect(self._new_pipeline)
+        act_open = file_menu.addAction(QIcon.fromTheme("document-open"), "Open Pipeline")
+        act_open.triggered.connect(self._load_pipeline)
+        act_save = file_menu.addAction(QIcon.fromTheme("document-save"), "Save Pipeline")
+        act_save.triggered.connect(self._save_pipeline)
+        file_menu_btn.setMenu(file_menu)
+        self.toolbar.addWidget(file_menu_btn)
+        add_separator()
 
-        calibration_btn = QPushButton("Calibration")
-        calibration_btn.clicked.connect(
-            lambda: self._add_component(ComponentType.CALIBRATION)
-        )
-        calibration_btn.setToolTip("Add a pixel calibration component")
-        self.toolbar.addWidget(calibration_btn)
+        # --- Components Section ---
+        add_section_label("Components")
+        comp_buttons = [
+            ("Camera", ComponentType.CAMERA, "camera-photo"),
+            ("Network", ComponentType.NETWORK, "network-wired"),
+            ("Calibration", ComponentType.CALIBRATION, "color-balance"),
+            ("Centroider", ComponentType.CENTROIDER, "view-split-left-right"),
+            ("Reconstruction", ComponentType.RECONSTRUCTION, "system-run"),
+            ("Control", ComponentType.CONTROL, "media-playback-start"),
+        ]
+        for label, ctype, icon in comp_buttons:
+            btn = QToolButton()
+            btn.setIcon(QIcon.fromTheme(icon))
+            btn.setText(label)
+            btn.setToolTip(f"Add a {label.lower()} component")
+            btn.clicked.connect(lambda _, t=ctype: self._add_component(t))
+            btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+            btn.setStyleSheet("color: #222; font-weight: 500;")
+            self.toolbar.addWidget(btn)
+        add_separator()
 
-        centroider_btn = QPushButton("Centroider")
-        centroider_btn.clicked.connect(
-            lambda: self._add_component(ComponentType.CENTROIDER)
-        )
-        centroider_btn.setToolTip("Add a centroider component for wavefront sensing")
-        self.toolbar.addWidget(centroider_btn)
+        # --- Actions Section ---
+        add_section_label("Actions")
+        btn_generate = QToolButton()
+        btn_generate.setIcon(QIcon.fromTheme("document-export"))
+        btn_generate.setText("Generate")
+        btn_generate.setToolTip("Generate Python code for the current pipeline design")
+        btn_generate.clicked.connect(self._generate_code)
+        btn_generate.setStyleSheet("color: #222; font-weight: 500;")
+        self.toolbar.addWidget(btn_generate)
+        btn_run = QToolButton()
+        btn_run.setIcon(QIcon.fromTheme("system-run"))
+        btn_run.setText("Run")
+        btn_run.setToolTip("Execute pipeline and display visualization")
+        btn_run.clicked.connect(self._run_pipeline)
+        btn_run.setStyleSheet("color: #222; font-weight: 500;")
+        self.toolbar.addWidget(btn_run)
+        add_separator()
 
-        reconstruction_btn = QPushButton("Reconstruction")
-        reconstruction_btn.clicked.connect(
-            lambda: self._add_component(ComponentType.RECONSTRUCTION)
-        )
-        reconstruction_btn.setToolTip("Add a wavefront reconstruction component")
-        self.toolbar.addWidget(reconstruction_btn)
+        # --- View Section ---
+        add_section_label("View")
+        btn_zoom_in = QToolButton()
+        btn_zoom_in.setIcon(QIcon.fromTheme("zoom-in"))
+        btn_zoom_in.setText("Zoom In")
+        btn_zoom_in.setToolTip("Zoom in on the pipeline view")
+        btn_zoom_in.clicked.connect(lambda: self.view.scale(1.2, 1.2))
+        btn_zoom_in.setStyleSheet("color: #222; font-weight: 500;")
+        self.toolbar.addWidget(btn_zoom_in)
+        btn_zoom_out = QToolButton()
+        btn_zoom_out.setIcon(QIcon.fromTheme("zoom-out"))
+        btn_zoom_out.setText("Zoom Out")
+        btn_zoom_out.setToolTip("Zoom out on the pipeline view")
+        btn_zoom_out.clicked.connect(lambda: self.view.scale(0.8, 0.8))
+        btn_zoom_out.setStyleSheet("color: #222; font-weight: 500;")
+        self.toolbar.addWidget(btn_zoom_out)
+        add_separator()
 
-        control_btn = QPushButton("Control")
-        control_btn.clicked.connect(lambda: self._add_component(ComponentType.CONTROL))
-        control_btn.setToolTip("Add a DM control component")
-        self.toolbar.addWidget(control_btn)
-
-        # Add separator
-        self.toolbar.addSeparator()
-
-        # === Add Generate Pipeline Button ===
-        generate_btn = QPushButton("Generate Pipeline")
-        generate_btn.setStyleSheet(
-            "font-size: 16px; font-weight: bold; background: #4CAF50; color: white; padding: 8px 16px;"
-        )
-        generate_btn.clicked.connect(self._generate_code)
-        generate_btn.setToolTip("Generate Python code for the current pipeline design")
-        self.toolbar.addWidget(generate_btn)
-        
-        # Add Run Pipeline section
-        self.toolbar.addSeparator()
-        
-        # Execution method dropdown
-        run_label = QLabel("<b>Run Pipeline:</b>")
-        self.toolbar.addWidget(run_label)
-        
-        self.execution_method = QComboBox()
-        self.execution_method.addItems(["Python", "JSON"])
-        self.execution_method.setToolTip("Select pipeline execution method")
-        self.execution_method.setStyleSheet("min-width: 120px;")
-        self.toolbar.addWidget(self.execution_method)
-        
-        # Run button
-        run_pipeline_btn = QPushButton("Run Pipeline")
-        run_pipeline_btn.setStyleSheet(
-            "font-size: 14px; font-weight: bold; background: #2196F3; color: white; padding: 6px 12px;"
-        )
-        run_pipeline_btn.clicked.connect(self._run_pipeline)
-        run_pipeline_btn.setToolTip("Execute pipeline and display visualization")
-        self.toolbar.addWidget(run_pipeline_btn)
-        
-        self.toolbar.addSeparator()
-
-        # --- UI Improvements ---
-        # 1. Toolbar grouping: Add section headers and separators
-        self.toolbar.addSeparator()
-        actions_label = QLabel("<b>Actions</b>")
-        self.toolbar.addWidget(actions_label)
-        # 9. Zoom controls
-        zoom_in_btn = QPushButton("Zoom In")
-        zoom_in_btn.setToolTip("Zoom in on the pipeline view")
-        zoom_in_btn.clicked.connect(lambda: self.view.scale(1.2, 1.2))
-        self.toolbar.addWidget(zoom_in_btn)
-        zoom_out_btn = QPushButton("Zoom Out")
-        zoom_out_btn.setToolTip("Zoom out on the pipeline view")
-        zoom_out_btn.clicked.connect(lambda: self.view.scale(0.8, 0.8))
-        self.toolbar.addWidget(zoom_out_btn)
-        # 10. Quick-save button
-        quick_save_btn = QPushButton("Quick Save")
-        quick_save_btn.setToolTip("Quickly save the current pipeline design")
-        quick_save_btn.clicked.connect(self._quick_save_pipeline)
-        self.toolbar.addWidget(quick_save_btn)
-        # 7. Status bar for feedback
         self.statusBar().showMessage("Ready")
 
     def _add_compute_box(self):

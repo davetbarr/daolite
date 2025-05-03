@@ -5,11 +5,29 @@ This module provides graphical representations of connections between components
 """
 
 from typing import Optional, List, Tuple, Any
-from PyQt5.QtWidgets import QGraphicsPathItem
+from PyQt5.QtWidgets import QGraphicsPathItem, QMenu, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QLabel
 from PyQt5.QtCore import Qt, QPointF
 from PyQt5.QtGui import QPen, QPainterPath, QColor
 
 from .components import Port, ComponentBlock, PortType, TransferIndicator
+
+
+class TransferPropertiesDialog(QDialog):
+    def __init__(self, parent=None, data_size=None, grouping=None):
+        super().__init__(parent)
+        self.setWindowTitle("Set Data Transfer Properties")
+        layout = QFormLayout(self)
+        self.data_size_edit = QLineEdit(str(data_size) if data_size is not None else "")
+        self.grouping_edit = QLineEdit(str(grouping) if grouping is not None else "")
+        layout.addRow("Data Size (bytes):", self.data_size_edit)
+        layout.addRow("Grouping:", self.grouping_edit)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        layout.addWidget(self.buttons)
+
+    def get_values(self):
+        return self.data_size_edit.text(), self.grouping_edit.text()
 
 
 class Connection(QGraphicsPathItem):
@@ -279,3 +297,46 @@ class Connection(QGraphicsPathItem):
             start_pos.x() + (end_pos.x() - start_pos.x()) * percent,
             start_pos.y() + (end_pos.y() - start_pos.y()) * percent
         )
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.RightButton:
+            self.setSelected(True)
+            self.contextMenuEvent(event)
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        # Open the transfer properties dialog on double-click
+        dlg = TransferPropertiesDialog(
+            parent=None,
+            data_size=getattr(self, 'data_size', None),
+            grouping=getattr(self, 'grouping', None)
+        )
+        if dlg.exec_():
+            data_size, grouping = dlg.get_values()
+            self.data_size = data_size
+            self.grouping = grouping
+            self.setToolTip(f"Data Size: {data_size} bytes\nGrouping: {grouping}")
+        event.accept()
+
+    def contextMenuEvent(self, event):
+        menu = QMenu()
+        set_data_action = menu.addAction("Set Data Transfer Properties")
+        delete_action = menu.addAction("Delete Connection")
+        action = menu.exec_(event.screenPos())
+        if action == set_data_action:
+            dlg = TransferPropertiesDialog(
+                parent=None,
+                data_size=getattr(self, 'data_size', None),
+                grouping=getattr(self, 'grouping', None)
+            )
+            if dlg.exec_():
+                data_size, grouping = dlg.get_values()
+                self.data_size = data_size
+                self.grouping = grouping
+                self.setToolTip(f"Data Size: {data_size} bytes\nGrouping: {grouping}")
+        elif action == delete_action:
+            self.disconnect()
+            if self.scene():
+                self.scene().removeItem(self)
