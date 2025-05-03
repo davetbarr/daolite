@@ -1,0 +1,47 @@
+/* Shared dialog and widget style for daolite GUI */
+QDialog, QDialog QWidget, QMessageBox {
+    background: #f8fafc;
+    border-radius: 10px;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    font-size: 13px;
+    color: #222;
+}
+QLabel {
+    color: #375a7f;
+    font-size: 13px;
+}
+QLineEdit, QComboBox, QTextEdit {
+    background: #fff;
+    border: 1.5px solid #b0c4de;
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 13px;
+}
+QPushButton {
+    background: #e7f2fa;
+    border: 1.5px solid #b0c4de;
+    border-radius: 7px;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #375a7f;
+}
+QPushButton:hover {
+    background: #d0e6fa;
+    border: 1.5px solid #4a90e2;
+    color: #1a3c6e;
+}
+QPushButton:pressed {
+    background: #b3d1f7;
+}
+QCheckBox {
+    font-size: 13px;
+    color: #375a7f;
+}
+QFormLayout QLabel {
+    min-width: 120px;
+}
+QMessageBox QLabel {
+    color: #222;
+    font-size: 13px;
+}

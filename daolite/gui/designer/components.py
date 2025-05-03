@@ -18,9 +18,10 @@ from PyQt5.QtWidgets import (
     QGraphicsRectItem,
     QFileDialog,
     QMessageBox,
+    QStyle,  # <-- Add this import
 )
 from PyQt5.QtCore import Qt, QRectF, QPointF
-from PyQt5.QtGui import QPen, QBrush, QColor, QPainter, QFont, QPainterPath
+from PyQt5.QtGui import QPen, QBrush, QColor, QPainter, QFont, QPainterPath, QLinearGradient
 
 from daolite.common import ComponentType
 from daolite.compute import ComputeResources
@@ -138,7 +139,7 @@ class ComponentBlock(QGraphicsItem):
         if name is None:
             base = component_type.name.capitalize().replace('_', ' ')
             if instance_number is not None:
-                self.name = f"{base} {instance_number}"
+                self.name = f"{base}({instance_number})"
             else:
                 self.name = base
         else:
@@ -213,50 +214,59 @@ class ComponentBlock(QGraphicsItem):
 
     def paint(self, painter: QPainter, option, widget):
         """
-        Paint the component block and its ports.
-
-        Args:
-            painter: QPainter to use for drawing
-            option: Style options
-            widget: Widget being painted on
+        Paint the component block and its ports with a modern, professional look.
         """
-        # Draw the main component block
+        # --- Drop shadow for depth ---
+        shadow_color = QColor(0, 0, 0, 60)
+        shadow_rect = self.size.adjusted(3, 3, 3, 3)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(shadow_color))
+        painter.drawRoundedRect(shadow_rect, 16, 16)
+
+        # --- Main block with gradient/glass effect ---
+        grad = QLinearGradient(self.size.topLeft(), self.size.bottomRight())
+        grad.setColorAt(0, self._get_color_for_component().lighter(110))
+        grad.setColorAt(1, self._get_color_for_component().darker(105))
+        painter.setBrush(QBrush(grad))
         pen = QPen(Qt.black, 2)
         if self.isSelected():
-            pen.setColor(Qt.blue)
+            pen.setColor(QColor(0, 120, 255))
+            pen.setWidth(4)
+        elif option.state & QStyle.State_MouseOver:  # <-- Use QStyle.State_MouseOver
+            pen.setColor(QColor(80, 180, 255))
             pen.setWidth(3)
-
-        brush = QBrush(self._get_color_for_component())
-
         painter.setPen(pen)
-        painter.setBrush(brush)
-        painter.drawRoundedRect(self.size, 10, 10)
+        painter.drawRoundedRect(self.size, 14, 14)
 
-        # Draw title bar (component name)
-        title_rect = QRectF(0, 0, self.size.width(), 26)
-        painter.setBrush(QBrush(self._get_title_color()))
-        painter.drawRoundedRect(title_rect, 10, 10)
-        painter.setPen(Qt.black)
-        font = QFont("Arial", 10, QFont.Bold)
+        # --- Title bar ---
+        title_rect = QRectF(0, 0, self.size.width(), 28)
+        title_grad = QLinearGradient(title_rect.topLeft(), title_rect.bottomLeft())
+        title_grad.setColorAt(0, self._get_title_color().lighter(120))
+        title_grad.setColorAt(1, self._get_title_color().darker(110))
+        painter.setBrush(QBrush(title_grad))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(title_rect, 12, 12)
+        painter.setPen(QPen(Qt.black, 1))
+        font = QFont("Segoe UI", 11, QFont.Bold)
         painter.setFont(font)
         painter.drawText(title_rect, Qt.AlignCenter, self.name)
 
-        # Draw component type
-        type_rect = QRectF(0, 28, self.size.width(), 20)
-        font = QFont("Arial", 9, QFont.Normal)
+        # --- Component type ---
+        type_rect = QRectF(0, 30, self.size.width(), 18)
+        font = QFont("Segoe UI", 9, QFont.Normal)
         painter.setFont(font)
         painter.setPen(QColor(60, 60, 120))
         painter.drawText(type_rect, Qt.AlignCenter, self.component_type.name.title())
 
-        # Draw description
+        # --- Description ---
         desc = self._get_description()
-        desc_rect = QRectF(0, 48, self.size.width(), 18)
-        font = QFont("Arial", 8, QFont.StyleItalic)
+        desc_rect = QRectF(0, 48, self.size.width(), 16)
+        font = QFont("Segoe UI", 8, QFont.StyleItalic)
         painter.setFont(font)
         painter.setPen(QColor(90, 90, 90))
         painter.drawText(desc_rect, Qt.AlignCenter, desc)
 
-        # Draw compute resource if assigned
+        # --- Compute resource if assigned ---
         compute = self.get_compute_resource()
         if compute:
             compute_name = getattr(compute, "name", "")
@@ -269,71 +279,65 @@ class ComponentBlock(QGraphicsItem):
                 elif isinstance(parent, ComputeBox):
                     resource_type = "CPU: "
             if resource_type:
-                font = QFont("Arial", 7)
+                font = QFont("Segoe UI", 7)
                 painter.setFont(font)
                 painter.setPen(QColor(60, 120, 60))
                 painter.drawText(compute_rect, Qt.AlignCenter, f"{resource_type}{compute_name}")
 
-        # Draw ports
+        # --- Draw ports with modern look ---
         self._draw_ports(painter)
 
     def _draw_ports(self, painter: QPainter):
-        """Draw input and output ports."""
         # Draw input ports
-        painter.setPen(QPen(Qt.black, 1))
         for port in self.input_ports:
-            # Draw port circle
-            painter.setBrush(QBrush(QColor(50, 150, 250)))  # Blue for input
-
-            # Larger ellipse for port
+            # Port shadow
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(0, 0, 0, 60))
+            shadow_rect = QRectF(port.position.x() - 8, port.position.y() - 7, 18, 18)
+            painter.drawEllipse(shadow_rect)
+            # Port circle
+            painter.setPen(QPen(QColor(30, 120, 220), 2))
+            painter.setBrush(QBrush(QColor(80, 180, 255)))
             port_rect = QRectF(port.position.x() - 9, port.position.y() - 9, 18, 18)
             painter.drawEllipse(port_rect)
-
-            # Draw port label (cast coordinates to int)
-            painter.setFont(QFont("Arial", 7))
-            painter.drawText(
-                int(port.position.x()) + 5, int(port.position.y()), port.label
-            )
-            
-            # Draw connected component name if any - next to the port
+            # Port label
+            painter.setFont(QFont("Segoe UI", 7))
+            painter.setPen(QColor(30, 120, 220))
+            painter.drawText(int(port.position.x()) + 7, int(port.position.y()) + 2, port.label)
+            # Tooltip
+            if hasattr(port, 'label'):
+                self.setToolTip(f"{self.name} - {port.label}")
+            # Connected component name
             if port.connected_to:
-                connected_comp = port.connected_to[0][0]  # Get first connected component
-                painter.setFont(QFont("Arial", 7, QFont.StyleItalic))
-                painter.setPen(QPen(QColor(80, 80, 180)))
-                painter.drawText(
-                    int(port.position.x()) + 5, int(port.position.y()) + 10, f"← {connected_comp.name}"
-                )
-
+                connected_comp = port.connected_to[0][0]
+                painter.setFont(QFont("Segoe UI", 7, QFont.StyleItalic))
+                painter.setPen(QColor(80, 80, 180))
+                painter.drawText(int(port.position.x()) + 7, int(port.position.y()) + 12, f"← {connected_comp.name}")
         # Draw output ports
         for port in self.output_ports:
-            # Draw port circle
-            painter.setBrush(QBrush(QColor(50, 200, 50)))  # Green for output
-
-            # Larger ellipse for port
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(0, 0, 0, 60))
+            shadow_rect = QRectF(port.position.x() - 8, port.position.y() - 7, 18, 18)
+            painter.drawEllipse(shadow_rect)
+            painter.setPen(QPen(QColor(40, 180, 60), 2))
+            painter.setBrush(QBrush(QColor(100, 220, 100)))
             port_rect = QRectF(port.position.x() - 9, port.position.y() - 9, 18, 18)
             painter.drawEllipse(port_rect)
-
-            # Draw port label
-            painter.setFont(QFont("Arial", 7))
-            painter.setPen(QPen(Qt.black))
-            painter.drawText(
-                int(port.position.x()) - 55, int(port.position.y()), port.label
-            )
-            
-            # Draw connected component name if any - next to the port
+            painter.setFont(QFont("Segoe UI", 7))
+            painter.setPen(QColor(40, 180, 60))
+            painter.drawText(int(port.position.x()) - 55, int(port.position.y()) + 2, port.label)
+            if hasattr(port, 'label'):
+                self.setToolTip(f"{self.name} - {port.label}")
             if port.connected_to:
                 connected_comps = [comp[0].name for comp in port.connected_to]
                 if connected_comps:
-                    painter.setFont(QFont("Arial", 7, QFont.StyleItalic))
-                    painter.setPen(QPen(QColor(80, 150, 80)))
-                    # If multiple connections, show first with "+" indicator
+                    painter.setFont(QFont("Segoe UI", 7, QFont.StyleItalic))
+                    painter.setPen(QColor(80, 150, 80))
                     if len(connected_comps) > 1:
                         display_text = f"{connected_comps[0]} +{len(connected_comps)-1} →"
                     else:
                         display_text = f"{connected_comps[0]} →"
-                    painter.drawText(
-                        int(port.position.x()) - 55, int(port.position.y()) + 10, display_text
-                    )
+                    painter.drawText(int(port.position.x()) - 55, int(port.position.y()) + 12, display_text)
 
     def _get_color_for_component(self) -> QColor:
         """Return appropriate color based on component type."""
