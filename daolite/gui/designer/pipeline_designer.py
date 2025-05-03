@@ -663,6 +663,61 @@ class PipelineDesignerApp(QMainWindow):
         self.setWindowTitle("daolite Pipeline Designer")
         self.resize(1200, 800)
 
+        # --- Professional Look: Global Stylesheet and Font ---
+        self.setStyleSheet("""
+            QMainWindow {
+                background: #f6f8fa;
+            }
+            QToolBar {
+                background: #e7f2fa;
+                border: none;
+                padding: 8px 4px;
+                spacing: 8px;
+            }
+            QToolBar QLabel {
+                color: #375a7f;
+                font-size: 13px;
+                padding: 2px 0 6px 0;
+            }
+            QToolBar QPushButton {
+                background: #ffffff;
+                border: 1.5px solid #b0c4de;
+                border-radius: 7px;
+                padding: 6px 14px;
+                margin: 2px 0;
+                font-size: 13px;
+                font-weight: 500;
+                color: #375a7f;
+            }
+            QToolBar QPushButton:hover {
+                background: #d0e6fa;
+                border: 1.5px solid #4a90e2;
+                color: #1a3c6e;
+            }
+            QToolBar QPushButton:pressed {
+                background: #b3d1f7;
+            }
+            QComboBox {
+                background: #fff;
+                border: 1.5px solid #b0c4de;
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-size: 13px;
+            }
+            QGraphicsView {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #f6f8fa, stop:1 #e7f2fa);
+                border: 1px solid #b0c4de;
+            }
+            QStatusBar {
+                background: #e7f2fa;
+                color: #375a7f;
+                font-size: 12px;
+            }
+        """)
+        font = QFont("Segoe UI", 11)
+        self.setFont(font)
+
         # Set up the scene and view
         self.scene = PipelineScene(self)
         self.view = QGraphicsView(self.scene)
