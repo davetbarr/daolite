@@ -69,6 +69,10 @@ def estimate_data_size(src_comp, dest_comp):
     Returns:
         int: Estimated data size in bits
     """
+    # Only operate on objects with component_type
+    if not hasattr(src_comp, 'component_type') or not hasattr(dest_comp, 'component_type'):
+        return 0
+
     # Default values for common AO data sizes
     if src_comp.component_type == ComponentType.CAMERA:
         # Camera output is typically pixel data
