@@ -119,7 +119,8 @@ def network_transfer(
 
 
 def pcie_transfer(
-    n_bits: int, compute_resources: ComputeResources, debug: bool = False
+    n_bits: int, compute_resources: ComputeResources, debug: bool = False,
+    start_times=None, group=None, **kwargs
 ) -> float:
     """
     Calculate time spent on PCIe transfer between CPU and GPU.
@@ -128,19 +129,22 @@ def pcie_transfer(
         n_bits: Number of bits to transfer
         compute_resources: ComputeResources instance
         debug: Enable debug output
+        start_times: Array of start/end times from source component (for timing propagation)
+        group: Number of groups to process (used with start_times)
+        **kwargs: Additional parameters (ignored)
 
     Returns:
-        float: PCIe transfer time in microseconds
+        float or np.ndarray: PCIe transfer time in microseconds or array of transfer timings
     """
-    # For PCIe transfers, we assume:
-    # 1. A basic driver overhead for initiating the transfer
-    # 2. The actual transfer time based on PCIe bandwidth
-    # 3. An additional overhead for completion
-    
     # Default to PCIe Gen4 x16 if compute_resources doesn't specify
     pcie_gen = getattr(compute_resources, 'pcie_gen', 4)
     
-    # Calculate the transfer time using the pcie_bus function
+    # Check if we're dealing with a component that passes timing data
+    if start_times is not None and isinstance(start_times, np.ndarray) and len(start_times.shape) == 2:
+        # Use the existing PCIE function for array timing calculations
+        return PCIE(n_bits, compute_resources, start_times, scale=1.0, gen=pcie_gen, debug=debug)
+    
+    # Standard case for scalar input: calculate a single transfer time
     transfer_time = pcie_bus(n_bits, gen=pcie_gen, debug=False) * 1e6  # Convert to µs
     
     # Add driver overhead
@@ -149,7 +153,7 @@ def pcie_transfer(
     
     if debug:
         print(f"PCIe transfer for {n_bits/8:.2f} bytes: {total_time:.2f} µs")
-        print(f"  - Pure transfer: {transfer_time:.2f} µs")
+        print(f"  - Pure transfer: {transfer_time:.2f} µs with PCIe Gen {pcie_gen}")
         print(f"  - Driver overhead: {driver_overhead * 2:.2f} µs")
     
     return total_time

@@ -183,130 +183,139 @@ def save_pipeline_to_file(scene, components, connections, filename):
         data["components"].append(comp_data)
         components_by_name[comp.name] = comp
     
-    # Save connections
-    for conn in connections:
-        # Save basic connection information
-        data["connections"].append({
-            "start": conn.start_block.name,
-            "end": conn.end_block.name,
-        })
+    # Get the transfer chain generation logic
+    from .code_generator import CodeGenerator
+    code_generator = CodeGenerator(components)
+    
+    # Dictionary to store transfer chains by connection (source->dest)
+    connection_transfer_chains = {}
+    
+    # Process generated transfer components
+    generated_transfers = getattr(code_generator, 'generated_transfer_components', [])
+    
+    # Group transfers by connection
+    for transfer in generated_transfers:
+        src_comp = transfer.get('src_comp')
+        dest_comp = transfer.get('dest_comp')
         
-        # Handle camera connections as network
-        if conn.start_block.component_type == ComponentType.CAMERA:
-            # Camera components always output via network
-            logger.debug(f"Detected camera connection from {conn.start_block.name} to {conn.end_block.name}")
-            
-            # Get destination compute resource details
-            dest_comp = conn.end_block
-            dest_res = dest_comp.get_compute_resource()
-            network_speed = None
-            if dest_res:
-                network_speed = getattr(dest_res, 'network_speed', 100e9)
-            
-            # Determine data size based on camera parameters
-            n_pixels = conn.start_block.params.get("n_pixels", 1024 * 1024)  # Default 1MP
-            bit_depth = conn.start_block.params.get("bit_depth", 16)  # Default 16-bit
-            data_size = n_pixels * bit_depth
-            
-            # Generate a unique name for the transfer component
-            transfer_name = f"Network_Transfer_{conn.start_block.name}_to_{conn.end_block.name}"
-            
-            # Create transfer record
-            transfer_data = {
-                "type": "NETWORK",
-                "name": transfer_name,
-                "transfer_type": "Network",
-                "source": conn.start_block.name,
-                "destination": conn.end_block.name,
-                "data_size": data_size,
-                "params": {
-                    "n_bits": data_size,
-                    "transfer_type": "network",
-                    "use_dest_network": True
-                }
-            }
-            
-            # Add network speed if available
-            if network_speed:
-                transfer_data["params"]["dest_network_speed"] = network_speed
-            
-            # Always add network transfers for camera connections
-            data["transfers"].append(transfer_data)
-            logger.debug(f"Added network transfer for camera: {transfer_name}")
+        if src_comp and dest_comp:
+            # This is a direct connection transfer
+            key = f"{src_comp.name}->{dest_comp.name}"
+            if key not in connection_transfer_chains:
+                connection_transfer_chains[key] = []
+            connection_transfer_chains[key].append(transfer)
         else:
-            # For other components, check compute resources to determine transfer type
-            src_comp = conn.start_block
-            dest_comp = conn.end_block
+            # This is a transfer in a chain - find which chain it belongs to by dependency
+            dependencies = transfer.get('dependencies', [])
+            for dep in dependencies:
+                # Find if this depends on an existing transfer
+                for existing_key, existing_transfers in connection_transfer_chains.items():
+                    for existing_transfer in existing_transfers:
+                        if existing_transfer.get('name') == dep:
+                            # This transfer belongs to this chain
+                            connection_transfer_chains[existing_key].append(transfer)
+                            break
+                    else:
+                        continue
+                    break
+    
+    # Sort each chain by dependencies
+    for key, chain in connection_transfer_chains.items():
+        # Create a dependency graph
+        depends_on = {}
+        names_to_transfers = {}
+        for transfer in chain:
+            name = transfer.get('name')
+            names_to_transfers[name] = transfer
+            depends_on[name] = transfer.get('dependencies', [])
+        
+        # Topological sort by dependencies
+        sorted_transfers = []
+        no_deps = [name for name, deps in depends_on.items() 
+                   if not deps or all(dep not in names_to_transfers for dep in deps)]
+        
+        while no_deps:
+            name = no_deps.pop(0)
+            sorted_transfers.append(name)
             
-            # Skip if either component doesn't exist (should never happen)
-            if not src_comp or not dest_comp:
+            # Find transfers that depend on this one
+            for dep_name, deps in list(depends_on.items()):
+                if name in deps:
+                    deps.remove(name)
+                    if not deps:
+                        no_deps.append(dep_name)
+        
+        # Add any that couldn't be sorted (should be rare)
+        for name in names_to_transfers:
+            if name not in sorted_transfers:
+                sorted_transfers.append(name)
+        
+        # Replace with sorted list
+        connection_transfer_chains[key] = [names_to_transfers[name] for name in sorted_transfers]
+    
+    # Save each transfer component
+    for chain_key, chain in connection_transfer_chains.items():
+        for transfer in chain:
+            transfer_name = transfer.get('name')
+            
+            # Skip if already added
+            if any(t["name"] == transfer_name for t in data["transfers"]):
                 continue
             
-            # Get compute resources for source and destination
-            src_res = src_comp.get_compute_resource()
-            dest_res = dest_comp.get_compute_resource()
+            # Get source and destination component details
+            source_comp = transfer.get('src_comp')
+            dest_comp = transfer.get('dest_comp')
+            source_name = source_comp.name if source_comp else None
+            dest_name = dest_comp.name if dest_comp else None
             
-            # Get parent containers
-            src_parent = src_comp.parentItem()
-            dest_parent = dest_comp.parentItem()
+            # Create transfer data
+            transfer_data = {
+                "type": "NETWORK",  # All transfers are network type components
+                "name": transfer_name,
+                "transfer_type": transfer.get('transfer_type', "Network"),
+                "source": source_name,
+                "destination": dest_name,
+                "data_size": transfer.get('data_size', 1024 * 1024),
+                "params": transfer.get('params', {}).copy(),
+                "dependencies": transfer.get('dependencies', []),
+                # Include compute resources if available
+                "compute": None
+            }
             
-            # Only add transfer if components are in different containers or hardware types
-            transfer_type = None
+            # Add compute resources if available (copying from source component)
+            if source_comp and hasattr(source_comp, 'get_compute_resource'):
+                compute_resource = source_comp.get_compute_resource()
+                if compute_resource:
+                    transfer_data["compute"] = _to_dict_recursive(compute_resource)
             
-            # Different compute boxes always use network
-            if (src_parent and dest_parent and 
-                src_parent != dest_parent and
-                isinstance(src_parent, ComputeBox) and 
-                isinstance(dest_parent, ComputeBox)):
-                transfer_type = "Network"
-            # CPU-GPU transfers use PCIe
-            elif ((isinstance(src_parent, GPUBox) and not isinstance(dest_parent, GPUBox)) or
-                (not isinstance(src_parent, GPUBox) and isinstance(dest_parent, GPUBox))):
-                transfer_type = "PCIe"
-            # Check hardware type
-            elif src_res and dest_res:
-                src_hw = getattr(src_res, 'hardware', 'CPU')
-                dest_hw = getattr(dest_res, 'hardware', 'CPU')
-                if src_hw != dest_hw:
-                    if 'GPU' in (src_hw, dest_hw):
-                        transfer_type = "PCIe"
-                    else:
-                        transfer_type = "Network"
-            
-            # If we've identified a transfer type, add it to the transfers list
-            if transfer_type:
-                # Generate a unique name
-                transfer_name = f"{transfer_type}_Transfer_{src_comp.name}_to_{dest_comp.name}"
-                
-                # Estimate data size
-                data_size = estimate_data_size(src_comp, dest_comp)
-                
-                # Create transfer record
-                transfer_data = {
-                    "type": "NETWORK",
-                    "name": transfer_name,
-                    "transfer_type": transfer_type,
-                    "source": src_comp.name,
-                    "destination": dest_comp.name,
-                    "data_size": data_size,
-                    "params": {
-                        "n_bits": data_size,
-                        "transfer_type": transfer_type.lower(),
-                        "group": 50  # Default group size
-                    }
-                }
-                
-                # Add network-specific parameters
-                if transfer_type == "Network":
-                    # For network transfers, add destination network speed
-                    if dest_res:
-                        network_speed = getattr(dest_res, 'network_speed', 100e9)
-                        transfer_data["params"]["dest_network_speed"] = network_speed
-                        transfer_data["params"]["use_dest_network"] = True
-                        transfer_data["params"]["dest_time_in_driver"] = getattr(dest_res, 'time_in_driver', 5)
-                
-                data["transfers"].append(transfer_data)
-                logger.debug(f"Added {transfer_type} transfer: {transfer_name}")
+            data["transfers"].append(transfer_data)
+    
+    # Save connections with transfer chains
+    for conn in connections:
+        # Get source and destination components
+        src_name = conn.start_block.name
+        dest_name = conn.end_block.name
+        
+        # Check if this connection has an associated transfer chain
+        connection_key = f"{src_name}->{dest_name}"
+        transfer_chain = []
+        
+        if connection_key in connection_transfer_chains:
+            # Get the transfer chain for this connection
+            chain = connection_transfer_chains[connection_key]
+            transfer_chain = [transfer["name"] for transfer in chain]
+        
+        # Save connection data
+        conn_data = {
+            "start": src_name,
+            "end": dest_name,
+        }
+        
+        # Add transfer chain if it exists
+        if transfer_chain:
+            conn_data["transfers"] = transfer_chain
+        
+        data["connections"].append(conn_data)
     
     try:
         with open(filename, "w") as f:
@@ -478,11 +487,51 @@ def load_pipeline(scene, filename, component_counts):
                 # Just increment the count if we can't parse the name
                 component_counts[comp_type] += 1
         
-        # Create connections
+        # Create transfer components in the scene first
+        # This ensures they exist when connections are created
+        for transfer_data in data.get("transfers", []):
+            transfer_name = transfer_data.get("name", "Transfer")
+            transfer_type_str = transfer_data.get("type", "NETWORK")
+            params = transfer_data.get("params", {})
+            
+            try:
+                # Convert type string to ComponentType
+                transfer_type = ComponentType[transfer_type_str]
+            except KeyError:
+                # Default to NETWORK for transfers
+                transfer_type = ComponentType.NETWORK
+            
+            # Create the transfer component
+            transfer_comp = ComponentBlock(transfer_type, transfer_name)
+            transfer_comp.params = params.copy()
+            
+            # Store the transfer component type in the params
+            if "transfer_type" not in transfer_comp.params:
+                # Get from higher level field or default to "Network"
+                transfer_comp.params["transfer_type"] = transfer_data.get("transfer_type", "Network").lower()
+            
+            # Add the transfer component (not shown in the UI)
+            transfer_comp._is_synthetic = True  # Mark as synthetic to not display
+            components[transfer_name] = transfer_comp
+            
+            # Add it to the scene but make it invisible
+            transfer_comp.setVisible(False)
+            scene.addItem(transfer_comp)
+            
+            logger.debug(f"Created transfer component: {transfer_name}")
+        
+        # Create connections with proper transfer chains
         connection_map = {}  # Map to store connections for transfer setup
+        connections_with_transfer_chains = {}  # Map to store connection->transfers associations
+        
         for conn in data.get("connections", []):
             start_name = conn.get("start")
             end_name = conn.get("end")
+            transfer_chain = conn.get("transfers", [])
+            
+            # Store connection transfer chain if present
+            if transfer_chain:
+                connections_with_transfer_chains[(start_name, end_name)] = transfer_chain
             
             if start_name in components and end_name in components:
                 start_block = components[start_name]
@@ -502,22 +551,56 @@ def load_pipeline(scene, filename, component_counts):
                         # Store connection for transfer setup
                         connection_key = f"{start_name}_{end_name}"
                         connection_map[connection_key] = connection
+                        
+                        # If this connection has a transfer chain, store the information
+                        # but don't modify component _dependencies attributes directly
+                        if (start_name, end_name) in connections_with_transfer_chains:
+                            # We'll use the synthetic _modified_dependencies attribute for code generation
+                            chain = connections_with_transfer_chains[(start_name, end_name)]
+                            
+                            # Store dependency information for later use
+                            if len(chain) > 0:
+                                # First transfer depends on source
+                                first_transfer = components.get(chain[0])
+                                if first_transfer and first_transfer != start_block:
+                                    # Use _modified_dependencies instead of _dependencies
+                                    if not hasattr(first_transfer, '_modified_dependencies'):
+                                        first_transfer._modified_dependencies = first_transfer.get_dependencies().copy()
+                                    if start_name not in first_transfer._modified_dependencies:
+                                        first_transfer._modified_dependencies.append(start_name)
+                                
+                                # Each subsequent transfer depends on the previous transfer
+                                for i in range(1, len(chain)):
+                                    prev_transfer = components.get(chain[i-1])
+                                    curr_transfer = components.get(chain[i])
+                                    if curr_transfer and prev_transfer and curr_transfer != prev_transfer:
+                                        if not hasattr(curr_transfer, '_modified_dependencies'):
+                                            curr_transfer._modified_dependencies = curr_transfer.get_dependencies().copy()
+                                        if chain[i-1] not in curr_transfer._modified_dependencies:
+                                            curr_transfer._modified_dependencies.append(chain[i-1])
+                                
+                                # Destination depends on last transfer
+                                if len(chain) > 0:
+                                    last_transfer_name = chain[-1]
+                                    if end_block:
+                                        if not hasattr(end_block, '_modified_dependencies'):
+                                            end_block._modified_dependencies = end_block.get_dependencies().copy()
+                                        # Replace dependency on source with dependency on last transfer
+                                        if start_name in end_block._modified_dependencies:
+                                            end_block._modified_dependencies.remove(start_name)
+                                        if last_transfer_name not in end_block._modified_dependencies:
+                                            end_block._modified_dependencies.append(last_transfer_name)
         
-        # Process transfer information and add indicators
-        for transfer in data.get("transfers", []):
-            source_name = transfer.get("source")
-            dest_name = transfer.get("destination")
-            transfer_type = transfer.get("transfer_type")
-            
-            if source_name and dest_name:
-                # Find the connection this transfer is associated with
-                connection_key = f"{source_name}_{dest_name}"
-                connection = connection_map.get(connection_key)
-                
-                if connection:
-                    # Update connection indicators for this connection
-                    logger.debug(f"Creating {transfer_type} transfer indicator for {source_name} → {dest_name}")
-                    update_connection_indicators(scene, connection)
+        # If no transfer chain is found but the connection crosses resource boundaries,
+        # auto-insert transfer components
+        from .code_generator import CodeGenerator
+        # Just create the code generator - it will auto-generate transfer components
+        CodeGenerator(list(components.values()))
+        
+        # Final pass: Update connection indicators for all connections
+        # This will create visual indicators for each transfer
+        for connection in scene.connections:
+            update_connection_indicators(scene, connection)
         
         logger.info(f"Pipeline loaded from {filename}")
         return True

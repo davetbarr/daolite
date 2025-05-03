@@ -461,16 +461,18 @@ class CodeGenerator:
             )
             # Set parameters from the transfer dict
             transfer_block.params = transfer["params"].copy()
-            # Set dependencies to include the source component
-            src_comp = transfer["src_comp"]
-            dest_comp = transfer["dest_comp"]
             
-            # Transfer depends on source component - ALWAYS include this dependency
-            if "dependencies" in transfer and src_comp.name not in transfer["dependencies"]:
-                transfer["dependencies"].append(src_comp.name)
+            # Instead of setting _dependencies attribute directly, 
+            # we'll use _modified_dependencies which is just for code generation
+            src_comp = transfer.get("src_comp")
+            dest_comp = transfer.get("dest_comp")
             
-            # Ensure the transfer block has the dependency
-            transfer_block._dependencies = [src_comp.name]
+            # Set up modified dependencies for the transfer block
+            transfer_block._modified_dependencies = []
+            if "dependencies" in transfer:
+                transfer_block._modified_dependencies = transfer["dependencies"].copy()
+            elif src_comp:
+                transfer_block._modified_dependencies = [src_comp.name]
             
             # Add to the mapping - this will be used for dependency resolution
             comp_map[transfer_block.name] = transfer_block
@@ -478,20 +480,23 @@ class CodeGenerator:
             
             # Update destination component's dependencies to include this transfer
             # in the dependency graph (not in the actual component)
-            if dest_comp.name in comp_map:
+            if dest_comp and dest_comp.name in comp_map:
                 # Create modified dependencies to replace source with transfer
                 if not hasattr(dest_comp, '_modified_dependencies'):
                     # Start with original dependencies
                     dest_comp._modified_dependencies = dest_comp.get_dependencies().copy()
                     
                 # Replace direct dependency on source with dependency on transfer
-                if src_comp.name in dest_comp._modified_dependencies:
+                if src_comp and src_comp.name in dest_comp._modified_dependencies:
                     dest_comp._modified_dependencies.remove(src_comp.name)
-                    dest_comp._modified_dependencies.append(transfer_block.name)
-                else:
-                    # If dest doesn't have explicit dependency on source, add dependency on transfer
+                    # Only add if not already there
+                    if transfer_block.name not in dest_comp._modified_dependencies:
+                        dest_comp._modified_dependencies.append(transfer_block.name)
+                elif src_comp:
+                    # If dest doesn't have explicit dependency on source, add dependency on transfer anyway
                     # This handles case where UI doesn't show the dependency but code needs it
-                    dest_comp._modified_dependencies.append(transfer_block.name)
+                    if transfer_block.name not in dest_comp._modified_dependencies:
+                        dest_comp._modified_dependencies.append(transfer_block.name)
         
         # Build the dependency graph
         graph = {}
@@ -550,6 +555,14 @@ class CodeGenerator:
         """
         Analyze component connections and add appropriate transfer components
         when connections cross different compute resources.
+        
+        This implements the transfer chain insertion logic:
+        - GPU → GPU (different computers): PCIe (GPU1→host) → Network (host1→host2) → PCIe (host2→GPU2)
+        - GPU → CPU (different computers): PCIe (GPU→host) → Network (host→host)
+        - CPU → GPU (different computers): Network (host→host) → PCIe (host→GPU)
+        - CPU → CPU (different computers): Network (host→host)
+        - CPU ↔ GPU (same computer): PCIe (CPU↔GPU)
+        - Camera → anything: Network transfer and PCIe if destination is GPU
         """
         # Get connections between components
         connections = []
@@ -558,11 +571,12 @@ class CodeGenerator:
                 for dest_comp, _ in port.connected_to:
                     connections.append((src_comp, dest_comp))
         
-        # Analyze each connection for resource boundaries
+        # Process each connection for resource boundaries
         for src_comp, dest_comp in connections:
             src_res = src_comp.get_compute_resource()
             dest_res = dest_comp.get_compute_resource()
-            # Determine if source or dest is GPU by checking parent container type or hardware field
+            
+            # Helper function to determine if a component runs on a GPU
             def is_gpu(comp, res):
                 # Check hardware field
                 if getattr(res, 'hardware', '').lower() == 'gpu':
@@ -572,88 +586,174 @@ class CodeGenerator:
                 if parent and parent.__class__.__name__.lower() == 'gpubox':
                     return True
                 return False
+            
+            # Helper to get parent ComputeBox - returns None if not found
+            def get_compute_box(comp):
+                parent = comp.parentItem() if hasattr(comp, 'parentItem') else None
+                if parent and parent.__class__.__name__.lower() == 'computebox':
+                    return parent
+                if parent and parent.__class__.__name__.lower() == 'gpubox':
+                    grandparent = parent.parentItem() if hasattr(parent, 'parentItem') else None
+                    if grandparent and grandparent.__class__.__name__.lower() == 'computebox':
+                        return grandparent
+                return None
+                
+            # Determine component types and locations
             src_is_gpu = is_gpu(src_comp, src_res)
             dest_is_gpu = is_gpu(dest_comp, dest_res)
-            print(f"[TRANSFER LOG] Checking connection: {src_comp.name} (GPU={src_is_gpu}) -> {dest_comp.name} (GPU={dest_is_gpu})")
-            # SPECIAL CASE: Always add network transfer for camera components
+            src_compute_box = get_compute_box(src_comp)
+            dest_compute_box = get_compute_box(dest_comp)
+            different_computers = src_compute_box and dest_compute_box and src_compute_box != dest_compute_box
+            
+            # Create list to store the transfers in this connection
+            transfer_chain = []
+            
+            # SPECIAL CASE: Camera components
             if src_comp.component_type == ComponentType.CAMERA:
-                print(f"[TRANSFER LOG] Adding Network transfer for CAMERA: {src_comp.name} -> {dest_comp.name}")
-                transfer_type = "Network"
-                transfer_comp = self._create_transfer_component(src_comp, dest_comp, transfer_type)
-                self.generated_transfer_components.append(transfer_comp)
-                continue
-            # Skip if either component has no compute resource
-            if not src_res or not dest_res:
-                print(f"[TRANSFER LOG] Skipping connection (missing compute resource): {src_comp.name} -> {dest_comp.name}")
-                continue
-            # --- PCIe transfer: CPU <-> GPU, even if on same resource ---
-            if src_is_gpu != dest_is_gpu:
-                print(f"[TRANSFER LOG] Adding PCIe transfer: {src_comp.name} -> {dest_comp.name}")
-                transfer_type = "PCIe"
-                transfer_comp = self._create_transfer_component(src_comp, dest_comp, transfer_type)
-                self.generated_transfer_components.append(transfer_comp)
-                continue
-            # --- Network transfer: different compute boxes ---
-            if src_res is dest_res:
-                print(f"[TRANSFER LOG] Skipping connection (same compute resource, not PCIe): {src_comp.name} -> {dest_comp.name}")
-                continue
-            transfer_type = self._determine_transfer_type(src_comp, dest_comp)
-            if transfer_type:
-                print(f"[TRANSFER LOG] Adding {transfer_type} transfer: {src_comp.name} -> {dest_comp.name}")
-                transfer_comp = self._create_transfer_component(src_comp, dest_comp, transfer_type)
-                self.generated_transfer_components.append(transfer_comp)
-            else:
-                print(f"[TRANSFER LOG] No transfer needed: {src_comp.name} -> {dest_comp.name}")
+                # Camera → anything: Always insert Network transfer
+                network_transfer = self._create_transfer_component(
+                    src_comp, dest_comp, "Network", 
+                    host_comp=dest_comp,  # Use destination for network characteristics
+                    dependencies=[src_comp.name]
+                )
+                transfer_chain.append(network_transfer)
+                
+                # If destination is GPU, also add PCIe transfer
+                if dest_is_gpu:
+                    # Network → PCIe chain for Camera → GPU
+                    pcie_transfer = self._create_transfer_component(
+                        src_comp, dest_comp, "PCIe",
+                        host_comp=dest_comp,  # Use destination for PCIe characteristics
+                        dependencies=[network_transfer["name"]]  # Make PCIe depend on Network
+                    )
+                    transfer_chain.append(pcie_transfer)
+                
+            # GPU → GPU (different computers)
+            elif src_is_gpu and dest_is_gpu and different_computers:
+                # Extract CPU (host) components for both source and destination GPUs
+                src_host_comp = src_compute_box  # Using ComputeBox as host
+                dest_host_comp = dest_compute_box  # Using ComputeBox as host
+                
+                # Create PCIe from GPU1 to host1
+                pcie_src_to_host = self._create_transfer_component(
+                    src_comp, None, "PCIe",
+                    host_comp=src_host_comp,
+                    custom_name=f"PCIe_Transfer_{src_comp.name}_to_host",
+                    dependencies=[src_comp.name]
+                )
+                
+                # Create Network from host1 to host2
+                network_host_to_host = self._create_transfer_component(
+                    src_host_comp, dest_host_comp, "Network",
+                    custom_name=f"Network_Transfer_{src_compute_box.name}_to_{dest_compute_box.name}",
+                    dependencies=[pcie_src_to_host["name"]]
+                )
+                
+                # Create PCIe from host2 to GPU2
+                pcie_host_to_dest = self._create_transfer_component(
+                    None, dest_comp, "PCIe",
+                    host_comp=dest_host_comp,
+                    custom_name=f"PCIe_Transfer_host_to_{dest_comp.name}",
+                    dependencies=[network_host_to_host["name"]]
+                )
+                
+                transfer_chain.extend([pcie_src_to_host, network_host_to_host, pcie_host_to_dest])
+                
+            # GPU → CPU (different computers)
+            elif src_is_gpu and not dest_is_gpu and different_computers:
+                # Create PCIe from GPU to host1
+                pcie_gpu_to_host = self._create_transfer_component(
+                    src_comp, None, "PCIe",
+                    host_comp=src_compute_box,
+                    custom_name=f"PCIe_Transfer_{src_comp.name}_to_host",
+                    dependencies=[src_comp.name]
+                )
+                
+                # Create Network from host1 to host2
+                network_host_to_host = self._create_transfer_component(
+                    src_compute_box, dest_compute_box, "Network",
+                    custom_name=f"Network_Transfer_{src_compute_box.name}_to_{dest_compute_box.name}",
+                    dependencies=[pcie_gpu_to_host["name"]]
+                )
+                
+                transfer_chain.extend([pcie_gpu_to_host, network_host_to_host])
+                
+            # CPU → GPU (different computers)
+            elif not src_is_gpu and dest_is_gpu and different_computers:
+                # Create Network from host1 to host2
+                network_host_to_host = self._create_transfer_component(
+                    src_comp, None, "Network",
+                    host_comp=dest_compute_box,
+                    custom_name=f"Network_Transfer_{src_compute_box.name}_to_{dest_compute_box.name}",
+                    dependencies=[src_comp.name]
+                )
+                
+                # Create PCIe from host2 to GPU
+                pcie_host_to_gpu = self._create_transfer_component(
+                    None, dest_comp, "PCIe",
+                    host_comp=dest_compute_box,
+                    custom_name=f"PCIe_Transfer_host_to_{dest_comp.name}",
+                    dependencies=[network_host_to_host["name"]]
+                )
+                
+                transfer_chain.extend([network_host_to_host, pcie_host_to_gpu])
+                
+            # CPU → CPU (different computers)
+            elif not src_is_gpu and not dest_is_gpu and different_computers:
+                # Create Network from host1 to host2
+                network_host_to_host = self._create_transfer_component(
+                    src_comp, dest_comp, "Network",
+                    custom_name=f"Network_Transfer_{src_compute_box.name}_to_{dest_compute_box.name}",
+                    dependencies=[src_comp.name]
+                )
+                
+                transfer_chain.append(network_host_to_host)
+                
+            # CPU ↔ GPU (on same computer)
+            elif src_is_gpu != dest_is_gpu and not different_computers:
+                # Create PCIe transfer between CPU and GPU
+                pcie_transfer = self._create_transfer_component(
+                    src_comp, dest_comp, "PCIe",
+                    dependencies=[src_comp.name]
+                )
+                
+                transfer_chain.append(pcie_transfer)
+            
+            # Add all transfers in this chain to the generated transfers list
+            if transfer_chain:
+                # Set up the chain dependencies correctly
+                for i, transfer in enumerate(transfer_chain):
+                    # Set destination component to depend on the last transfer in the chain
+                    if i == len(transfer_chain) - 1:
+                        # Instead of trying to modify _dependencies directly (which might not exist),
+                        # we'll use the _modified_dependencies attribute which is used only during code generation
+                        # Create _modified_dependencies attribute if it doesn't exist
+                        if not hasattr(dest_comp, '_modified_dependencies'):
+                            dest_comp._modified_dependencies = dest_comp.get_dependencies()
+                        
+                        # Remove direct dependency on source if it exists
+                        if src_comp.name in dest_comp._modified_dependencies:
+                            dest_comp._modified_dependencies.remove(src_comp.name)
+                        
+                        # Add dependency on last transfer
+                        if transfer["name"] not in dest_comp._modified_dependencies:
+                            dest_comp._modified_dependencies.append(transfer["name"])
+                    
+                # Store all transfers in this chain
+                self.generated_transfer_components.extend(transfer_chain)
 
-    def _determine_transfer_type(self, src_comp: ComponentBlock, dest_comp: ComponentBlock) -> Optional[str]:
+    def _create_transfer_component(self, src_comp, dest_comp, transfer_type, 
+                                   host_comp=None, custom_name=None, dependencies=None):
         """
-        Determine the type of transfer needed between two components.
+        Create a transfer component between components.
         
         Args:
-            src_comp: Source component
-            dest_comp: Destination component
-            
-        Returns:
-            str: "PCIe" for CPU-GPU transfers, "Network" for network transfers, None if same resource
-        """
-        # SPECIAL CASE: Camera components always connect via network to compute components
-        if src_comp.component_type == ComponentType.CAMERA:
-            return "Network"
-        
-        src_res = src_comp.get_compute_resource()
-        dest_res = dest_comp.get_compute_resource()
-        
-        if not src_res or not dest_res:
-            return None
-            
-        # Get parent containers to determine resource types
-        src_parent = src_comp.parentItem()
-        dest_parent = dest_comp.parentItem()
-        
-        # If parents are different computers, it's a network transfer
-        if src_parent and dest_parent and src_parent != dest_parent:
-            from .components import ComputeBox
-            if isinstance(src_parent, ComputeBox) and isinstance(dest_parent, ComputeBox):
-                return "Network"
-        
-        # Check for CPU-GPU transfer
-        src_is_gpu = getattr(src_res, 'hardware', '').lower() == 'gpu'
-        dest_is_gpu = getattr(dest_res, 'hardware', '').lower() == 'gpu'
-        
-        if src_is_gpu != dest_is_gpu:
-            return "PCIe"
-            
-        return None
-    
-    def _create_transfer_component(self, src_comp: ComponentBlock, dest_comp: ComponentBlock, 
-                                transfer_type: str) -> dict:
-        """
-        Create a transfer component between two components.
-        
-        Args:
-            src_comp: Source component
-            dest_comp: Destination component
+            src_comp: Source component (can be None for intermediate transfers)
+            dest_comp: Destination component (can be None for intermediate transfers)
             transfer_type: "PCIe" or "Network"
+            host_comp: Optional host component for resource information
+            custom_name: Optional custom name for the transfer component
+            dependencies: List of component names this transfer depends on
             
         Returns:
             dict: Dictionary representing the transfer component
@@ -664,28 +764,68 @@ class CodeGenerator:
         elif transfer_type == "PCIe":
             self.import_statements.add("from daolite.utils.network import pcie_transfer")
 
+        # Generate a name for the transfer component if not provided
+        if custom_name:
+            transfer_name = custom_name
+        elif src_comp and dest_comp:
+            transfer_name = f"{transfer_type}_Transfer_{src_comp.name}_to_{dest_comp.name}"
+        elif src_comp:
+            transfer_name = f"{transfer_type}_Transfer_{src_comp.name}_to_intermediate"
+        elif dest_comp:
+            transfer_name = f"{transfer_type}_Transfer_intermediate_to_{dest_comp.name}"
+        else:
+            transfer_name = f"{transfer_type}_Transfer_intermediate"
+
+        # Add computer number if not significant
+        if transfer_name.startswith(f"{transfer_type}_Transfer_"):
+            import random
+            if "_to_" not in transfer_name:
+                # Add random number to make name unique
+                transfer_name += f"_{random.randint(1000, 9999)}"
+
+        # Import data size estimation function
+        from .data_transfer import estimate_data_size
+
         # Determine data size based on source and destination components
-        data_size = self._estimate_data_size(src_comp, dest_comp)
+        data_size = 0
+        if src_comp and dest_comp:
+            data_size = estimate_data_size(src_comp, dest_comp)
+        elif src_comp:
+            # Estimate from source component alone - use standard function in data_transfer.py
+            data_size = estimate_data_size(src_comp, None)
+        elif dest_comp:
+            # Estimate from destination component alone - use standard function in data_transfer.py
+            data_size = estimate_data_size(None, dest_comp)
+        else:
+            # Default data size if both are None
+            data_size = 1024 * 1024 * 8  # 1MB in bits
+            
+        # Ensure minimum data size
+        data_size = max(data_size, 1024)
 
-        # Create a synthetic component with appropriate data
-        transfer_name = f"{transfer_type}_Transfer_{src_comp.name}_to_{dest_comp.name}"
-
-        print(f"DEBUG: Creating transfer component {transfer_name} from {src_comp.name} to {dest_comp.name}")
-
-        # Create component dict with all necessary information
+        # Create parameters dictionary
         params = {
-            "n_bits": data_size
+            "n_bits": data_size,
+            "transfer_type": transfer_type.lower()
         }
-        if transfer_type == "Network":
-            params["transfer_type"] = transfer_type.lower()
-            params["group"] = src_comp.params.get("group", src_comp.params.get("group_size", 50))
-            dest_compute = dest_comp.get_compute_resource()
+        
+        # Add group size - use source group if available
+        if src_comp and hasattr(src_comp, 'params') and 'group' in src_comp.params:
+            params["group"] = src_comp.params["group"]
+        elif host_comp and hasattr(host_comp, 'params') and 'group' in host_comp.params:
+            params["group"] = host_comp.params["group"]
+        else:
+            params["group"] = 50  # Default group size
+            
+        # Add network-specific parameters
+        if transfer_type == "Network" and host_comp:
+            dest_compute = host_comp.get_compute_resource()
             if dest_compute:
                 params["use_dest_network"] = True
                 params["dest_network_speed"] = getattr(dest_compute, 'network_speed', 100e9)
                 params["dest_time_in_driver"] = getattr(dest_compute, 'time_in_driver', 5.0)
-        elif transfer_type == "PCIe":
-            params["group"] = src_comp.params.get("group", src_comp.params.get("group_size", 50))
+
+        # Create the transfer component dictionary
         transfer_comp = {
             "name": transfer_name,
             "type": ComponentType.NETWORK,
@@ -694,117 +834,7 @@ class CodeGenerator:
             "transfer_type": transfer_type,
             "data_size": data_size,
             "params": params,
-            "dependencies": [src_comp.name]
+            "dependencies": dependencies or []
         }
 
-        print(f"DEBUG: Transfer {transfer_name} dependencies set to: {transfer_comp['dependencies']}")
-
-        # SPECIAL CASE: For camera components, use the destination compute's network characteristics
-        # since camera is just a generator and the compute component defines the network properties
-        if src_comp.component_type == ComponentType.CAMERA and transfer_type == "Network":
-            dest_compute = dest_comp.get_compute_resource()
-            if dest_compute:
-                # Add extra parameters to use the destination compute's network speed
-                transfer_comp["params"]["use_dest_network"] = True
-                transfer_comp["params"]["dest_network_speed"] = getattr(dest_compute, 'network_speed', 100e9)
-                transfer_comp["params"]["dest_time_in_driver"] = getattr(dest_compute, 'time_in_driver', 5.0)
-                # For camera-to-calibration pipelines, ensure group size is passed through
-                # This is needed for timing array propagation
-                if dest_comp.component_type == ComponentType.CALIBRATION:
-                    # Get group size from camera or use default
-                    group_size = src_comp.params.get("group", src_comp.params.get("group_size", 50))
-                    transfer_comp["params"]["group"] = group_size
-
-        # Update destination component dependencies to include this transfer
-        for port in dest_comp.input_ports:
-            for i, (comp, port2) in enumerate(port.connected_to):
-                if comp == src_comp:
-                    # Replace direct dependency with transfer component
-                    port.connected_to[i] = (src_comp, port2)  # Keep the same, just for tracking
-
         return transfer_comp
-    
-    def _estimate_data_size(self, src_comp: ComponentBlock, dest_comp: ComponentBlock) -> int:
-        """
-        Estimate the data size transferred between components based on their types.
-        
-        Args:
-            src_comp: Source component
-            dest_comp: Destination component
-            
-        Returns:
-            int: Estimated data size in bits
-        """
-        # Default size
-        data_size = 1024 * 1024 * 8  # 1MB in bits
-        
-        # Estimate based on source component type
-        if src_comp.component_type == ComponentType.CAMERA:
-            # Camera typically outputs pixel data
-            n_pixels = src_comp.params.get("n_pixels", 1024 * 1024)
-            data_size = n_pixels * 16  # 16 bits per pixel
-            
-        elif src_comp.component_type == ComponentType.CENTROIDER:
-            # Centroider outputs slopes
-            n_subaps = src_comp.params.get("n_subaps", 5120)
-            data_size = n_subaps * 2 * 32  # X and Y slopes, 32 bits per value
-            
-        elif src_comp.component_type == ComponentType.RECONSTRUCTION:
-            # Reconstruction outputs actuator commands
-            n_actuators = src_comp.params.get("n_actuators", 5000)
-            data_size = n_actuators * 32  # 32 bits per actuator
-            
-        # Estimate based on destination component if source estimation failed
-        if data_size <= 0:
-            if dest_comp.component_type == ComponentType.CENTROIDER:
-                n_pixels = dest_comp.params.get("n_subaps", 5120) * dest_comp.params.get("pixels_per_subap", 256)
-                data_size = n_pixels * 16  # 16 bits per pixel
-                
-            elif dest_comp.component_type == ComponentType.RECONSTRUCTION:
-                n_slopes = dest_comp.params.get("n_slopes", 5120 * 2)
-                data_size = n_slopes * 32  # 32 bits per slope
-                
-            elif dest_comp.component_type == ComponentType.CONTROL:
-                n_actuators = dest_comp.params.get("n_actuators", 5000)
-                data_size = n_actuators * 32  # 32 bits per actuator
-        
-        return max(data_size, 1024)  # Ensure minimum data size
-
-    def _get_component_dependencies(self, component: ComponentBlock) -> List[str]:
-        """
-        Get the component's dependencies, taking into account network transfers.
-        
-        This method handles the modified dependency graph created for transfer components.
-        
-        Args:
-            component: The component to get dependencies for
-            
-        Returns:
-            List[str]: List of component names that this component depends on
-        """
-        # Use modified dependencies if available (these account for transfer components)
-        if hasattr(component, '_modified_dependencies'):
-            return component._modified_dependencies
-            
-        # Find if this component is a destination of any transfer
-        for transfer in self.generated_transfer_components:
-            if transfer["dest_comp"] == component:
-                # This component should depend on the transfer, not the original source
-                deps = component.get_dependencies().copy()
-                src_comp = transfer["src_comp"]
-                transfer_name = transfer["name"]
-                
-                # Replace source dependency with transfer dependency
-                if src_comp.name in deps:
-                    deps.remove(src_comp.name)
-                    deps.append(transfer_name)
-                else:
-                    # Special case: Camera connections may not have explicit dependencies
-                    # but still need the transfer component in the dependency chain
-                    if src_comp.component_type == ComponentType.CAMERA:
-                        deps.append(transfer_name)
-                        
-                return deps
-                
-        # Regular case: use the component's normal dependencies
-        return component.get_dependencies()

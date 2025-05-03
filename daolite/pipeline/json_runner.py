@@ -265,14 +265,50 @@ def run_pipeline_and_return_pipe(json_path, debug=False):
                     # Add destination driver time if available and not already set
                     if hasattr(dest_compute, 'time_in_driver') and "dest_time_in_driver" not in params:
                         params["dest_time_in_driver"] = dest_compute.time_in_driver
+                        
+        # For PCIe transfers, ensure PCIe-specific parameters
+        elif transfer_type.lower() == "pcie":
+            # For PCIe transfer, we need to filter the parameters to only those
+            # accepted by the pcie_transfer function
+            # Check the function signature: pcie_transfer(n_bits, compute_resources, debug=False)
+            # Filter params to only include n_bits (all other parameters will be injected)
+            filtered_params = {}
+            if "n_bits" in params:
+                filtered_params["n_bits"] = params["n_bits"]
+            params = filtered_params
         
-        # Create transfer component
-        function = network_transfer  # Default to network_transfer
-        if "function" in transfer:
-            function = FUNCTION_MAP.get(transfer["function"], network_transfer)
+        # Determine the appropriate transfer function
+        function = None
+        if transfer_type.lower() == "network":
+            function = network_transfer
+            # Also add to FUNCTION_MAP
+            FUNCTION_MAP["network_transfer"] = network_transfer
+        elif transfer_type.lower() == "pcie":
+            # Import pcie_transfer if not already in FUNCTION_MAP
+            if "pcie_transfer" not in FUNCTION_MAP:
+                try:
+                    from daolite.utils.network import pcie_transfer
+                    FUNCTION_MAP["pcie_transfer"] = pcie_transfer
+                    function = pcie_transfer
+                except ImportError:
+                    print(f"Warning: pcie_transfer not found, using network_transfer for {transfer_name}")
+                    function = network_transfer
+            else:
+                function = FUNCTION_MAP["pcie_transfer"]
+        
+        # Default to network_transfer if no specific function determined
+        if not function:
+            function = network_transfer
             
+        # Set or get dependencies 
+        dependencies = transfer.get("dependencies", [])
+        # If no dependencies specified but source exists, depend on source
+        if not dependencies and source and source in name_to_component:
+            dependencies = [source]
+        
+        # Create compute resource for the transfer
         compute = None
-        if "compute" in transfer:
+        if "compute" in transfer and transfer["compute"] is not None:
             from daolite.compute.base_resources import ComputeResources
             valid_fields = {
                 'hardware', 'memory_bandwidth', 'flops', 'network_speed', 'time_in_driver',
@@ -304,44 +340,69 @@ def run_pipeline_and_return_pipe(json_path, debug=False):
             compute=compute,
             function=function,
             params=params,
-            dependencies=[source] if source else []
+            dependencies=dependencies
         )
         pipeline.add_component(transfer_comp)
         name_to_component[transfer_name] = transfer_comp
+    
+    # Set up connection dependencies based on transfer chains
+    for conn in data.get("connections", []):
+        source = conn.get("start")
+        destination = conn.get("end")
+        transfer_chain = conn.get("transfers", [])
         
-        # Update destination component to depend on transfer instead of source
-        if destination in name_to_component:
-            dest_comp = name_to_component[destination]
-            # Replace direct source dependency with transfer dependency
+        # Skip if source or destination doesn't exist
+        if source not in name_to_component or destination not in name_to_component:
+            logger.warning(f"Skipping connection {source} → {destination}: component not found")
+            continue
+        
+        # Get the components
+        source_comp = name_to_component[source]
+        dest_comp = name_to_component[destination]
+        
+        if transfer_chain:
+            # Connection uses transfer chain
+            logger.debug(f"Processing transfer chain for {source} → {destination}: {transfer_chain}")
+            
+            # Verify all transfers in the chain exist
+            missing_transfers = [t for t in transfer_chain if t not in name_to_component]
+            if missing_transfers:
+                # Some transfers are missing - we need to auto-create them
+                logger.warning(f"Missing transfers in chain: {missing_transfers} - will auto-create")
+                
+                # Auto-create transfer chain - this would require more complex logic
+                # For now we'll fall back to direct dependency
+                if source not in dest_comp.dependencies:
+                    dest_comp.dependencies.append(source)
+                continue
+            
+            # First transfer must depend on source
+            first_transfer = name_to_component[transfer_chain[0]]
+            if source not in first_transfer.dependencies:
+                first_transfer.dependencies.append(source)
+            
+            # Each subsequent transfer depends on the previous one
+            for i in range(1, len(transfer_chain)):
+                curr_transfer = name_to_component[transfer_chain[i]]
+                prev_transfer = name_to_component[transfer_chain[i-1]]
+                if prev_transfer.name not in curr_transfer.dependencies:
+                    curr_transfer.dependencies.append(prev_transfer.name)
+            
+            # Destination depends on last transfer
+            last_transfer = name_to_component[transfer_chain[-1]]
+            # Remove direct dependency on source if it exists
             if source in dest_comp.dependencies:
                 dest_comp.dependencies.remove(source)
-            if transfer_name not in dest_comp.dependencies:
-                dest_comp.dependencies.append(transfer_name)
-    
-    # Set dependencies for direct connections
-    for idx, comp in enumerate(data["components"]):
-        comp_name = comp["name"]
-        pipeline_comp = name_to_component[comp_name]
-        # Find all connections where this component is the destination
-        direct_deps = []
-        for conn in data["connections"]:
-            if conn["end"] == comp_name:
-                # Check if this connection should be via a transfer
-                source = conn["start"]
-                has_transfer = False
-                for transfer in data.get("transfers", []):
-                    if transfer.get("source") == source and transfer.get("destination") == comp_name:
-                        has_transfer = True
-                        break
-                
-                # Only add direct dependency if there's no transfer component
-                if not has_transfer and source not in pipeline_comp.dependencies:
-                    direct_deps.append(source)
-        
-        # Add any direct dependencies that aren't already in the component's dependencies
-        for dep in direct_deps:
-            if dep not in pipeline_comp.dependencies:
-                pipeline_comp.dependencies.append(dep)
+            # Add dependency on last transfer
+            if last_transfer.name not in dest_comp.dependencies:
+                dest_comp.dependencies.append(last_transfer.name)
+            
+            logger.debug(f"Transfer chain dependencies set up: {source} → {' → '.join(transfer_chain)} → {destination}")
+        else:
+            # No transfer chain specified - check if we need to auto-insert transfers
+            # For now, just set up direct dependency
+            if source not in dest_comp.dependencies:
+                dest_comp.dependencies.append(source)
     
     # Run the pipeline
     results = pipeline.run(debug=debug)

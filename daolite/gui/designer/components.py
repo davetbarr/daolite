@@ -357,6 +357,16 @@ class ComponentBlock(QGraphicsItem):
         }
         return descs.get(self.component_type, "AO pipeline component")
 
+    def _update_all_transfer_indicators(self):
+        """Update transfer indicators for all connections involving this block."""
+        if not self.scene():
+            return
+        from .connection import Connection
+        for item in self.scene().items():
+            if isinstance(item, Connection):
+                if item.start_block == self or item.end_block == self:
+                    item.update_transfer_indicators()
+
     def itemChange(self, change, value):
         """Handle changes to the item, particularly position changes and parent assignment for drag-and-drop."""
         if change == QGraphicsItem.ItemPositionChange and self.scene():
@@ -371,6 +381,7 @@ class ComponentBlock(QGraphicsItem):
                                 (item.start_port == port or item.end_port == port)):
                                 item.update_path()
             self.scene().update()
+            self._update_all_transfer_indicators()
         elif change == QGraphicsItem.ItemScenePositionHasChanged and self.scene():
             # Also update connections when scene position changes (happens when parent changes)
             for port in self.input_ports + self.output_ports:
@@ -382,11 +393,13 @@ class ComponentBlock(QGraphicsItem):
                                 (item.start_port == port or item.end_port == port)):
                                 item.update_path()
             self.scene().update()
+            self._update_all_transfer_indicators()
         elif change == QGraphicsItem.ItemParentChange and self.scene():
             # Update connections when parent changes (moved in/out of ComputeBox or GPUBox)
             # Need to defer actual connection update to after parent is set
             from .connection import Connection
             self.scene().update()
+            self._update_all_transfer_indicators()
         elif change == QGraphicsItem.ItemParentHasChanged and self.scene():
             # Parent has changed, update all connections
             for port in self.input_ports + self.output_ports:
@@ -398,6 +411,7 @@ class ComponentBlock(QGraphicsItem):
                                 (item.start_port == port or item.end_port == port)):
                                 item.update_path()
             self.scene().update()
+            self._update_all_transfer_indicators()
         elif change == QGraphicsItem.ItemSelectedChange and self.scene():
             # Remove highlight from all boxes when selection changes
             for item in self.scene().items():
@@ -553,6 +567,17 @@ class ComponentContainer(QGraphicsItem):
         self._highlight = value
         self.update()
 
+    def _update_all_transfer_indicators(self):
+        """Update transfer indicators for all connections involving this container or its children."""
+        if not self.scene():
+            return
+        from .connection import Connection, ComponentBlock
+        blocks = [child for child in self.childItems() if isinstance(child, ComponentBlock)]
+        for item in self.scene().items():
+            if isinstance(item, Connection):
+                if (item.start_block in blocks or item.end_block in blocks):
+                    item.update_transfer_indicators()
+
     def contextMenuEvent(self, event):
         """Standard context menu with common options."""
         menu = QMenu()
@@ -662,6 +687,7 @@ class ComponentContainer(QGraphicsItem):
             self.prepareGeometryChange()
             self.update()
             self.auto_arrange_children()
+            self._update_all_transfer_indicators()
             event.accept()
             return
             
@@ -694,6 +720,7 @@ class ComponentContainer(QGraphicsItem):
         """Handle mouse release events."""
         if getattr(self, '_resizing', False):
             self._resizing = False
+            self._update_all_transfer_indicators()
             event.accept()
             return
         super().mouseReleaseEvent(event)

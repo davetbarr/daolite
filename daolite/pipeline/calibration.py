@@ -54,7 +54,8 @@ def PixelCalibration(
     Args:
         n_pixels: Total number of pixels to calibrate
         compute_resources: ComputeResources instance
-        start_times: Array of shape (rows, 2) with start/end times from camera
+        start_times: Array of shape (rows, 2) with start/end times from camera,
+                     or a scalar value representing a single timing
         n_workers: Number of workers (default: 1)
         bitdepth: Bit depth of the pixel data (default: 16)
         group: Number of groups to process (default: use start_times length)
@@ -62,9 +63,17 @@ def PixelCalibration(
         debug: Enable debug output
 
     Returns:
-        np.ndarray: Array of shape (rows, 2) with calibration start/end times
+        np.ndarray: Array of shape (rows, 2) with calibration start/end times,
+                    or a scalar value representing calibration time
     """
-    if group is None:
+    # Check if start_times is a scalar value (float/int)
+    is_scalar = np.isscalar(start_times)
+    
+    # If start_times is a scalar and group is None, set group to 1
+    if is_scalar and group is None:
+        group = 1
+    # If start_times is an array and group is None, use its length
+    elif not is_scalar and group is None:
         group = len(start_times)
 
     # Calculate pixels per group
@@ -79,7 +88,21 @@ def PixelCalibration(
         compute_resources.total_time(mem_ops_per_group, flops_per_group) / scale
     )  # Apply scaling factor
 
-    # Create timing array
+    if debug:
+        print("\n*************Pixel Calibration************")
+        print(f"Total pixels: {n_pixels}")
+        print(f"Pixels per group: {pixels_per_group}")
+        print(f"FLOPS per group: {flops_per_group}")
+        print(f"Memory operations per group: {mem_ops_per_group}")
+        print(f"Computation time per group: {computation_time:.2f} μs")
+        
+    # Handle scalar input - just return the computation time
+    if is_scalar:
+        if debug:
+            print(f"Total calibration time: {computation_time:.2f} μs")
+        return computation_time
+        
+    # Create timing array for non-scalar input
     timings = np.zeros([len(start_times), 2])
 
     # First calibration starts after first camera data is ready
@@ -92,12 +115,6 @@ def PixelCalibration(
         timings[i, 1] = timings[i, 0] + computation_time
 
     if debug:
-        print("\n*************Pixel Calibration************")
-        print(f"Total pixels: {n_pixels}")
-        print(f"Pixels per group: {pixels_per_group}")
-        print(f"FLOPS per group: {flops_per_group}")
-        print(f"Memory operations per group: {mem_ops_per_group}")
-        print(f"Computation time per group: {computation_time:.2f} μs")
         print(f"Total calibration time: {timings[-1, 1] - timings[0, 0]:.2f} μs")
 
     return timings

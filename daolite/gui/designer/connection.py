@@ -4,7 +4,7 @@ Connection classes for the daolite pipeline designer.
 This module provides graphical representations of connections between components.
 """
 
-from typing import Optional
+from typing import Optional, List, Tuple, Any
 from PyQt5.QtWidgets import QGraphicsPathItem
 from PyQt5.QtCore import Qt, QPointF
 from PyQt5.QtGui import QPen, QPainterPath, QColor
@@ -43,7 +43,7 @@ class Connection(QGraphicsPathItem):
         self.end_port = end_port
         
         # For tracking transfer indicators
-        self.transfer_indicators = []
+        self.transfer_indicators: List[Tuple[str, QPointF]] = []
 
         # Set up appearance
         self.setPen(
@@ -56,6 +56,62 @@ class Connection(QGraphicsPathItem):
         self.temp_end_point: Optional[QPointF] = None
 
         self.update_path()
+
+        # Set up event tracking for connected objects
+        self._setup_event_tracking()
+        
+    def _setup_event_tracking(self):
+        """Set up tracking for item changes in connected components."""
+        # This function enables automatic indicator updates when components move
+        # Only install filters if we have a scene and both items are in it
+        if not self.scene():
+            return
+            
+        if self.start_block and self.start_block.scene() == self.scene():
+            self.start_block.installSceneEventFilter(self)
+        if self.end_block and self.end_block.scene() == self.scene():
+            self.end_block.installSceneEventFilter(self)
+            
+        # Also track parent container movements
+        self._track_parent_containers()
+            
+    def _track_parent_containers(self):
+        """Track changes in parent containers (GPU boxes, Compute boxes)."""
+        # For source component parent containers
+        if not self.scene():
+            return
+            
+        if self.start_block:
+            parent = self.start_block.parentItem()
+            if parent and parent.scene() == self.scene():
+                parent.installSceneEventFilter(self)
+                # Also track grandparent (e.g., ComputeBox containing a GPUBox)
+                grandparent = parent.parentItem() if hasattr(parent, 'parentItem') else None
+                if grandparent and grandparent.scene() == self.scene():
+                    grandparent.installSceneEventFilter(self)
+                    
+        # For destination component parent containers  
+        if self.end_block:
+            parent = self.end_block.parentItem()
+            if parent and parent.scene() == self.scene():
+                parent.installSceneEventFilter(self)
+                # Also track grandparent (e.g., ComputeBox containing a GPUBox)
+                grandparent = parent.parentItem() if hasattr(parent, 'parentItem') else None
+                if grandparent and grandparent.scene() == self.scene():
+                    grandparent.installSceneEventFilter(self)
+        
+    def sceneEventFilter(self, watched: Any, event: Any) -> bool:
+        """Filter scene events for connected components and containers."""
+        # Check for item change events that might affect indicators
+        if event.type() in [11]:  # QEvent.GraphicsSceneMove = 11
+            # Item moved - update the connection path and indicators
+            self.update_path()
+            # Also refresh transfer indicators
+            self.update_transfer_indicators()
+            return False  # Let the event propagate
+            
+        # Let the event propagate to other handlers
+        return False
         
     def update_path(self):
         """Update the connection path between source and destination ports."""
@@ -94,6 +150,13 @@ class Connection(QGraphicsPathItem):
 
         # Make the connection more prominent (thicker, brighter)
         self.setPen(QPen(QColor(0, 180, 255), 4, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+
+    def update_transfer_indicators(self):
+        """Update the positions of all transfer indicators when components move."""
+        if self.scene():
+            # Import locally to avoid circular import issues
+            from .connection_manager import update_connection_indicators
+            update_connection_indicators(self.scene(), self)
 
     def set_temp_end_point(self, point: QPointF):
         """Set a temporary end point for interactive creation."""
@@ -143,6 +206,15 @@ class Connection(QGraphicsPathItem):
 
         # Update the path
         self.update_path()
+        
+        # Set up event tracking only after both blocks are connected and in the scene
+        if self.scene():
+            self._setup_event_tracking()
+            
+            # Add transfer indicators after connection is complete
+            from .connection_manager import update_connection_indicators
+            update_connection_indicators(self.scene(), self)
+            
         return True
 
     def disconnect(self):
