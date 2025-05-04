@@ -2,3 +2,8 @@ numpy>=1.20.0
 matplotlib>=3.4.0
 pyyaml>=5.4.0
 cycler>=0.10.0
+regex>=2021.8.3
+pyqt5>=5.15.0
+pytest
+pytest-cov
+sphinx
