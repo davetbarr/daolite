@@ -11,52 +11,75 @@ from daolite.common import ComponentType
 # Set up logging
 logger = logging.getLogger('DataTransfer')
 
-def determine_transfer_type(src_comp, dest_comp):
+def determine_transfer_chain(src_comp, dest_comp):
     """
-    Determine the type of transfer between two components.
-    
-    Args:
-        src_comp: Source component
-        dest_comp: Destination component
-        
-    Returns:
-        str: Transfer type ('Network' or 'PCIe') or None if no transfer needed
+    Determine the transfer chain (list of transfer types) between two components.
+    Handles multi-step transfers such as GPU->GPU across computers.
+    Returns a list of transfer types in order (e.g., ["PCIe", "Network", "PCIe"])
     """
-    # Get compute resources and parent containers
+    from .components import GPUBox, ComputeBox
+    chain = []
     src_res = src_comp.get_compute_resource()
     dest_res = dest_comp.get_compute_resource()
     src_parent = src_comp.parentItem()
     dest_parent = dest_comp.parentItem()
-    
-    # Camera components always connect via network
+
+    # Camera components always connect via network (and PCIe if dest is GPU)
     if src_comp.component_type == ComponentType.CAMERA:
-        return "Network"
-    
-    # Check if components are in different compute boxes
-    if (src_parent and dest_parent and 
-        src_parent != dest_parent and
-        isinstance(src_parent, 'ComputeBox') and 
-        isinstance(dest_parent, 'ComputeBox')):
-        return "Network"
-    
-    # Check for CPU-GPU transfers
-    from .components import GPUBox
-    if ((isinstance(src_parent, GPUBox) and not isinstance(dest_parent, GPUBox)) or
-        (not isinstance(src_parent, GPUBox) and isinstance(dest_parent, GPUBox))):
-        return "PCIe"
-    
-    # Check based on hardware type
-    if src_res and dest_res:
-        src_hw = getattr(src_res, 'hardware', 'CPU')
-        dest_hw = getattr(dest_res, 'hardware', 'CPU')
-        if src_hw != dest_hw:
-            if 'GPU' in (src_hw, dest_hw):
-                return "PCIe"
-            else:
-                return "Network"
-    
-    # No transfer needed or couldn't determine
-    return None
+        chain.append("Network")
+        if dest_parent and isinstance(dest_parent, GPUBox):
+            chain.append("PCIe")
+        return chain
+
+    # Helper to get ComputeBox for a component
+    def get_compute_box(comp):
+        parent = comp.parentItem() if hasattr(comp, 'parentItem') else None
+        if parent and isinstance(parent, ComputeBox):
+            return parent
+        if parent and isinstance(parent, GPUBox):
+            grandparent = parent.parentItem() if hasattr(parent, 'parentItem') else None
+            if grandparent and isinstance(grandparent, ComputeBox):
+                return grandparent
+        return None
+
+    src_is_gpu = src_parent and isinstance(src_parent, GPUBox)
+    dest_is_gpu = dest_parent and isinstance(dest_parent, GPUBox)
+    src_box = get_compute_box(src_comp)
+    dest_box = get_compute_box(dest_comp)
+    different_computers = src_box and dest_box and src_box != dest_box
+
+    # GPU -> GPU (different computers): PCIe (GPU1->host1) + Network (host1->host2) + PCIe (host2->GPU2)
+    if src_is_gpu and dest_is_gpu and different_computers:
+        chain.extend(["PCIe", "Network", "PCIe"])
+        return chain
+    # GPU -> CPU (different computers): PCIe (GPU->host1) + Network (host1->host2)
+    if src_is_gpu and not dest_is_gpu and different_computers:
+        chain.extend(["PCIe", "Network"])
+        return chain
+    # CPU -> GPU (different computers): Network (host1->host2) + PCIe (host2->GPU)
+    if not src_is_gpu and dest_is_gpu and different_computers:
+        chain.extend(["Network", "PCIe"])
+        return chain
+    # CPU -> CPU (different computers): Network
+    if not src_is_gpu and not dest_is_gpu and different_computers:
+        chain.append("Network")
+        return chain
+    # CPU <-> GPU (same computer): PCIe
+    if src_is_gpu != dest_is_gpu and not different_computers:
+        chain.append("PCIe")
+        return chain
+    # Fallback to single transfer type if any
+    ttype = determine_transfer_type(src_comp, dest_comp)
+    if ttype:
+        chain.append(ttype)
+    return chain
+
+def determine_transfer_type(src_comp, dest_comp):
+    """
+    Backward-compatible: returns the first transfer type in the chain, or None.
+    """
+    chain = determine_transfer_chain(src_comp, dest_comp)
+    return chain[0] if chain else None
 
 def estimate_data_size(src_comp, dest_comp):
     """

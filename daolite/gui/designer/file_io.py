@@ -97,9 +97,18 @@ def save_pipeline_to_file(scene, components, connections, filename):
             container_data["gpu_boxes"] = gpu_boxes
             data["containers"].append(container_data)
     
-    # Save components
+    # Get the transfer chain generation logic
+    from .code_generator import CodeGenerator
+    code_generator = CodeGenerator(components)
+    generated_transfers = getattr(code_generator, 'generated_transfer_components', [])
+    transfer_names = {t['name'] for t in generated_transfers}
+    
+    # Save components (skip transfer components)
     components_by_name = {}  # Map names to components for easier lookup
     for comp in components:
+        if comp.component_type.name == "NETWORK" and comp.name in transfer_names:
+            continue  # Skip synthetic transfer components
+        
         parent_container = None
         parent_type = None
         parent_name = None
@@ -183,138 +192,71 @@ def save_pipeline_to_file(scene, components, connections, filename):
         data["components"].append(comp_data)
         components_by_name[comp.name] = comp
     
-    # Get the transfer chain generation logic
-    from .code_generator import CodeGenerator
-    code_generator = CodeGenerator(components)
-    
     # Dictionary to store transfer chains by connection (source->dest)
     connection_transfer_chains = {}
     
     # Process generated transfer components
-    generated_transfers = getattr(code_generator, 'generated_transfer_components', [])
-    
-    # Group transfers by connection
+    # --- NEW: Save all generated transfer components, not just those with src_comp and dest_comp ---
+    all_transfer_names = set()
     for transfer in generated_transfers:
-        src_comp = transfer.get('src_comp')
+        transfer_name = transfer.get('name')
+        if transfer_name in all_transfer_names:
+            continue
+        all_transfer_names.add(transfer_name)
+        source_comp = transfer.get('src_comp')
         dest_comp = transfer.get('dest_comp')
-        
-        if src_comp and dest_comp:
-            # This is a direct connection transfer
-            key = f"{src_comp.name}->{dest_comp.name}"
-            if key not in connection_transfer_chains:
-                connection_transfer_chains[key] = []
-            connection_transfer_chains[key].append(transfer)
-        else:
-            # This is a transfer in a chain - find which chain it belongs to by dependency
-            dependencies = transfer.get('dependencies', [])
-            for dep in dependencies:
-                # Find if this depends on an existing transfer
-                for existing_key, existing_transfers in connection_transfer_chains.items():
-                    for existing_transfer in existing_transfers:
-                        if existing_transfer.get('name') == dep:
-                            # This transfer belongs to this chain
-                            connection_transfer_chains[existing_key].append(transfer)
-                            break
-                    else:
-                        continue
-                    break
-    
-    # Sort each chain by dependencies
-    for key, chain in connection_transfer_chains.items():
-        # Create a dependency graph
-        depends_on = {}
-        names_to_transfers = {}
-        for transfer in chain:
-            name = transfer.get('name')
-            names_to_transfers[name] = transfer
-            depends_on[name] = transfer.get('dependencies', [])
-        
-        # Topological sort by dependencies
-        sorted_transfers = []
-        no_deps = [name for name, deps in depends_on.items() 
-                   if not deps or all(dep not in names_to_transfers for dep in deps)]
-        
-        while no_deps:
-            name = no_deps.pop(0)
-            sorted_transfers.append(name)
-            
-            # Find transfers that depend on this one
-            for dep_name, deps in list(depends_on.items()):
-                if name in deps:
-                    deps.remove(name)
-                    if not deps:
-                        no_deps.append(dep_name)
-        
-        # Add any that couldn't be sorted (should be rare)
-        for name in names_to_transfers:
-            if name not in sorted_transfers:
-                sorted_transfers.append(name)
-        
-        # Replace with sorted list
-        connection_transfer_chains[key] = [names_to_transfers[name] for name in sorted_transfers]
-    
-    # Save each transfer component
-    for chain_key, chain in connection_transfer_chains.items():
-        for transfer in chain:
-            transfer_name = transfer.get('name')
-            
-            # Skip if already added
-            if any(t["name"] == transfer_name for t in data["transfers"]):
-                continue
-            
-            # Get source and destination component details
-            source_comp = transfer.get('src_comp')
-            dest_comp = transfer.get('dest_comp')
-            source_name = source_comp.name if source_comp else None
-            dest_name = dest_comp.name if dest_comp else None
-            
-            # Create transfer data
-            transfer_data = {
-                "type": "NETWORK",  # All transfers are network type components
-                "name": transfer_name,
-                "transfer_type": transfer.get('transfer_type', "Network"),
-                "source": source_name,
-                "destination": dest_name,
-                "data_size": transfer.get('data_size', 1024 * 1024),
-                "params": transfer.get('params', {}).copy(),
-                "dependencies": transfer.get('dependencies', []),
-                # Include compute resources if available
-                "compute": None
-            }
-            
-            # Add compute resources if available (copying from source component)
-            if source_comp and hasattr(source_comp, 'get_compute_resource'):
-                compute_resource = source_comp.get_compute_resource()
-                if compute_resource:
-                    transfer_data["compute"] = _to_dict_recursive(compute_resource)
-            
-            data["transfers"].append(transfer_data)
+        source_name = source_comp.name if source_comp else None
+        dest_name = dest_comp.name if dest_comp else None
+        transfer_data = {
+            "type": "NETWORK",  # All transfers are network type components
+            "name": transfer_name,
+            "transfer_type": transfer.get('transfer_type', "Network"),
+            "source": source_name,
+            "destination": dest_name,
+            "data_size": transfer.get('data_size', 1024 * 1024),
+            "params": transfer.get('params', {}).copy(),
+            "dependencies": transfer.get('dependencies', []),
+            "compute": None
+        }
+        if source_comp and hasattr(source_comp, 'get_compute_resource'):
+            compute_resource = source_comp.get_compute_resource()
+            if compute_resource:
+                transfer_data["compute"] = _to_dict_recursive(compute_resource)
+        data["transfers"].append(transfer_data)
     
     # Save connections with transfer chains
     for conn in connections:
-        # Get source and destination components
         src_name = conn.start_block.name
         dest_name = conn.end_block.name
-        
-        # Check if this connection has an associated transfer chain
-        connection_key = f"{src_name}->{dest_name}"
+        # Find all transfers in the chain for this connection
         transfer_chain = []
-        
-        if connection_key in connection_transfer_chains:
-            # Get the transfer chain for this connection
-            chain = connection_transfer_chains[connection_key]
-            transfer_chain = [transfer["name"] for transfer in chain]
-        
-        # Save connection data
+        for transfer in generated_transfers:
+            # The first transfer in the chain should depend on the source
+            if transfer.get('dependencies', []) == [src_name]:
+                chain = [transfer["name"]]
+                # Follow the chain by dependencies
+                current = transfer
+                while True:
+                    next_transfer = None
+                    for t in generated_transfers:
+                        if t is not current and t.get('dependencies', []) == [current["name"]]:
+                            next_transfer = t
+                            break
+                    if next_transfer:
+                        chain.append(next_transfer["name"])
+                        current = next_transfer
+                    else:
+                        break
+                # Only add if the last transfer's dest_comp matches the connection's dest
+                if current.get('dest_comp') and current['dest_comp'].name == dest_name:
+                    transfer_chain = chain
+                    break
         conn_data = {
             "start": src_name,
             "end": dest_name,
         }
-        
-        # Add transfer chain if it exists
         if transfer_chain:
             conn_data["transfers"] = transfer_chain
-        
         data["connections"].append(conn_data)
     
     try:

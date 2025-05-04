@@ -584,193 +584,40 @@ class CodeGenerator:
         """
         Analyze component connections and add appropriate transfer components
         when connections cross different compute resources.
-        
-        This implements the transfer chain insertion logic:
-        - GPU → GPU (different computers): PCIe (GPU1→host) → Network (host1→host2) → PCIe (host2→GPU2)
-        - GPU → CPU (different computers): PCIe (GPU→host) → Network (host→host)
-        - CPU → GPU (different computers): Network (host→host) → PCIe (host→GPU)
-        - CPU → CPU (different computers): Network (host→host)
-        - CPU ↔ GPU (same computer): PCIe (CPU↔GPU)
-        - Camera → anything: Network transfer and PCIe if destination is GPU
+        Uses the unified determine_transfer_chain function for transfer inference.
+        Handles transfer chains (e.g., GPU->GPU across computers).
         """
+        from .data_transfer import determine_transfer_chain
         # Get connections between components
         connections = []
         for src_comp in self.components:
             for port in src_comp.output_ports:
                 for dest_comp, _ in port.connected_to:
                     connections.append((src_comp, dest_comp))
-        
-        # Process each connection for resource boundaries
+
         for src_comp, dest_comp in connections:
-            src_res = src_comp.get_compute_resource()
-            dest_res = dest_comp.get_compute_resource()
-            
-            # Helper function to determine if a component runs on a GPU
-            def is_gpu(comp, res):
-                # Check hardware field
-                if getattr(res, 'hardware', '').lower() == 'gpu':
-                    return True
-                # Check parent container type
-                parent = comp.parentItem() if hasattr(comp, 'parentItem') else None
-                if parent and parent.__class__.__name__.lower() == 'gpubox':
-                    return True
-                return False
-            
-            # Helper to get parent ComputeBox - returns None if not found
-            def get_compute_box(comp):
-                parent = comp.parentItem() if hasattr(comp, 'parentItem') else None
-                if parent and parent.__class__.__name__.lower() == 'computebox':
-                    return parent
-                if parent and parent.__class__.__name__.lower() == 'gpubox':
-                    grandparent = parent.parentItem() if hasattr(parent, 'parentItem') else None
-                    if grandparent and grandparent.__class__.__name__.lower() == 'computebox':
-                        return grandparent
-                return None
-                
-            # Determine component types and locations
-            src_is_gpu = is_gpu(src_comp, src_res)
-            dest_is_gpu = is_gpu(dest_comp, dest_res)
-            src_compute_box = get_compute_box(src_comp)
-            dest_compute_box = get_compute_box(dest_comp)
-            different_computers = src_compute_box and dest_compute_box and src_compute_box != dest_compute_box
-            
-            # Create list to store the transfers in this connection
-            transfer_chain = []
-            
-            # SPECIAL CASE: Camera components
-            if src_comp.component_type == ComponentType.CAMERA:
-                # Camera → anything: Always insert Network transfer
-                network_transfer = self._create_transfer_component(
-                    src_comp, None if dest_is_gpu else dest_comp, "Network", 
-                    host_comp=dest_compute_box,  # Use destination for network characteristics
-                    custom_name=f"Network_Transfer_{src_comp.name}_to_{dest_comp.name}",
-                    dependencies=[src_comp.name]
+            transfer_chain = determine_transfer_chain(src_comp, dest_comp)
+            prev_name = src_comp.name
+            prev_comp = src_comp
+            for idx, transfer_type in enumerate(transfer_chain):
+                # Name each transfer in the chain uniquely
+                transfer_name = f"{transfer_type}_Transfer_{src_comp.name}_to_{dest_comp.name}_step{idx+1}"
+                transfer = self._create_transfer_component(
+                    prev_comp, dest_comp if idx == len(transfer_chain)-1 else None, transfer_type,
+                    custom_name=transfer_name,
+                    dependencies=[prev_name]
                 )
-                transfer_chain.append(network_transfer)
-                
-                # If destination is GPU, also add PCIe transfer
-                if dest_is_gpu:
-                    # Network → PCIe chain for Camera → GPU
-                    pcie_transfer = self._create_transfer_component(
-                        None, dest_comp, "PCIe",
-                        host_comp=dest_compute_box,  # Use destination for PCIe characteristics
-                        custom_name=f"PCIe_Transfer_{src_comp.name}_to_{dest_comp.name}",
-                        dependencies=[network_transfer["name"]]  # Make PCIe depend ONLY on Network
-                    )
-                    transfer_chain.append(pcie_transfer)
-                
-            # GPU → GPU (different computers)
-            elif src_is_gpu and dest_is_gpu and different_computers:
-                # Extract CPU (host) components for both source and destination GPUs
-                src_host_comp = src_compute_box  # Using ComputeBox as host
-                dest_host_comp = dest_compute_box  # Using ComputeBox as host
-                
-                # Create PCIe from GPU1 to host1
-                pcie_src_to_host = self._create_transfer_component(
-                    src_comp, None, "PCIe",
-                    host_comp=src_host_comp,
-                    custom_name=f"PCIe_Transfer_{src_comp.name}_to_host",
-                    dependencies=[src_comp.name]
-                )
-                
-                # Create Network from host1 to host2
-                network_host_to_host = self._create_transfer_component(
-                    src_host_comp, dest_host_comp, "Network",
-                    custom_name=f"Network_Transfer_{src_compute_box.name}_to_{dest_compute_box.name}",
-                    dependencies=[pcie_src_to_host["name"]]
-                )
-                
-                # Create PCIe from host2 to GPU2
-                pcie_host_to_dest = self._create_transfer_component(
-                    None, dest_comp, "PCIe",
-                    host_comp=dest_host_comp,
-                    custom_name=f"PCIe_Transfer_host_to_{dest_comp.name}",
-                    dependencies=[network_host_to_host["name"]]
-                )
-                
-                transfer_chain.extend([pcie_src_to_host, network_host_to_host, pcie_host_to_dest])
-                
-            # GPU → CPU (different computers)
-            elif src_is_gpu and not dest_is_gpu and different_computers:
-                # Create PCIe from GPU to host1
-                pcie_gpu_to_host = self._create_transfer_component(
-                    src_comp, None, "PCIe",
-                    host_comp=src_compute_box,
-                    custom_name=f"PCIe_Transfer_{src_comp.name}_to_host",
-                    dependencies=[src_comp.name]
-                )
-                
-                # Create Network from host1 to host2
-                network_host_to_host = self._create_transfer_component(
-                    src_compute_box, dest_comp, "Network",
-                    custom_name=f"Network_Transfer_{src_compute_box.name}_to_{dest_compute_box.name}",
-                    dependencies=[pcie_gpu_to_host["name"]]
-                )
-                
-                transfer_chain.extend([pcie_gpu_to_host, network_host_to_host])
-                
-            # CPU → GPU (different computers)
-            elif not src_is_gpu and dest_is_gpu and different_computers:
-                # Create Network from host1 to host2
-                network_host_to_host = self._create_transfer_component(
-                    src_comp, None, "Network",
-                    host_comp=dest_compute_box,
-                    custom_name=f"Network_Transfer_{src_compute_box.name}_to_{dest_compute_box.name}",
-                    dependencies=[src_comp.name]
-                )
-                
-                # Create PCIe from host2 to GPU
-                pcie_host_to_gpu = self._create_transfer_component(
-                    None, dest_comp, "PCIe",
-                    host_comp=dest_compute_box,
-                    custom_name=f"PCIe_Transfer_host_to_{dest_comp.name}",
-                    dependencies=[network_host_to_host["name"]]
-                )
-                
-                transfer_chain.extend([network_host_to_host, pcie_host_to_gpu])
-                
-            # CPU → CPU (different computers)
-            elif not src_is_gpu and not dest_is_gpu and different_computers:
-                # Create Network from host1 to host2
-                network_host_to_host = self._create_transfer_component(
-                    src_comp, dest_comp, "Network",
-                    custom_name=f"Network_Transfer_{src_compute_box.name}_to_{dest_compute_box.name}",
-                    dependencies=[src_comp.name]
-                )
-                
-                transfer_chain.append(network_host_to_host)
-                
-            # CPU ↔ GPU (on same computer)
-            elif src_is_gpu != dest_is_gpu and not different_computers:
-                # Create PCIe transfer between CPU and GPU
-                pcie_transfer = self._create_transfer_component(
-                    src_comp, dest_comp, "PCIe",
-                    custom_name=f"PCIe_Transfer_{src_comp.name}_to_{dest_comp.name}",
-                    dependencies=[src_comp.name]
-                )
-                
-                transfer_chain.append(pcie_transfer)
-            
-            # Add all transfers in this chain to the generated transfers list
+                self.generated_transfer_components.append(transfer)
+                prev_name = transfer["name"]
+                prev_comp = None  # Only the first transfer gets the real src_comp
+            # Set up dependency for destination
             if transfer_chain:
-                # Set up the chain dependencies correctly for the destination component
-                if len(transfer_chain) > 0:
-                    last_transfer = transfer_chain[-1]
-                    
-                    # Create _modified_dependencies attribute if it doesn't exist
-                    if not hasattr(dest_comp, '_modified_dependencies'):
-                        dest_comp._modified_dependencies = dest_comp.get_dependencies().copy()
-                    
-                    # Remove direct dependency on source if it exists
-                    if src_comp.name in dest_comp._modified_dependencies:
-                        dest_comp._modified_dependencies.remove(src_comp.name)
-                    
-                    # Add dependency on last transfer in the chain
-                    if last_transfer["name"] not in dest_comp._modified_dependencies:
-                        dest_comp._modified_dependencies.append(last_transfer["name"])
-                
-                # Add the transfers to the generated list
-                self.generated_transfer_components.extend(transfer_chain)
+                if not hasattr(dest_comp, '_modified_dependencies'):
+                    dest_comp._modified_dependencies = dest_comp.get_dependencies().copy()
+                if src_comp.name in dest_comp._modified_dependencies:
+                    dest_comp._modified_dependencies.remove(src_comp.name)
+                if prev_name not in dest_comp._modified_dependencies:
+                    dest_comp._modified_dependencies.append(prev_name)
 
     def _create_transfer_component(self, src_comp, dest_comp, transfer_type, 
                                    host_comp=None, custom_name=None, dependencies=None):
@@ -849,7 +696,10 @@ class CodeGenerator:
             
         # Add network-specific parameters
         if transfer_type == "Network" and host_comp:
-            dest_compute = host_comp.get_compute_resource()
+            # Use .compute for ComputeBox, .gpu_resource for GPUBox
+            dest_compute = getattr(host_comp, 'compute', None)
+            if dest_compute is None:
+                dest_compute = getattr(host_comp, 'gpu_resource', None)
             if dest_compute:
                 params["use_dest_network"] = True
                 params["dest_network_speed"] = getattr(dest_compute, 'network_speed', 100e9)
