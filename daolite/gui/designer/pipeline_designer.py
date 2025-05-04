@@ -43,7 +43,7 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
 )
 from PyQt5.QtCore import Qt, QRectF, QPointF, QSize
-from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QBrush, QKeySequence, QIcon
+from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QBrush, QKeySequence, QIcon, QLinearGradient
 
 import inspect
 import daolite.compute.hardware as hardware
@@ -69,7 +69,7 @@ from .connection import Connection
 from .code_generator import CodeGenerator
 from .parameter_dialog import ComponentParametersDialog
 from .connection_manager import update_connection_indicators
-from .style_utils import set_app_style, StyledTextInputDialog
+from .style_utils import set_app_style, StyledTextInputDialog, get_saved_theme, save_theme
 
 # Set up logging
 logging.basicConfig(
@@ -138,9 +138,10 @@ class PipelineScene(QGraphicsScene):
     Handles interactions, connections, and component management.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, theme='light'):
         super().__init__(parent)
         self.setSceneRect(0, 0, 2000, 1500)
+        self.theme = theme
 
         # Currently active connection during creation
         self.current_connection = None
@@ -154,6 +155,13 @@ class PipelineScene(QGraphicsScene):
         self.click_connect_mode = False
         self.selected_port = None
         self.selected_block = None
+
+    def set_theme(self, theme):
+        self.theme = theme
+        self.update()
+        for item in self.items():
+            if hasattr(item, 'set_theme'):
+                item.set_theme(theme)
 
     def dragMoveEvent(self, event):
         event.accept()
@@ -499,6 +507,19 @@ class PipelineScene(QGraphicsScene):
             painter.restore()
         super().drawForeground(painter, rect)
 
+    def drawBackground(self, painter, rect):
+        theme = getattr(self, 'theme', 'light')
+        if theme == 'dark':
+            color1 = QColor(30, 36, 48)
+            color2 = QColor(40, 48, 64)
+        else:
+            color1 = QColor(246, 248, 250)  # light blue/gray
+            color2 = QColor(231, 242, 250)  # lighter blue
+        grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
+        grad.setColorAt(0, color1)
+        grad.setColorAt(1, color2)
+        painter.fillRect(rect, grad)
+
 
 class ResourceSelectionDialog(QDialog):
     """
@@ -723,63 +744,14 @@ class PipelineDesignerApp(QMainWindow):
         self.setWindowTitle("daolite Pipeline Designer")
         self.resize(1200, 800)
 
-        # --- Professional Look: Global Stylesheet and Font ---
-        self.setStyleSheet("""
-            QMainWindow {
-                background: #f6f8fa;
-            }
-            QToolBar {
-                background: #e7f2fa;
-                border: none;
-                padding: 8px 4px;
-                spacing: 8px;
-            }
-            QToolBar QLabel {
-                color: #375a7f;
-                font-size: 13px;
-                padding: 2px 0 6px 0;
-            }
-            QToolBar QPushButton {
-                background: #ffffff;
-                border: 1.5px solid #b0c4de;
-                border-radius: 7px;
-                padding: 6px 14px;
-                margin: 2px 0;
-                font-size: 13px;
-                font-weight: 500;
-                color: #375a7f;
-            }
-            QToolBar QPushButton:hover {
-                background: #d0e6fa;
-                border: 1.5px solid #4a90e2;
-                color: #1a3c6e;
-            }
-            QToolBar QPushButton:pressed {
-                background: #b3d1f7;
-            }
-            QComboBox {
-                background: #fff;
-                border: 1.5px solid #b0c4de;
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-size: 13px;
-            }
-            QGraphicsView {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #f6f8fa, stop:1 #e7f2fa);
-                border: 1px solid #b0c4de;
-            }
-            QStatusBar {
-                background: #e7f2fa;
-                color: #375a7f;
-                font-size: 12px;
-            }
-        """)
+        # --- Theme selection ---
+        self.theme = get_saved_theme()
+        set_app_style(self, self.theme)
         font = QFont("Segoe UI", 11)
         self.setFont(font)
 
         # Set up the scene and view
-        self.scene = PipelineScene(self)
+        self.scene = PipelineScene(self, theme=self.theme)
         self.view = QGraphicsView(self.scene)
         self.view.setRenderHint(
             QPainter.Antialiasing
@@ -829,7 +801,6 @@ class PipelineDesignerApp(QMainWindow):
                 QMessageBox.critical(self, "Load Error", f"Error loading pipeline: {e}")
 
     def _create_toolbar(self):
-        """Create a professional, horizontal, grouped, icon+text toolbar at the top with improved contrast and 'Add Computer' first."""
         from PyQt5.QtWidgets import QToolBar, QToolButton, QFrame, QSizePolicy
         from PyQt5.QtGui import QIcon
         from PyQt5.QtCore import QSize
@@ -844,6 +815,13 @@ class PipelineDesignerApp(QMainWindow):
         self.toolbar.setIconSize(QSize(32, 32))
         self.toolbar.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         self.addToolBar(Qt.TopToolBarArea, self.toolbar)
+
+        # Set toolbar background color based on theme
+        theme = getattr(self, 'theme', 'light')
+        if theme == 'dark':
+            self.toolbar.setStyleSheet("QToolBar { background: #232b3a; border: none; padding: 8px 4px; } QToolBar QLabel, QToolBar QPushButton, QToolBar QToolButton { color: #e0e6ef; }")
+        else:
+            self.toolbar.setStyleSheet("QToolBar { background: #e7f2fa; border: none; padding: 8px 4px; } QToolBar QLabel, QToolBar QPushButton, QToolBar QToolButton { color: #375a7f; }")
 
         def add_section_label(text):
             label = QLabel(f"  <b>{text}</b>  ")
@@ -1115,6 +1093,18 @@ class PipelineDesignerApp(QMainWindow):
         reset_zoom_action.triggered.connect(lambda: self.view.resetTransform())
         view_menu.addAction(reset_zoom_action)
 
+        # --- Theme submenu ---
+        view_menu.addSeparator()
+        theme_menu = view_menu.addMenu("Theme")
+        theme_group = []
+        for label, key in [("System Default", "system"), ("Light", "light"), ("Dark", "dark")]:
+            act = QAction(label, self, checkable=True)
+            act.setChecked(self.theme == key)
+            act.triggered.connect(lambda checked, k=key: self._set_theme(k))
+            theme_menu.addAction(act)
+            theme_group.append(act)
+        self._theme_actions = theme_group
+
         # Help menu
         help_menu = menu_bar.addMenu("&Help")
 
@@ -1126,6 +1116,20 @@ class PipelineDesignerApp(QMainWindow):
         shortcut_action.setShortcut("Ctrl+H")
         shortcut_action.triggered.connect(self._show_shortcuts)
         help_menu.addAction(shortcut_action)
+
+    def _set_theme(self, theme):
+        self.theme = theme
+        save_theme(theme)
+        set_app_style(self, theme)
+        self.scene.set_theme(theme)
+        # Update toolbar color
+        self._create_toolbar()
+        self.update()
+        for widget in self.findChildren(QWidget):
+            set_app_style(widget, theme)
+        if hasattr(self, '_theme_actions'):
+            for act in self._theme_actions:
+                act.setChecked(act.text().lower().startswith(theme))
 
     def _show_shortcuts(self):
         dlg = ShortcutHelpDialog(self)

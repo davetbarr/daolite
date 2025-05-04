@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
     QGraphicsRectItem,
     QFileDialog,
     QMessageBox,
-    QStyle,  # <-- Add this import
+    QStyle,
 )
 from PyQt5.QtCore import Qt, QRectF, QPointF
 from PyQt5.QtGui import QPen, QBrush, QColor, QPainter, QFont, QPainterPath, QLinearGradient
@@ -160,7 +160,11 @@ class ComponentBlock(QGraphicsItem):
         
         # Add ability to accept mouse events for double-click renaming
         self.setAcceptedMouseButtons(Qt.LeftButton)
-        
+
+    def set_theme(self, theme):
+        self.theme = theme
+        self.update()
+
     def get_compute_resource(self) -> Optional[ComputeResources]:
         """
         Get the compute resource for this component by checking parent containers.
@@ -180,14 +184,14 @@ class ComponentBlock(QGraphicsItem):
         """Initialize default ports based on component type."""
         if self.component_type == ComponentType.CAMERA:
             # Camera has no inputs, one output
-            output = Port(PortType.OUTPUT, QPointF(180, 40), "data")
+            output = Port(PortType.OUTPUT, QPointF(190, 40), "data")
             output.parent = self
             self.output_ports.append(output)
 
         elif self.component_type == ComponentType.NETWORK:
             # Network has one input, one output
             input_port = Port(PortType.INPUT, QPointF(0, 40), "data in")
-            output_port = Port(PortType.OUTPUT, QPointF(180, 40), "data out")
+            output_port = Port(PortType.OUTPUT, QPointF(190, 40), "data out")
             input_port.parent = self
             output_port.parent = self
             self.input_ports.append(input_port)
@@ -202,7 +206,7 @@ class ComponentBlock(QGraphicsItem):
         else:
             # Default for other components: one input, one output
             input_port = Port(PortType.INPUT, QPointF(0, 40), "in")
-            output_port = Port(PortType.OUTPUT, QPointF(180, 40), "out")
+            output_port = Port(PortType.OUTPUT, QPointF(190, 40), "out")
             input_port.parent = self
             output_port.parent = self
             self.input_ports.append(input_port)
@@ -213,11 +217,11 @@ class ComponentBlock(QGraphicsItem):
         return self.size
 
     def paint(self, painter: QPainter, option, widget):
-        """
-        Paint the component block and its ports with a modern, professional look.
-        """
+        theme = getattr(self, 'theme', getattr(self.scene(), 'theme', 'light'))
+        is_dark = theme == 'dark'
+
         # --- Drop shadow for depth ---
-        shadow_color = QColor(0, 0, 0, 60)
+        shadow_color = QColor(0, 0, 0, 100 if is_dark else 60)
         shadow_rect = self.size.adjusted(3, 3, 3, 3)
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(shadow_color))
@@ -225,14 +229,19 @@ class ComponentBlock(QGraphicsItem):
 
         # --- Main block with gradient/glass effect ---
         grad = QLinearGradient(self.size.topLeft(), self.size.bottomRight())
-        grad.setColorAt(0, self._get_color_for_component().lighter(110))
-        grad.setColorAt(1, self._get_color_for_component().darker(105))
+        base_color = self._get_color_for_component()
+        if is_dark:
+            grad.setColorAt(0, base_color.darker(180))
+            grad.setColorAt(1, base_color.darker(220))
+        else:
+            grad.setColorAt(0, base_color.lighter(110))
+            grad.setColorAt(1, base_color.darker(105))
         painter.setBrush(QBrush(grad))
-        pen = QPen(Qt.black, 2)
+        pen = QPen(QColor('#8ecfff') if is_dark else Qt.black, 2)
         if self.isSelected():
-            pen.setColor(QColor(0, 120, 255))
+            pen.setColor(QColor(0, 180, 255) if is_dark else QColor(0, 120, 255))
             pen.setWidth(4)
-        elif option.state & QStyle.State_MouseOver:  # <-- Use QStyle.State_MouseOver
+        elif option.state & QStyle.State_MouseOver:
             pen.setColor(QColor(80, 180, 255))
             pen.setWidth(3)
         painter.setPen(pen)
@@ -241,12 +250,18 @@ class ComponentBlock(QGraphicsItem):
         # --- Title bar ---
         title_rect = QRectF(0, 0, self.size.width(), 28)
         title_grad = QLinearGradient(title_rect.topLeft(), title_rect.bottomLeft())
-        title_grad.setColorAt(0, self._get_title_color().lighter(120))
-        title_grad.setColorAt(1, self._get_title_color().darker(110))
+        if is_dark:
+            title_grad.setColorAt(0, QColor(40, 60, 80))
+            title_grad.setColorAt(1, QColor(30, 40, 60))
+        else:
+            title_grad.setColorAt(0, self._get_title_color().lighter(120))
+            title_grad.setColorAt(1, self._get_title_color().darker(110))
         painter.setBrush(QBrush(title_grad))
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(title_rect, 12, 12)
-        painter.setPen(QPen(Qt.black, 1))
+
+        # Title text
+        painter.setPen(Qt.black if not is_dark else QColor('#e0e6ef'))
         font = QFont("Segoe UI", 11, QFont.Bold)
         painter.setFont(font)
         painter.drawText(title_rect, Qt.AlignCenter, self.name)
@@ -255,7 +270,7 @@ class ComponentBlock(QGraphicsItem):
         type_rect = QRectF(0, 30, self.size.width(), 18)
         font = QFont("Segoe UI", 9, QFont.Normal)
         painter.setFont(font)
-        painter.setPen(QColor(60, 60, 120))
+        painter.setPen(QColor(60, 60, 120) if not is_dark else QColor('#b3e1ff'))
         painter.drawText(type_rect, Qt.AlignCenter, self.component_type.name.title())
 
         # --- Description ---
@@ -263,7 +278,7 @@ class ComponentBlock(QGraphicsItem):
         desc_rect = QRectF(0, 48, self.size.width(), 16)
         font = QFont("Segoe UI", 8, QFont.StyleItalic)
         painter.setFont(font)
-        painter.setPen(QColor(90, 90, 90))
+        painter.setPen(QColor(90, 90, 90) if not is_dark else QColor('#e0e6ef'))
         painter.drawText(desc_rect, Qt.AlignCenter, desc)
 
         # --- Compute resource if assigned ---
@@ -281,42 +296,41 @@ class ComponentBlock(QGraphicsItem):
             if resource_type:
                 font = QFont("Segoe UI", 7)
                 painter.setFont(font)
-                painter.setPen(QColor(60, 120, 60))
+                painter.setPen(QColor(60, 120, 60) if not is_dark else QColor('#b3e1ff'))
                 painter.drawText(compute_rect, Qt.AlignCenter, f"{resource_type}{compute_name}")
 
         # --- Draw ports with modern look ---
         self._draw_ports(painter)
 
     def _draw_ports(self, painter: QPainter):
+        theme = getattr(self, 'theme', getattr(self.scene(), 'theme', 'light'))
+        is_dark = theme == 'dark'
+
         # Draw input ports
         for port in self.input_ports:
-            # Port shadow
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(0, 0, 0, 60))
+            painter.setBrush(QColor(0, 0, 0, 100 if is_dark else 60))
             shadow_rect = QRectF(port.position.x() - 8, port.position.y() - 7, 18, 18)
             painter.drawEllipse(shadow_rect)
-            # Port circle
             painter.setPen(QPen(QColor(30, 120, 220), 2))
             painter.setBrush(QBrush(QColor(80, 180, 255)))
             port_rect = QRectF(port.position.x() - 9, port.position.y() - 9, 18, 18)
             painter.drawEllipse(port_rect)
-            # Port label
             painter.setFont(QFont("Segoe UI", 7))
             painter.setPen(QColor(30, 120, 220))
             painter.drawText(int(port.position.x()) + 7, int(port.position.y()) + 2, port.label)
-            # Tooltip
             if hasattr(port, 'label'):
                 self.setToolTip(f"{self.name} - {port.label}")
-            # Connected component name
             if port.connected_to:
                 connected_comp = port.connected_to[0][0]
                 painter.setFont(QFont("Segoe UI", 7, QFont.StyleItalic))
                 painter.setPen(QColor(80, 80, 180))
                 painter.drawText(int(port.position.x()) + 7, int(port.position.y()) + 12, f"← {connected_comp.name}")
+
         # Draw output ports
         for port in self.output_ports:
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(0, 0, 0, 60))
+            painter.setBrush(QColor(0, 0, 0, 100 if is_dark else 60))
             shadow_rect = QRectF(port.position.x() - 8, port.position.y() - 7, 18, 18)
             painter.drawEllipse(shadow_rect)
             painter.setPen(QPen(QColor(40, 180, 60), 2))
@@ -575,6 +589,13 @@ class ComponentContainer(QGraphicsItem):
         # Enable mouse events for double-click renaming
         self.setAcceptedMouseButtons(Qt.LeftButton)
 
+    def set_theme(self, theme):
+        self.theme = theme
+        self.update()
+        for child in self.childItems():
+            if hasattr(child, 'set_theme'):
+                child.set_theme(theme)
+
     def set_highlight(self, value: bool):
         """Set highlight state for drag-over visual feedback."""
         self._highlight = value
@@ -637,14 +658,16 @@ class ComponentContainer(QGraphicsItem):
         return self.size.adjusted(0, 0, self._resize_handle_size, self._resize_handle_size)
 
     def paint(self, painter: QPainter, option, widget):
-        """Paint the container with title, border and resize handle."""
+        theme = getattr(self, 'theme', getattr(self.scene(), 'theme', 'light'))
+        is_dark = theme == 'dark'
+
         # Draw container with highlight/selection indicators
         pen = QPen(self.box_color, 2)
         if self._highlight:
             pen.setWidth(8)
         elif self.isSelected():
             pen.setWidth(4)
-        brush = QBrush(self.fill_color)
+        brush = QBrush(QColor(40, 50, 60, 180) if is_dark else self.fill_color)
         painter.setPen(pen)
         painter.setBrush(brush)
         painter.drawRoundedRect(self.size, 14, 14)
@@ -662,6 +685,7 @@ class ComponentContainer(QGraphicsItem):
         if self.compute:
             compute_name = getattr(self.compute, "name", str(type(self.compute).__name__))
             painter.setFont(QFont("Arial", 8))
+            painter.setPen(Qt.black)
             painter.drawText(10, 40, f"Resource: {compute_name}")
         
         # Draw resize handle
@@ -670,7 +694,7 @@ class ComponentContainer(QGraphicsItem):
         painter.setBrush(QBrush(Qt.gray))
         painter.setPen(QPen(Qt.darkGray, 1))
         painter.drawRect(handle_rect)
-        painter.setPen(QPen(Qt.black, 1))
+        painter.setPen(Qt.black)
         painter.drawText(handle_rect, Qt.AlignCenter, "⇲")
 
     def mousePressEvent(self, event):
@@ -954,6 +978,9 @@ class ComputeBox(ComponentContainer):
         # Track child items
         self.child_items = []
 
+    def set_theme(self, theme):
+        super().set_theme(theme)
+
     def paint(self, painter, option, widget):
         super().paint(painter, option, widget)
         # Draw 'Resource: Computer' label
@@ -980,11 +1007,11 @@ class GPUBox(ComponentContainer):
         self.gpu_resource = gpu_resource
         self.size = QRectF(0, 0, 220, 120)
 
-    def paint(self, painter: QPainter, option, widget):
-        """Paint with GPU-specific customizations."""
+    def set_theme(self, theme):
+        super().set_theme(theme)
+
+    def paint(self, painter, option, widget):
         super().paint(painter, option, widget)
-        
-        # Override resource label with GPU-specific label
         if self.gpu_resource:
             gpu_name = getattr(self.gpu_resource, "name", str(type(self.gpu_resource).__name__))
             painter.setFont(QFont("Arial", 8))
