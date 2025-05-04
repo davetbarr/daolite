@@ -510,15 +510,29 @@ class PipelineScene(QGraphicsScene):
     def drawBackground(self, painter, rect):
         theme = getattr(self, 'theme', 'light')
         if theme == 'dark':
-            color1 = QColor(30, 36, 48)
-            color2 = QColor(40, 48, 64)
+            grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
+            grad.setColorAt(0, QColor(36, 42, 56))
+            grad.setColorAt(1, QColor(24, 28, 40))
+            painter.fillRect(rect, grad)
         else:
-            color1 = QColor(246, 248, 250)  # light blue/gray
-            color2 = QColor(231, 242, 250)  # lighter blue
-        grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        grad.setColorAt(0, color1)
-        grad.setColorAt(1, color2)
-        painter.fillRect(rect, grad)
+            color1 = QColor(246, 248, 250)
+            color2 = QColor(231, 242, 250)
+            grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
+            grad.setColorAt(0, color1)
+            grad.setColorAt(1, color2)
+            painter.fillRect(rect, grad)
+        # Draw subtle grid lines in both modes
+        painter.save()
+        grid_color = QColor(50, 60, 80, 80) if theme == 'dark' else QColor(180, 200, 220, 60)
+        painter.setPen(grid_color)
+        grid_size = 32
+        left = int(rect.left()) - (int(rect.left()) % grid_size)
+        top = int(rect.top()) - (int(rect.top()) % grid_size)
+        for x in range(left, int(rect.right()), grid_size):
+            painter.drawLine(x, int(rect.top()), x, int(rect.bottom()))
+        for y in range(top, int(rect.bottom()), grid_size):
+            painter.drawLine(int(rect.left()), y, int(rect.right()), y)
+        painter.restore()
 
 
 class ResourceSelectionDialog(QDialog):
@@ -819,7 +833,33 @@ class PipelineDesignerApp(QMainWindow):
         # Set toolbar background color based on theme
         theme = getattr(self, 'theme', 'light')
         if theme == 'dark':
-            self.toolbar.setStyleSheet("QToolBar { background: #232b3a; border: none; padding: 8px 4px; } QToolBar QLabel, QToolBar QPushButton, QToolBar QToolButton { color: #e0e6ef; }")
+            self.toolbar.setStyleSheet("""
+                QToolBar {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #27304a, stop:1 #232b3a);
+                    border: none;
+                    padding: 8px 4px;
+                }
+                QToolBar QLabel, QToolBar QPushButton, QToolBar QToolButton {
+                    color: #f2f6fa;
+                    font-weight: 500;
+                }
+                QToolBar QToolButton {
+                    background: #2d3952;
+                    border: 1.5px solid #3a4660;
+                    border-radius: 7px;
+                    padding: 6px 14px;
+                    margin: 2px 0;
+                    font-size: 13px;
+                }
+                QToolBar QToolButton:hover {
+                    background: #36415a;
+                    border: 1.5px solid #4a90e2;
+                    color: #b3e1ff;
+                }
+                QToolBar QToolButton:pressed {
+                    background: #232b3a;
+                }
+            """)
         else:
             self.toolbar.setStyleSheet("QToolBar { background: #e7f2fa; border: none; padding: 8px 4px; } QToolBar QLabel, QToolBar QPushButton, QToolBar QToolButton { color: #375a7f; }")
 

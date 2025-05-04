@@ -660,41 +660,48 @@ class ComponentContainer(QGraphicsItem):
     def paint(self, painter: QPainter, option, widget):
         theme = getattr(self, 'theme', getattr(self.scene(), 'theme', 'light'))
         is_dark = theme == 'dark'
-
-        # Draw container with highlight/selection indicators
-        pen = QPen(self.box_color, 2)
+        # Use lighter fill and box colors in dark mode for ComputeBox and GPUBox
+        if is_dark:
+            if isinstance(self, ComputeBox):
+                fill = QColor(60, 80, 120, 180)
+                box = QColor(120, 180, 255)
+            elif isinstance(self, GPUBox):
+                fill = QColor(80, 120, 80, 180)
+                box = QColor(180, 255, 180)
+            else:
+                fill = QColor(40, 50, 60, 180)
+                box = self.box_color.lighter(180)
+        else:
+            fill = self.fill_color
+            box = self.box_color.lighter(180)
+        pen = QPen(box if is_dark else self.box_color, 2)
         if self._highlight:
             pen.setWidth(8)
         elif self.isSelected():
             pen.setWidth(4)
-        brush = QBrush(QColor(40, 50, 60, 180) if is_dark else self.fill_color)
         painter.setPen(pen)
-        painter.setBrush(brush)
+        painter.setBrush(QBrush(fill))
         painter.drawRoundedRect(self.size, 14, 14)
-        
         # Draw title bar
         title_rect = QRectF(0, 0, self.size.width(), 25)
-        painter.setBrush(QBrush(self.box_color.lighter(180)))
+        painter.setBrush(QBrush(box))
         painter.drawRoundedRect(title_rect, 12, 12)
-        painter.setPen(Qt.black)
+        painter.setPen(Qt.black if not is_dark else QColor('#e0e6ef'))
         font = QFont("Arial", 9, QFont.Bold)
         painter.setFont(font)
         painter.drawText(title_rect, Qt.AlignCenter, self.name)
-        
         # Draw resource name if available
         if self.compute:
             compute_name = getattr(self.compute, "name", str(type(self.compute).__name__))
             painter.setFont(QFont("Arial", 8))
-            painter.setPen(Qt.black)
+            painter.setPen(Qt.black if not is_dark else QColor('#b3e1ff'))
             painter.drawText(10, 40, f"Resource: {compute_name}")
-        
         # Draw resize handle
-        handle_rect = QRectF(self.size.width(), self.size.height(), 
-                            self._resize_handle_size, self._resize_handle_size)
-        painter.setBrush(QBrush(Qt.gray))
-        painter.setPen(QPen(Qt.darkGray, 1))
+        handle_rect = QRectF(self.size.width(), self.size.height(), self._resize_handle_size, self._resize_handle_size)
+        painter.setBrush(QBrush(Qt.gray if not is_dark else QColor(120, 130, 150)))
+        painter.setPen(QPen(Qt.darkGray if not is_dark else QColor(80, 100, 120), 1))
         painter.drawRect(handle_rect)
-        painter.setPen(Qt.black)
+        painter.setPen(Qt.black if not is_dark else QColor('#e0e6ef'))
         painter.drawText(handle_rect, Qt.AlignCenter, "⇲")
 
     def mousePressEvent(self, event):
@@ -1012,10 +1019,12 @@ class GPUBox(ComponentContainer):
 
     def paint(self, painter, option, widget):
         super().paint(painter, option, widget)
+        theme = getattr(self, 'theme', getattr(self.scene(), 'theme', 'light'))
+        is_dark = theme == 'dark'
         if self.gpu_resource:
             gpu_name = getattr(self.gpu_resource, "name", str(type(self.gpu_resource).__name__))
             painter.setFont(QFont("Arial", 8))
-            painter.setPen(Qt.black)
+            painter.setPen(Qt.black if not is_dark else QColor('#b3e1ff'))
             painter.drawText(10, 45, f"GPU: {gpu_name}")
 
     def _check_resize_boundaries(self, new_width, new_height):
