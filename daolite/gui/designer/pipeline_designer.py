@@ -783,6 +783,11 @@ class PipelineDesignerApp(QMainWindow):
 
         self.undo_stack = QUndoStack(self)
 
+        # Initialize execution_method ComboBox with options
+        self.execution_method = QComboBox()
+        self.execution_method.addItems(["Python", "JSON"])
+        self.execution_method.setCurrentText("Python")  # Default to Python
+
         self._create_toolbar()
         self._create_menu()
 

@@ -319,19 +319,44 @@ class CodeGenerator:
         Returns:
             str: Python code for the compute resource
         """
+        # Check if component is in a GPU container
+        parent = getattr(component, 'parentItem', lambda: None)()
+        is_in_gpu = parent and parent.__class__.__name__.lower() == 'gpubox'
+        
+        # If component is in a GPU container, use the GPU's compute resource
+        if is_in_gpu and hasattr(parent, 'gpu_resource'):
+            resource = parent.gpu_resource
+            if resource:
+                resource_name = getattr(resource, 'name', '').lower()
+                # Check if this is a named hardware resource
+                if resource_name and resource_name in ['nvidia_a100_80gb', 'nvidia_h100_80gb', 'nvidia_rtx_4090', 'amd_mi300x']:
+                    self.import_statements.add("from daolite.compute import hardware")
+                    return f"hardware.{resource_name}()"
+                # Otherwise, create resource with explicit parameters
+                return (
+                    f"create_compute_resources("
+                    f"cores={getattr(resource, 'cores', 16)}, "
+                    f"core_frequency={getattr(resource, 'core_frequency', 2.6e9)}, "
+                    f"flops_per_cycle={getattr(resource, 'flops_per_cycle', 32)}, "
+                    f"memory_frequency={getattr(resource, 'memory_frequency', 3.2e9)}, "
+                    f"memory_width={getattr(resource, 'memory_width', 64)}, "
+                    f"memory_channels={getattr(resource, 'memory_channels', 8)}, "
+                    f"network_speed={getattr(resource, 'network_speed', 100e9)}, "
+                    f"time_in_driver={getattr(resource, 'time_in_driver', 5.0)})"
+                )
+        
+        # If component has its own compute resource, use that
         compute_resource = component.get_compute_resource()
         if compute_resource:
             c = compute_resource
             resource_name = getattr(c, 'name', '').lower() if hasattr(c, 'name') else ''
-            # Use new hardware resource loader: check for YAML-based hardware resource
-            import os
-            hardware_dir = os.path.join(os.path.dirname(__file__), '../../compute/hardware')
-            if resource_name:
-                yaml_path = os.path.join(hardware_dir, f'{resource_name}.yaml')
-                if os.path.exists(yaml_path):
-                    self.import_statements.add("from daolite.compute import hardware")
-                    return f"hardware.{resource_name}()"
-            # Fallback to explicit resource fields if not a known YAML hardware
+            # Check for common hardware names
+            if resource_name in ['amd_epyc_7763', 'amd_epyc_9654', 'intel_xeon_8480', 'intel_xeon_8462', 'amd_ryzen_7950x',
+                                'nvidia_a100_80gb', 'nvidia_h100_80gb', 'nvidia_rtx_4090', 'amd_mi300x']:
+                self.import_statements.add("from daolite.compute import hardware")
+                return f"hardware.{resource_name}()"
+            
+            # Fallback to explicit resource fields if not a known hardware
             return (
                 f"create_compute_resources("
                 f"cores={getattr(c, 'cores', 16)}, "
@@ -343,19 +368,15 @@ class CodeGenerator:
                 f"network_speed={getattr(c, 'network_speed', 100e9)}, "
                 f"time_in_driver={getattr(c, 'time_in_driver', 5.0)})"
             )
-        # Try to get parent container compute resource
-        parent = getattr(component, 'parentItem', lambda: None)()
-        if parent and hasattr(parent, 'get_compute_resource'):
-            c = parent.get_compute_resource()
+            
+        # Try to get parent compute box resource
+        if parent and parent.__class__.__name__.lower() == 'computebox' and hasattr(parent, 'compute'):
+            c = parent.compute
             if c:
                 resource_name = getattr(c, 'name', '').lower() if hasattr(c, 'name') else ''
-                import os
-                hardware_dir = os.path.join(os.path.dirname(__file__), '../../compute/hardware')
-                if resource_name:
-                    yaml_path = os.path.join(hardware_dir, f'{resource_name}.yaml')
-                    if os.path.exists(yaml_path):
-                        self.import_statements.add("from daolite.compute import hardware")
-                        return f"hardware.{resource_name}()"
+                if resource_name in ['amd_epyc_7763', 'amd_epyc_9654', 'intel_xeon_8480', 'intel_xeon_8462', 'amd_ryzen_7950x']:
+                    self.import_statements.add("from daolite.compute import hardware")
+                    return f"hardware.{resource_name}()"
                 return (
                     f"create_compute_resources("
                     f"cores={getattr(c, 'cores', 16)}, "
@@ -367,6 +388,7 @@ class CodeGenerator:
                     f"network_speed={getattr(c, 'network_speed', 100e9)}, "
                     f"time_in_driver={getattr(c, 'time_in_driver', 5.0)})"
                 )
+                
         # Fallback to default
         return (
             "create_compute_resources("
@@ -451,9 +473,20 @@ class CodeGenerator:
         # Create a name-to-component mapping
         comp_map = {comp.name: comp for comp in self.components}
         
+        # First, deduplicate any transfer components with the same name
+        unique_transfers = {}
+        for transfer in self.generated_transfer_components:
+            name = transfer["name"]
+            # Keep only the first instance of each named transfer
+            if name not in unique_transfers:
+                unique_transfers[name] = transfer
+        
+        # Use the deduplicated transfers instead
+        deduplicated_transfers = list(unique_transfers.values())
+        
         # Create synthetic ComponentBlock objects for all transfer components
         transfer_blocks = []
-        for transfer in self.generated_transfer_components:
+        for transfer in deduplicated_transfers:
             # Create a synthetic ComponentBlock for the transfer
             transfer_block = ComponentBlock(
                 ComponentType.NETWORK,
@@ -462,17 +495,12 @@ class CodeGenerator:
             # Set parameters from the transfer dict
             transfer_block.params = transfer["params"].copy()
             
-            # Instead of setting _dependencies attribute directly, 
-            # we'll use _modified_dependencies which is just for code generation
-            src_comp = transfer.get("src_comp")
-            dest_comp = transfer.get("dest_comp")
-            
-            # Set up modified dependencies for the transfer block
+            # Set up dependencies correctly from the transfer data
             transfer_block._modified_dependencies = []
-            if "dependencies" in transfer:
+            if "dependencies" in transfer and transfer["dependencies"]:
                 transfer_block._modified_dependencies = transfer["dependencies"].copy()
-            elif src_comp:
-                transfer_block._modified_dependencies = [src_comp.name]
+            elif transfer.get("src_comp"):
+                transfer_block._modified_dependencies = [transfer["src_comp"].name]
             
             # Add to the mapping - this will be used for dependency resolution
             comp_map[transfer_block.name] = transfer_block
@@ -480,6 +508,7 @@ class CodeGenerator:
             
             # Update destination component's dependencies to include this transfer
             # in the dependency graph (not in the actual component)
+            dest_comp = transfer.get("dest_comp")
             if dest_comp and dest_comp.name in comp_map:
                 # Create modified dependencies to replace source with transfer
                 if not hasattr(dest_comp, '_modified_dependencies'):
@@ -487,16 +516,13 @@ class CodeGenerator:
                     dest_comp._modified_dependencies = dest_comp.get_dependencies().copy()
                     
                 # Replace direct dependency on source with dependency on transfer
+                src_comp = transfer.get("src_comp")
                 if src_comp and src_comp.name in dest_comp._modified_dependencies:
                     dest_comp._modified_dependencies.remove(src_comp.name)
-                    # Only add if not already there
-                    if transfer_block.name not in dest_comp._modified_dependencies:
-                        dest_comp._modified_dependencies.append(transfer_block.name)
-                elif src_comp:
-                    # If dest doesn't have explicit dependency on source, add dependency on transfer anyway
-                    # This handles case where UI doesn't show the dependency but code needs it
-                    if transfer_block.name not in dest_comp._modified_dependencies:
-                        dest_comp._modified_dependencies.append(transfer_block.name)
+                
+                # Add dependency on transfer
+                if transfer_block.name not in dest_comp._modified_dependencies:
+                    dest_comp._modified_dependencies.append(transfer_block.name)
         
         # Build the dependency graph
         graph = {}
@@ -526,9 +552,12 @@ class CodeGenerator:
 
         # Check for circular dependencies
         if len(sorted_names) < len(graph):
-            # Some components couldn't be sorted
-            # Add remaining components in any order
+            # Some components couldn't be sorted - likely circular dependencies
+            # Identify unhandled components
             remaining = set(comp_map.keys()) - set(sorted_names)
+            print(f"Warning: Circular dependencies detected. Unplaced components: {', '.join(remaining)}")
+            
+            # Break the circular dependencies by adding remaining components
             sorted_names.extend(remaining)
 
         # Convert back to component objects
@@ -612,8 +641,9 @@ class CodeGenerator:
             if src_comp.component_type == ComponentType.CAMERA:
                 # Camera → anything: Always insert Network transfer
                 network_transfer = self._create_transfer_component(
-                    src_comp, dest_comp, "Network", 
-                    host_comp=dest_comp,  # Use destination for network characteristics
+                    src_comp, None if dest_is_gpu else dest_comp, "Network", 
+                    host_comp=dest_compute_box,  # Use destination for network characteristics
+                    custom_name=f"Network_Transfer_{src_comp.name}_to_{dest_comp.name}",
                     dependencies=[src_comp.name]
                 )
                 transfer_chain.append(network_transfer)
@@ -622,9 +652,10 @@ class CodeGenerator:
                 if dest_is_gpu:
                     # Network → PCIe chain for Camera → GPU
                     pcie_transfer = self._create_transfer_component(
-                        src_comp, dest_comp, "PCIe",
-                        host_comp=dest_comp,  # Use destination for PCIe characteristics
-                        dependencies=[network_transfer["name"]]  # Make PCIe depend on Network
+                        None, dest_comp, "PCIe",
+                        host_comp=dest_compute_box,  # Use destination for PCIe characteristics
+                        custom_name=f"PCIe_Transfer_{src_comp.name}_to_{dest_comp.name}",
+                        dependencies=[network_transfer["name"]]  # Make PCIe depend ONLY on Network
                     )
                     transfer_chain.append(pcie_transfer)
                 
@@ -671,7 +702,7 @@ class CodeGenerator:
                 
                 # Create Network from host1 to host2
                 network_host_to_host = self._create_transfer_component(
-                    src_compute_box, dest_compute_box, "Network",
+                    src_compute_box, dest_comp, "Network",
                     custom_name=f"Network_Transfer_{src_compute_box.name}_to_{dest_compute_box.name}",
                     dependencies=[pcie_gpu_to_host["name"]]
                 )
@@ -714,6 +745,7 @@ class CodeGenerator:
                 # Create PCIe transfer between CPU and GPU
                 pcie_transfer = self._create_transfer_component(
                     src_comp, dest_comp, "PCIe",
+                    custom_name=f"PCIe_Transfer_{src_comp.name}_to_{dest_comp.name}",
                     dependencies=[src_comp.name]
                 )
                 
@@ -721,25 +753,23 @@ class CodeGenerator:
             
             # Add all transfers in this chain to the generated transfers list
             if transfer_chain:
-                # Set up the chain dependencies correctly
-                for i, transfer in enumerate(transfer_chain):
-                    # Set destination component to depend on the last transfer in the chain
-                    if i == len(transfer_chain) - 1:
-                        # Instead of trying to modify _dependencies directly (which might not exist),
-                        # we'll use the _modified_dependencies attribute which is used only during code generation
-                        # Create _modified_dependencies attribute if it doesn't exist
-                        if not hasattr(dest_comp, '_modified_dependencies'):
-                            dest_comp._modified_dependencies = dest_comp.get_dependencies()
-                        
-                        # Remove direct dependency on source if it exists
-                        if src_comp.name in dest_comp._modified_dependencies:
-                            dest_comp._modified_dependencies.remove(src_comp.name)
-                        
-                        # Add dependency on last transfer
-                        if transfer["name"] not in dest_comp._modified_dependencies:
-                            dest_comp._modified_dependencies.append(transfer["name"])
+                # Set up the chain dependencies correctly for the destination component
+                if len(transfer_chain) > 0:
+                    last_transfer = transfer_chain[-1]
                     
-                # Store all transfers in this chain
+                    # Create _modified_dependencies attribute if it doesn't exist
+                    if not hasattr(dest_comp, '_modified_dependencies'):
+                        dest_comp._modified_dependencies = dest_comp.get_dependencies().copy()
+                    
+                    # Remove direct dependency on source if it exists
+                    if src_comp.name in dest_comp._modified_dependencies:
+                        dest_comp._modified_dependencies.remove(src_comp.name)
+                    
+                    # Add dependency on last transfer in the chain
+                    if last_transfer["name"] not in dest_comp._modified_dependencies:
+                        dest_comp._modified_dependencies.append(last_transfer["name"])
+                
+                # Add the transfers to the generated list
                 self.generated_transfer_components.extend(transfer_chain)
 
     def _create_transfer_component(self, src_comp, dest_comp, transfer_type, 
@@ -838,3 +868,20 @@ class CodeGenerator:
         }
 
         return transfer_comp
+
+    def _get_component_dependencies(self, component: ComponentBlock) -> List[str]:
+        """
+        Get a list of component names that this component depends on.
+        
+        Args:
+            component: The component block
+            
+        Returns:
+            List[str]: List of component names this component depends on
+        """
+        # Check for modified dependencies first (these account for transfer components)
+        if hasattr(component, '_modified_dependencies'):
+            return component._modified_dependencies
+        
+        # Fall back to the original dependencies from the component
+        return component.get_dependencies()
