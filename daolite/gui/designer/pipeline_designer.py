@@ -40,6 +40,7 @@ from PyQt5.QtWidgets import (
     QToolButton,
     QFrame,
     QSizePolicy,
+    QDialogButtonBox,
 )
 from PyQt5.QtCore import Qt, QRectF, QPointF, QSize
 from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QBrush, QKeySequence, QIcon
@@ -68,7 +69,7 @@ from .connection import Connection
 from .code_generator import CodeGenerator
 from .parameter_dialog import ComponentParametersDialog
 from .connection_manager import update_connection_indicators
-from .style_utils import set_app_style
+from .style_utils import set_app_style, StyledTextInputDialog
 
 # Set up logging
 logging.basicConfig(
@@ -110,6 +111,24 @@ class ShortcutHelpDialog(QDialog):
         btn = QPushButton("Close")
         btn.clicked.connect(self.accept)
         layout.addWidget(btn)
+
+
+class StyledTextInputDialog(QDialog):
+    def __init__(self, title, label, default_text="", parent=None):
+        super().__init__(parent)
+        set_app_style(self)
+        self.setWindowTitle(title)
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel(label))
+        self.line_edit = QLineEdit(default_text)
+        layout.addWidget(self.line_edit)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def getText(self):
+        return self.line_edit.text()
 
 
 class PipelineScene(QGraphicsScene):
@@ -991,9 +1010,10 @@ class PipelineDesignerApp(QMainWindow):
         if not compute_box:
             QMessageBox.information(self, "No Computer Selected", "Please select a computer box to add a GPU to.")
             return
-        name, ok = QInputDialog.getText(self, "Add GPU", "Enter GPU name:", text="GPU")
-        if not ok or not name:
+        dlg = StyledTextInputDialog("Add GPU", "Enter GPU name:", "GPU", self)
+        if not dlg.exec_():
             return
+        name = dlg.getText()
         # Prompt for GPU resource
         dlg = ResourceSelectionDialog(self)
         gpu_resource = None
@@ -1122,10 +1142,10 @@ class PipelineDesignerApp(QMainWindow):
         super().keyPressEvent(event)
 
     def _set_pipeline_title(self):
-        title, ok = QInputDialog.getText(self, "Set Pipeline Title", "Enter pipeline title:", text=self.pipeline_title)
-        if ok and title:
-            self.pipeline_title = title
-            self.statusBar().showMessage(f"Pipeline title set to: {title}", 3000)
+        dlg = StyledTextInputDialog("Set Pipeline Title", "Enter pipeline title:", self.pipeline_title, self)
+        if dlg.exec_():
+            self.pipeline_title = dlg.getText()
+            self.statusBar().showMessage(f"Pipeline title set to: {self.pipeline_title}", 3000)
 
     def _add_component(self, comp_type: ComponentType):
         """
@@ -1233,15 +1253,9 @@ class PipelineDesignerApp(QMainWindow):
         """Rename the selected component."""
         if not self.selected_component:
             return
-
-        name, ok = QInputDialog.getText(
-            self,
-            "Rename Component",
-            "Enter new name:",
-            text=self.selected_component.name,
-        )
-
-        if ok and name:
+        dlg = StyledTextInputDialog("Rename Component", "Enter new name:", self.selected_component.name, self)
+        if dlg.exec_():
+            name = dlg.getText()
             self.selected_component.name = name
             self.scene.update()
 
@@ -1358,11 +1372,10 @@ class PipelineDesignerApp(QMainWindow):
     def _save_pipeline(self):
         """Save pipeline design to a file (not the code, but the design)."""
         # Prompt for pipeline title before saving
-        title, ok = QInputDialog.getText(self, "Set Pipeline Title", "Enter pipeline title:", text=self.pipeline_title)
-        if not ok:
+        dlg = StyledTextInputDialog("Set Pipeline Title", "Enter pipeline title:", self.pipeline_title, self)
+        if not dlg.exec_():
             return  # User cancelled, do not proceed to save
-        if title:
-            self.pipeline_title = title
+        self.pipeline_title = dlg.getText()
         filename, _ = QFileDialog.getSaveFileName(
             self, "Save Pipeline Design", "", "JSON Files (*.json)"
         )

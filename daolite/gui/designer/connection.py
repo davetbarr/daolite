@@ -10,12 +10,12 @@ from PyQt5.QtCore import Qt, QPointF
 from PyQt5.QtGui import QPen, QPainterPath, QColor
 
 from .components import Port, ComponentBlock, PortType, TransferIndicator
+from .style_utils import set_app_style
 
 
 class TransferPropertiesDialog(QDialog):
     def __init__(self, parent=None, data_size=None, grouping=None):
         super().__init__(parent)
-        from daolite.gui.designer.style_utils import set_app_style
         set_app_style(self)
         self.setWindowTitle("Set Data Transfer Properties")
         self.resize(360, 140)
@@ -97,7 +97,7 @@ class Connection(QGraphicsPathItem):
         if self.end_block and self.end_block.scene() == self.scene():
             self.end_block.installSceneEventFilter(self)
             
-        # Also track parent container movements
+        # Also track parent containers
         self._track_parent_containers()
             
     def _track_parent_containers(self):

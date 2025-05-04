@@ -12,7 +12,6 @@ from PyQt5.QtWidgets import (
     QGraphicsSceneContextMenuEvent,
     QMenu,
     QAction,
-    QInputDialog,
     QColorDialog,
     QGraphicsTextItem,
     QGraphicsRectItem,
@@ -25,6 +24,7 @@ from PyQt5.QtGui import QPen, QBrush, QColor, QPainter, QFont, QPainterPath, QLi
 
 from daolite.common import ComponentType
 from daolite.compute import ComputeResources
+from .style_utils import StyledTextInputDialog
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -461,11 +461,9 @@ class ComponentBlock(QGraphicsItem):
     def _on_rename(self):
         """Handle component rename action."""
         # Show dialog to rename component
-        name, ok = QInputDialog.getText(
-            None, "Rename Component", "Enter new name:", text=self.name
-        )
-
-        if ok and name:
+        dlg = StyledTextInputDialog("Rename Component", "Enter new name:", self.name, None)
+        if dlg.exec_():
+            name = dlg.getText()
             self.name = name
             if self.scene():
                 self.scene().update()
@@ -509,7 +507,6 @@ class ComponentBlock(QGraphicsItem):
                 if connection.start_block == self or connection.end_block == self:
                     connection.disconnect()
                     self.scene().connections.remove(connection)
-                    self.scene().removeItem(connection)
 
             # Remove the component itself
             self.scene().removeItem(self)
@@ -926,10 +923,9 @@ class ComponentContainer(QGraphicsItem):
         title_rect = QRectF(0, 0, self.size.width(), 25)
         if title_rect.contains(event.pos()):
             # Show rename dialog
-            name, ok = QInputDialog.getText(
-                None, f"Rename {type(self).__name__}", "Enter new name:", text=self.name
-            )
-            if ok and name:
+            dlg = StyledTextInputDialog(f"Rename {type(self).__name__}", "Enter new name:", self.name, None)
+            if dlg.exec_():
+                name = dlg.getText()
                 self.name = name
                 if self.scene():
                     self.scene().update()
