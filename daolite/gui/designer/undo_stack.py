@@ -86,8 +86,10 @@ class RemoveComponentCommand(QUndoCommand):
         if hasattr(self.scene, "_items") and self.component in self.scene._items:
             self.scene._items.remove(self.component)
         
-        # Hide connections
+        # Properly disconnect and hide connections
         for connection in self.connections:
+            # Disconnect will remove transfer indicators
+            connection.disconnect()
             connection.setVisible(False)
             if hasattr(self.scene, "connections") and connection in self.scene.connections:
                 self.scene.connections.remove(connection)
@@ -110,11 +112,23 @@ class RemoveComponentCommand(QUndoCommand):
         if hasattr(self.scene, "_items") and self.component not in self.scene._items:
             self.scene._items.append(self.component)
         
-        # Restore connections
+        # Properly restore connections using the connect method
         for connection in self.connections:
+            # Make connection visible first
             connection.setVisible(True)
+            
+            # Use connect method to restore port connections
+            if hasattr(connection, 'connect') and connection.start_port and connection.end_port:
+                connection.connect(connection.start_block, connection.start_port, 
+                                 connection.end_block, connection.end_port)
+            
+            # Add connection back to scene's connections list if needed
             if hasattr(self.scene, "connections") and connection not in self.scene.connections:
                 self.scene.connections.append(connection)
+            
+            # Ensure transfer indicators are recreated immediately
+            if hasattr(connection, 'update_transfer_indicators'):
+                connection.update_transfer_indicators()
                 
         # Make child items visible again
         for child_data in self.child_items:
@@ -261,6 +275,10 @@ class AddConnectionCommand(QUndoCommand):
         # Add to scene's connections list if needed
         if hasattr(self.scene, "connections") and self.connection not in self.scene.connections:
             self.scene.connections.append(self.connection)
+            
+        # Ensure transfer indicators are created immediately
+        if hasattr(self.connection, 'update_transfer_indicators'):
+            self.connection.update_transfer_indicators()
 
     def undo(self):
         """Undo adding the connection by removing it from the scene."""

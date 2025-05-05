@@ -309,18 +309,37 @@ class PipelineDesignerApp(QMainWindow):
         for item in self.scene.selectedItems():
             print(f"[DEBUG] Considering item for deletion: {item}")
             if isinstance(item, ComponentBlock):
+                # First, collect all connections associated with this component
+                connections_to_remove = []
                 for connection in list(self.scene.connections):
                     if connection.start_block == item or connection.end_block == item:
-                        print(f"[DEBUG] About to disconnect connection: {connection}")
-                        connection.disconnect()
-                        print(f"[DEBUG] Disconnected connection: {connection}")
+                        connections_to_remove.append(connection)
+                
+                # Call disconnect() on each connection first
+                # This will ensure that transfer indicators are properly removed
+                for connection in connections_to_remove:
+                    print(f"[DEBUG] About to disconnect connection: {connection}")
+                    connection.disconnect()
+                    print(f"[DEBUG] Disconnected connection: {connection}")
+                
+                # After disconnection, remove connections from the scene
+                for connection in connections_to_remove:
+                    if connection in self.scene.connections:
                         self.scene.connections.remove(connection)
                         print(f"[DEBUG] Removed connection from scene.connections: {connection}")
-                        self.scene.removeItem(connection)
-                        print(f"[DEBUG] Removed connection from scene: {connection}")
-                command = RemoveComponentCommand(self.scene, item)
+                    self.scene.removeItem(connection)
+                    print(f"[DEBUG] Removed connection from scene: {connection}")
+                
+                # Now create and push the remove component command
+                command = RemoveComponentCommand(self.scene, item, connections_to_remove)
                 self.undo_stack.push(command)
                 print(f"[DEBUG] Removed item: {item}")
+            elif isinstance(item, ComputeBox) or isinstance(item, GPUBox):
+                # Handle container deletion
+                # Create a command to remove the container
+                command = RemoveComponentCommand(self.scene, item)
+                self.undo_stack.push(command)
+                print(f"[DEBUG] Removed container: {item}")
 
     def _get_default_compute_for_type(self, comp_type: ComponentType):
         print(f"[DEBUG] PipelineDesignerApp._get_default_compute_for_type called with comp_type={comp_type}")
