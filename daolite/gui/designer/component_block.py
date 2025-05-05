@@ -181,7 +181,11 @@ class ComponentBlock(QGraphicsItem):
             painter.drawEllipse(port_rect)
             painter.setFont(QFont("Segoe UI", 7))
             painter.setPen(QColor(40, 180, 60))
-            painter.drawText(int(port.position.x()) - 55, int(port.position.y()) + 2, port.label)
+            
+            # Use a proper text rectangle for right alignment of port labels
+            label_width = painter.fontMetrics().horizontalAdvance(port.label)
+            painter.drawText(int(port.position.x()) - label_width - 7, int(port.position.y()) + 2, port.label)
+            
             if hasattr(port, 'label'):
                 self.setToolTip(f"{self.name} - {port.label}")
             if port.connected_to:
@@ -193,7 +197,9 @@ class ComponentBlock(QGraphicsItem):
                         display_text = f"{connected_comps[0]} +{len(connected_comps)-1} →"
                     else:
                         display_text = f"{connected_comps[0]} →"
-                    painter.drawText(int(port.position.x()) - 55, int(port.position.y()) + 12, display_text)
+                    # Right align the connected component text as well
+                    text_width = painter.fontMetrics().horizontalAdvance(display_text)
+                    painter.drawText(int(port.position.x()) - text_width - 7, int(port.position.y()) + 12, display_text)
 
     def _get_color_for_component(self) -> QColor:
         colors = {
