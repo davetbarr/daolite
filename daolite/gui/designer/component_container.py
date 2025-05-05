@@ -3,7 +3,7 @@ ComponentContainer, ComputeBox, and GPUBox classes for the daolite pipeline desi
 """
 
 from typing import List, Optional
-from PyQt5.QtCore import Qt, QRectF
+from PyQt5.QtCore import Qt, QRectF, QPointF
 from PyQt5.QtGui import QPen, QBrush, QColor, QPainter, QFont, QPainterPath
 from PyQt5.QtWidgets import QGraphicsItem, QMenu, QAction, QColorDialog
 from daolite.compute import ComputeResources
@@ -29,7 +29,8 @@ class ComponentContainer(QGraphicsItem):
         self.box_color = QColor(100, 150, 200)  # Default color - will be overridden
         self.fill_color = QColor(220, 230, 255, 70)
         self._resizing = False
-        self._resize_handle_size = 16
+        self._resize_edge = None  # Tracks which edge/corner is being resized
+        self._edge_size = 8  # Size of the edge detection area for resizing
         self.setAcceptHoverEvents(True)
         self.setAcceptedMouseButtons(Qt.LeftButton)
 
@@ -89,7 +90,7 @@ class ComponentContainer(QGraphicsItem):
             self.scene().removeItem(self)
 
     def boundingRect(self) -> QRectF:
-        return self.size.adjusted(0, 0, self._resize_handle_size, self._resize_handle_size)
+        return self.size.adjusted(-self._edge_size, -self._edge_size, self._edge_size, self._edge_size)
 
     def paint(self, painter: QPainter, option, widget):
         theme = getattr(self, 'theme', getattr(self.scene(), 'theme', 'light'))
@@ -115,7 +116,11 @@ class ComponentContainer(QGraphicsItem):
         painter.setPen(pen)
         painter.setBrush(QBrush(fill))
         painter.drawRoundedRect(self.size, 14, 14)
-        title_rect = QRectF(0, 0, self.size.width(), 25)
+        
+        # Create the title rect at the top of the container
+        title_height = 25
+        title_rect = QRectF(0, 0, self.size.width(), title_height)
+        
         painter.setBrush(QBrush(box))
         painter.drawRoundedRect(title_rect, 12, 12)
         painter.setPen(Qt.black if not is_dark else QColor('#e0e6ef'))
@@ -127,19 +132,70 @@ class ComponentContainer(QGraphicsItem):
             painter.setFont(QFont("Arial", 8))
             painter.setPen(Qt.black if not is_dark else QColor('#b3e1ff'))
             painter.drawText(10, 40, f"Resource: {compute_name}")
-        handle_rect = QRectF(self.size.width(), self.size.height(), self._resize_handle_size, self._resize_handle_size)
-        painter.setBrush(QBrush(Qt.gray if not is_dark else QColor(120, 130, 150)))
-        painter.setPen(QPen(Qt.darkGray if not is_dark else QColor(80, 100, 120), 1))
-        painter.drawRect(handle_rect)
-        painter.setPen(Qt.black if not is_dark else QColor('#e0e6ef'))
-        painter.drawText(handle_rect, Qt.AlignCenter, "⇲")
+
+    def _get_edge_at_position(self, pos):
+        """Determine which edge or corner the cursor is near."""
+        left = pos.x() <= self._edge_size
+        right = pos.x() >= self.size.width() - self._edge_size
+        top = pos.y() <= self._edge_size
+        bottom = pos.y() >= self.size.height() - self._edge_size
+        
+        # Corners first
+        if top and left:
+            return "top-left"
+        elif top and right:
+            return "top-right"
+        elif bottom and left:
+            return "bottom-left"
+        elif bottom and right:
+            return "bottom-right"
+        # Then edges
+        elif left:
+            return "left"
+        elif right:
+            return "right" 
+        elif top:
+            return "top"
+        elif bottom:
+            return "bottom"
+        else:
+            return None
+
+    def hoverMoveEvent(self, event):
+        """Change cursor shape when hovering near edges for resizing."""
+        if self._resizing:
+            return
+            
+        edge = self._get_edge_at_position(event.pos())
+        
+        # Set cursor based on which edge/corner we're hovering over
+        if edge == "top-left" or edge == "bottom-right":
+            self.setCursor(Qt.SizeFDiagCursor)
+        elif edge == "top-right" or edge == "bottom-left":
+            self.setCursor(Qt.SizeBDiagCursor)
+        elif edge == "left" or edge == "right":
+            self.setCursor(Qt.SizeHorCursor)
+        elif edge == "top" or edge == "bottom":
+            self.setCursor(Qt.SizeVerCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
+
+    def hoverLeaveEvent(self, event):
+        """Reset cursor when mouse leaves the container."""
+        if not self._resizing:
+            self.setCursor(Qt.ArrowCursor)
+        super().hoverLeaveEvent(event)
 
     def mousePressEvent(self, event):
-        handle_rect = QRectF(self.size.width(), self.size.height(), self._resize_handle_size, self._resize_handle_size)
-        if handle_rect.contains(event.pos()):
+        edge = self._get_edge_at_position(event.pos())
+        
+        # If clicking on an edge, start resizing
+        if edge:
             self._resizing = True
+            self._resize_edge = edge
             self._resize_start = event.pos()
-            self._orig_size = self.size.size()
+            self._orig_size = QRectF(self.size)
+            self._orig_pos = self.pos()
             event.accept()
             return
             
@@ -149,18 +205,57 @@ class ComponentContainer(QGraphicsItem):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if getattr(self, '_resizing', False):
-            delta = event.pos() - self._resize_start
-            new_width = max(120, self._orig_size.width() + delta.x())
-            new_height = max(80, self._orig_size.height() + delta.y())
+        if self._resizing:
+            # Calculate how much to resize based on the edge/corner being dragged
+            dx = event.pos().x() - self._resize_start.x()
+            dy = event.pos().y() - self._resize_start.y()
+            
+            # We'll always work with width and height directly
+            # rather than rectangle coordinates
+            old_width = self._orig_size.width()
+            old_height = self._orig_size.height()
+            new_width = old_width
+            new_height = old_height
+            new_pos = QPointF(self._orig_pos)
+            
+            # Handle horizontal resizing
+            if "left" in self._resize_edge:
+                # When resizing from left edge, adjust both position and width
+                new_width = max(120, old_width - dx)  # Ensure minimum width
+                # Move the container by the difference between old and new width
+                new_pos.setX(self._orig_pos.x() - (new_width - old_width))
+            elif "right" in self._resize_edge:
+                new_width = max(120, old_width + dx)  # Ensure minimum width
+            
+            # Handle vertical resizing
+            if "top" in self._resize_edge:
+                # When resizing from top edge, adjust both position and height
+                new_height = max(80, old_height - dy)  # Ensure minimum height
+                # Move the container by the difference between old and new height
+                new_pos.setY(self._orig_pos.y() - (new_height - old_height))
+            elif "bottom" in self._resize_edge:
+                new_height = max(80, old_height + dy)  # Ensure minimum height
+            
+            # Apply the resize boundaries
             new_width, new_height = self._check_resize_boundaries(new_width, new_height)
-            self.size = QRectF(0, 0, new_width, new_height)
+            
+            # Create a new rectangle with the origin at (0,0)
+            new_rect = QRectF(0, 0, new_width, new_height)
+            
+            # Update size and position
             self.prepareGeometryChange()
+            self.size = new_rect
+            self.setPos(new_pos)
             self.update()
+            
+            # Make sure children fit within the new bounds
             self.auto_arrange_children()
             self._update_all_transfer_indicators()
+            
             event.accept()
             return
+        
+        # Handle constrained movement for GPUBox inside ComputeBox
         if isinstance(self, GPUBox) and self.parentItem():
             new_pos = self.pos() + event.pos() - event.lastPos()
             parent = self.parentItem()
@@ -175,11 +270,13 @@ class ComponentContainer(QGraphicsItem):
                 self.setPos(constrained_x, constrained_y)
                 event.accept()
                 return
+                
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if getattr(self, '_resizing', False):
+        if self._resizing:
             self._resizing = False
+            self._resize_edge = None
             self._update_all_transfer_indicators()
             event.accept()
             return
