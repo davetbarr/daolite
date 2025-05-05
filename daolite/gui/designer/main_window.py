@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QMainWindow, QComboBox, QUndoStack, QWidget, QMessageBox, QApplication, QFileDialog, QUndoView, QDockWidget
-from PyQt5.QtGui import QFont, QPainter, QKeySequence
+from PyQt5.QtGui import QFont, QPainter, QKeySequence, QCursor
 from PyQt5.QtCore import Qt
 from .scene import PipelineScene
 from .view import PipelineView
@@ -421,8 +421,8 @@ class PipelineDesignerApp(QMainWindow):
         # Use our enhanced component addition method that includes parameter inheritance
         component = self._on_component_added(comp_type)
         
-        # Set default compute resource if needed
-        if comp_type != ComponentType.NETWORK and not component.compute:
+        # Set default compute resource if needed - safely check for compute attribute
+        if comp_type != ComponentType.NETWORK and not hasattr(component, 'compute') or not component.compute:
             component.compute = self._get_default_compute_for_type(comp_type)
 
     def _configure_compute(self):
@@ -709,16 +709,15 @@ class PipelineDesignerApp(QMainWindow):
         print(f"[DEBUG] Adding component type: {component_type}")
         
         # Create component instance
-        instance_counts = self._get_component_counts()
-        count = instance_counts.get(component_type, 0) + 1
-        instance_counts[component_type] = count
+        count = self.component_counts.get(component_type, 0) + 1
+        self.component_counts[component_type] = count
         
         component = ComponentBlock(component_type, instance_number=count)
         
         # If position not specified, place at mouse position
         if pos is None:
             cursor_pos = self.mapFromGlobal(QCursor.pos())
-            scene_pos = self.mapToScene(cursor_pos)
+            scene_pos = self.view.mapToScene(cursor_pos)
             component.setPos(scene_pos.x() - component.size.width() / 2, scene_pos.y() - component.size.height() / 2)
         else:
             component.setPos(pos)
@@ -726,18 +725,16 @@ class PipelineDesignerApp(QMainWindow):
         # Add to scene
         self.scene.addItem(component)
         
-        # Add to history
-        command = AddComponentCommand(component, self.scene)
-        self.undo_stack.push(command)
-        
         # Set as selected component
         self.selected_component = component
         
         # Check if there are parameters that can be inherited from existing components
         self._check_inheritable_parameters(component)
         
-        # Add to the scene's tracking of components by type
-        self._update_component_tracking()
+        # Add to history - Fix parameter order (scene, component) and don't add command
+        # for something we've already added to the scene
+        # command = AddComponentCommand(self.scene, component)
+        # self.undo_stack.push(command)
         
         return component
     
