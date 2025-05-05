@@ -423,9 +423,13 @@ class Connection(QGraphicsPathItem):
         if self.start_port.port_type == PortType.OUTPUT:
             self.start_port.connected_to.append((end_block, end_port))
             end_port.connected_to.append((self.start_block, self.start_port))
+            # Handle parameter inheritance: Source -> Destination
+            self._handle_parameter_inheritance(self.start_block, end_block)
         else:
             end_port.connected_to.append((self.start_block, self.start_port))
             self.start_port.connected_to.append((end_block, end_port))
+            # Handle parameter inheritance: Destination -> Source
+            self._handle_parameter_inheritance(end_block, self.start_block)
 
         # Update the path
         self.update_path()
@@ -439,6 +443,39 @@ class Connection(QGraphicsPathItem):
             update_connection_indicators(self.scene(), self)
             
         return True
+        
+    def _handle_parameter_inheritance(self, source_block, target_block):
+        """Handle parameter inheritance between components when connected."""
+        if not hasattr(source_block, 'params') or not source_block.params:
+            return  # No parameters to inherit
+            
+        # Import locally to avoid circular imports
+        from .parameter_inheritance import get_inheritable_parameters
+        from .dialogs.parameter_inheritance_dialog import ParameterInheritanceDialog
+        
+        # Check for inheritable parameters
+        inheritable_params = get_inheritable_parameters(source_block, target_block)
+        if not inheritable_params:
+            return  # No inheritable parameters
+            
+        # Show inheritance dialog
+        if self.scene() and self.scene().parent():
+            app = self.scene().parent()
+            dlg = ParameterInheritanceDialog(
+                target_block.component_type, 
+                inheritable_params, 
+                [source_block.name],
+                app
+            )
+            
+            if dlg.exec_():
+                # Get selected parameters
+                selected_params = dlg.get_selected_parameters()
+                if selected_params:
+                    # Update target component parameters
+                    if not hasattr(target_block, 'params'):
+                        target_block.params = {}
+                    target_block.params.update(selected_params)
 
     def disconnect(self):
         """Remove connection between ports."""

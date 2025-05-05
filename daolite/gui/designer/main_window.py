@@ -418,15 +418,11 @@ class PipelineDesignerApp(QMainWindow):
 
     def _add_component(self, comp_type: ComponentType):
         print(f"[DEBUG] PipelineDesignerApp._add_component called with comp_type={comp_type}")
-        self.component_counts[comp_type] += 1
-        name = f"{comp_type.value}{self.component_counts[comp_type]}"
-        component = ComponentBlock(comp_type, name)
-        view_center = self.view.mapToScene(self.view.viewport().rect().center())
-        component.setPos(view_center.x() - 90, view_center.y() - 40)
-        command = AddComponentCommand(self.scene, component)
-        self.undo_stack.push(command)
-        print(f"[DEBUG] Added component: {component}")
-        if comp_type != ComponentType.NETWORK:
+        # Use our enhanced component addition method that includes parameter inheritance
+        component = self._on_component_added(comp_type)
+        
+        # Set default compute resource if needed
+        if comp_type != ComponentType.NETWORK and not component.compute:
             component.compute = self._get_default_compute_for_type(comp_type)
 
     def _configure_compute(self):
@@ -459,12 +455,92 @@ class PipelineDesignerApp(QMainWindow):
             # Get new parameters
             new_params = dlg.get_parameters()
             
-            # Create and push command
+            # Check which parameters were changed
+            changed_params = {}
+            for param_name, new_value in new_params.items():
+                old_value = old_params.get(param_name)
+                if old_value != new_value:
+                    changed_params[param_name] = new_value
+                    
+            # If parameters were changed, check for propagation
+            if changed_params:
+                self._check_parameter_propagation(self.selected_component, changed_params)
+                
+            # Create and push command to update the current component
             command = ChangeParameterCommand(self.selected_component, old_params, new_params)
             self.undo_stack.push(command)
             
             self.scene.update()
             print(f"[DEBUG] Updated params for component: {self.selected_component}")
+            
+    def _check_parameter_propagation(self, source_component, changed_params):
+        """
+        Check if any of the changed parameters should be propagated to other components.
+        
+        Args:
+            source_component: The component whose parameters were changed
+            changed_params: Dict of parameter name to new value for changed parameters
+        """
+        # Import locally to avoid circular imports
+        from .parameter_inheritance import find_components_for_parameter_propagation
+        from .dialogs.parameter_propagation_dialog import ParameterPropagationDialog
+        
+        # Get all components that might be affected by each parameter change
+        for param_name, new_value in changed_params.items():
+            print(f"[DEBUG] Checking propagation for parameter {param_name}={new_value}")
+            
+            # Find components that can inherit this parameter
+            other_components = self._get_all_components()
+            if not other_components:
+                print("[DEBUG] No other components found in scene")
+                continue
+                
+            # Exclude the source component
+            other_components = [comp for comp in other_components if comp != source_component]
+            if not other_components:
+                print("[DEBUG] No components other than source component")
+                continue
+                
+            print(f"[DEBUG] Found {len(other_components)} other components to check for propagation")
+            
+            # Find components that share this parameter
+            affected_components = find_components_for_parameter_propagation(
+                source_component, param_name, other_components
+            )
+            
+            # If there are affected components, show propagation dialog
+            if affected_components:
+                print(f"[DEBUG] Found {len(affected_components)} affected components for parameter {param_name}")
+                try:
+                    dlg = ParameterPropagationDialog(
+                        param_name,
+                        new_value,
+                        affected_components,
+                        self
+                    )
+                    
+                    if dlg.exec_():
+                        # Get selected components for propagation
+                        components_to_update = dlg.get_selected_components()
+                        
+                        # Update selected components
+                        for component, param_names in components_to_update.items():
+                            old_comp_params = component.params.copy() if hasattr(component, 'params') and component.params else {}
+                            new_comp_params = old_comp_params.copy()
+                            
+                            for target_param in param_names:
+                                new_comp_params[target_param] = new_value
+                                
+                            # Create and push command to update this component
+                            command = ChangeParameterCommand(component, old_comp_params, new_comp_params)
+                            self.undo_stack.push(command)
+                            print(f"[DEBUG] Propagated {param_name}={new_value} to {component.name}.{target_param}")
+                except Exception as e:
+                    print(f"[DEBUG] Error showing propagation dialog: {e}")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print(f"[DEBUG] No affected components found for parameter {param_name}")
 
     def _quick_save_pipeline(self):
         print("[DEBUG] PipelineDesignerApp._quick_save_pipeline called")
@@ -621,3 +697,88 @@ class PipelineDesignerApp(QMainWindow):
         print("[DEBUG] PipelineDesignerApp.toggle_history_view called")
         if hasattr(self, 'undo_history_dock'):
             self.undo_history_dock.setVisible(not self.undo_history_dock.isVisible())
+
+    def _on_component_added(self, component_type, pos=None):
+        """
+        Handle adding a new component to the scene.
+        
+        Args:
+            component_type: Type of component to add
+            pos: Optional position to place the component
+        """
+        print(f"[DEBUG] Adding component type: {component_type}")
+        
+        # Create component instance
+        instance_counts = self._get_component_counts()
+        count = instance_counts.get(component_type, 0) + 1
+        instance_counts[component_type] = count
+        
+        component = ComponentBlock(component_type, instance_number=count)
+        
+        # If position not specified, place at mouse position
+        if pos is None:
+            cursor_pos = self.mapFromGlobal(QCursor.pos())
+            scene_pos = self.mapToScene(cursor_pos)
+            component.setPos(scene_pos.x() - component.size.width() / 2, scene_pos.y() - component.size.height() / 2)
+        else:
+            component.setPos(pos)
+        
+        # Add to scene
+        self.scene.addItem(component)
+        
+        # Add to history
+        command = AddComponentCommand(component, self.scene)
+        self.undo_stack.push(command)
+        
+        # Set as selected component
+        self.selected_component = component
+        
+        # Check if there are parameters that can be inherited from existing components
+        self._check_inheritable_parameters(component)
+        
+        # Add to the scene's tracking of components by type
+        self._update_component_tracking()
+        
+        return component
+    
+    def _check_inheritable_parameters(self, component):
+        """
+        Check if there are parameters that can be inherited from existing components.
+        
+        Args:
+            component: Component to check for inheritable parameters
+        """
+        # Import locally to avoid circular imports
+        from .parameter_inheritance import get_all_inheritable_parameters
+        from .dialogs.parameter_inheritance_dialog import ParameterInheritanceDialog
+        
+        # Get all existing components
+        components = self._get_all_components()
+        if not components:
+            return
+        
+        # Filter out the current component
+        components = [comp for comp in components if comp != component]
+        if not components:
+            return
+        
+        # Check for inheritable parameters
+        inheritable_params, source_names = get_all_inheritable_parameters(components, component)
+        
+        # If there are any inheritable parameters, show the dialog
+        if inheritable_params:
+            dlg = ParameterInheritanceDialog(
+                component.component_type,
+                inheritable_params,
+                source_names,
+                self
+            )
+            
+            if dlg.exec_():
+                # Get selected parameters
+                selected_params = dlg.get_selected_parameters()
+                if selected_params:
+                    # Update component parameters
+                    if not hasattr(component, 'params'):
+                        component.params = {}
+                    component.params.update(selected_params)
