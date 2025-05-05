@@ -1,5 +1,6 @@
-from PyQt5.QtWidgets import QMainWindow, QComboBox, QUndoStack, QWidget, QMessageBox, QApplication, QFileDialog
-from PyQt5.QtGui import QFont, QPainter
+from PyQt5.QtWidgets import QMainWindow, QComboBox, QUndoStack, QWidget, QMessageBox, QApplication, QFileDialog, QUndoView, QDockWidget
+from PyQt5.QtGui import QFont, QPainter, QKeySequence
+from PyQt5.QtCore import Qt
 from .scene import PipelineScene
 from .view import PipelineView
 from .dialogs.misc_dialogs import ShortcutHelpDialog, StyledTextInputDialog
@@ -11,6 +12,11 @@ from .component_block import ComponentBlock
 from .component_container import ComputeBox, GPUBox
 from .code_generator import CodeGenerator
 from .style_utils import set_app_style, get_saved_theme, save_theme
+from .undo_stack import (
+    AddComponentCommand, RemoveComponentCommand, MoveComponentCommand, 
+    RenameComponentCommand, AddConnectionCommand, RemoveConnectionCommand, 
+    ChangeParameterCommand, CompositeCommand
+)
 from daolite.common import ComponentType
 from daolite.compute.hardware import nvidia_rtx_4090, amd_epyc_7763
 
@@ -54,10 +60,43 @@ class PipelineDesignerApp(QMainWindow):
 
     def init_ui(self):
         print("[DEBUG] PipelineDesignerApp.init_ui called")
+        # Set up undo/redo actions before creating the menu that references them
+        self._setup_undo_redo_actions()
         self._create_toolbar()
         self.create_menu()
+        self._create_undo_view()
         self.statusBar().showMessage("Ready")
         self.set_theme(get_saved_theme())
+        
+    def _create_undo_view(self):
+        """Create a dock widget with an undo history view."""
+        print("[DEBUG] PipelineDesignerApp._create_undo_view called")
+        undo_view = QUndoView(self.undo_stack)
+        dock = QDockWidget("History", self)
+        dock.setWidget(undo_view)
+        dock.setObjectName("UndoHistoryDock")
+        self.addDockWidget(Qt.RightDockWidgetArea, dock)
+        # Hide by default, can be shown from menu
+        dock.setVisible(False)
+        self.undo_history_dock = dock
+        
+    def _setup_undo_redo_actions(self):
+        """Set up actions for undo/redo with keyboard shortcuts."""
+        print("[DEBUG] PipelineDesignerApp._setup_undo_redo_actions called")
+        # Create undo action with Ctrl+Z shortcut
+        self.undo_action = self.undo_stack.createUndoAction(self, "Undo")
+        self.undo_action.setShortcut(QKeySequence.Undo)
+        
+        # Create redo action with Ctrl+Shift+Z shortcut
+        self.redo_action = self.undo_stack.createRedoAction(self, "Redo")
+        self.redo_action.setShortcut(QKeySequence.Redo)
+        
+        # Add actions to the window so shortcuts work globally
+        self.addAction(self.undo_action)
+        self.addAction(self.redo_action)
+        
+        # Connect undo stack's clean state to application state if needed
+        self.undo_stack.cleanChanged.connect(self._handle_clean_state_changed)
 
     def _create_toolbar(self):
         print("[DEBUG] PipelineDesignerApp._create_toolbar called")
@@ -86,7 +125,8 @@ class PipelineDesignerApp(QMainWindow):
             component = GPUBox()
         else:
             component = ComponentBlock()
-        self.scene.addItem(component)
+        command = AddComponentCommand(self.scene, component)
+        self.undo_stack.push(command)
         print(f"[DEBUG] Added component: {component}")
 
     def generate_code(self):
@@ -113,7 +153,8 @@ class PipelineDesignerApp(QMainWindow):
             compute_box = ComputeBox(cpu_name, compute=compute_resource, cpu_resource=cpu)
             view_center = self.view.mapToScene(self.view.viewport().rect().center())
             compute_box.setPos(view_center.x() - 160, view_center.y() - 110)
-            self.scene.addItem(compute_box)
+            command = AddComponentCommand(self.scene, compute_box)
+            self.undo_stack.push(command)
             print(f"[DEBUG] Added compute_box: {compute_box}")
             if hasattr(compute_resource, 'attached_gpus'):
                 for idx, gpu_resource in enumerate(compute_resource.attached_gpus):
@@ -121,7 +162,8 @@ class PipelineDesignerApp(QMainWindow):
                     gpu_box = GPUBox(gpu_name, gpu_resource=gpu_resource)
                     gpu_box.setPos(30, 60 + 40 * idx)
                     compute_box.add_child(gpu_box)
-                    self.scene.addItem(gpu_box)
+                    command = AddComponentCommand(self.scene, gpu_box)
+                    self.undo_stack.push(command)
                     print(f"[DEBUG] Added gpu_box: {gpu_box}")
 
     def _add_gpu_box(self):
@@ -151,7 +193,8 @@ class PipelineDesignerApp(QMainWindow):
         gpu_box.setPos(30, 60 + 40 * len(getattr(compute_box, 'child_items', [])))
         if hasattr(compute_box, 'add_child'):
             compute_box.add_child(gpu_box)
-        self.scene.addItem(gpu_box)
+        command = AddComponentCommand(self.scene, gpu_box)
+        self.undo_stack.push(command)
         print(f"[DEBUG] Added gpu_box: {gpu_box}")
 
     def load_pipeline(self, json_path):
@@ -250,9 +293,15 @@ class PipelineDesignerApp(QMainWindow):
             return
         dlg = StyledTextInputDialog("Rename Component", "Enter new name:", self.selected_component.name, self)
         if dlg.exec_():
-            name = dlg.getText()
-            print(f"[DEBUG] Renaming component {self.selected_component} to {name}")
-            self.selected_component.name = name
+            old_name = self.selected_component.name
+            new_name = dlg.getText()
+            print(f"[DEBUG] Renaming component {self.selected_component} from {old_name} to {new_name}")
+            
+            # Create and push the rename command
+            command = RenameComponentCommand(self.selected_component, old_name, new_name)
+            self.undo_stack.push(command)
+            
+            # Update the scene
             self.scene.update()
 
     def _delete_selected(self):
@@ -269,9 +318,9 @@ class PipelineDesignerApp(QMainWindow):
                         print(f"[DEBUG] Removed connection from scene.connections: {connection}")
                         self.scene.removeItem(connection)
                         print(f"[DEBUG] Removed connection from scene: {connection}")
-                print(f"[DEBUG] Removing item: {item}")
-                self.scene.removeItem(item)
-                print(f"[DEBUG] Removed item from scene: {item}")
+                command = RemoveComponentCommand(self.scene, item)
+                self.undo_stack.push(command)
+                print(f"[DEBUG] Removed item: {item}")
 
     def _get_default_compute_for_type(self, comp_type: ComponentType):
         print(f"[DEBUG] PipelineDesignerApp._get_default_compute_for_type called with comp_type={comp_type}")
@@ -355,7 +404,8 @@ class PipelineDesignerApp(QMainWindow):
         component = ComponentBlock(comp_type, name)
         view_center = self.view.mapToScene(self.view.viewport().rect().center())
         component.setPos(view_center.x() - 90, view_center.y() - 40)
-        self.scene.addItem(component)
+        command = AddComponentCommand(self.scene, component)
+        self.undo_stack.push(command)
         print(f"[DEBUG] Added component: {component}")
         if comp_type != ComponentType.NETWORK:
             component.compute = self._get_default_compute_for_type(comp_type)
@@ -378,11 +428,22 @@ class PipelineDesignerApp(QMainWindow):
                 self, "No Selection", "Please select a component to configure."
             )
             return
+        
+        # Store the original parameters
+        old_params = self.selected_component.params.copy() if self.selected_component.params else {}
+        
+        # Show dialog
         dlg = ComponentParametersDialog(
             self.selected_component.component_type, self.selected_component.params, self
         )
         if dlg.exec_():
-            self.selected_component.params = dlg.get_parameters()
+            # Get new parameters
+            new_params = dlg.get_parameters()
+            
+            # Create and push command
+            command = ChangeParameterCommand(self.selected_component, old_params, new_params)
+            self.undo_stack.push(command)
+            
             self.scene.update()
             print(f"[DEBUG] Updated params for component: {self.selected_component}")
 
@@ -420,7 +481,8 @@ class PipelineDesignerApp(QMainWindow):
                         gpu_box = GPUBox(gpu_name, gpu_resource=gpu_resource)
                         gpu_box.setPos(30, 60 + 40 * idx)
                         item.add_child(gpu_box)
-                        self.scene.addItem(gpu_box)
+                        command = AddComponentCommand(self.scene, gpu_box)
+                        self.undo_stack.push(command)
                         print(f"[DEBUG] Added GPUBox: {gpu_box}")
                 for child in item.childItems():
                     if isinstance(child, ComponentBlock):
@@ -525,3 +587,18 @@ class PipelineDesignerApp(QMainWindow):
         if dlg.exec_():
             self.pipeline_title = dlg.getText()
             self.statusBar().showMessage(f"Pipeline title set to: {self.pipeline_title}", 3000)
+
+    def _handle_clean_state_changed(self, is_clean):
+        """Handle changes in the undo stack's clean state."""
+        print(f"[DEBUG] PipelineDesignerApp._handle_clean_state_changed called with is_clean={is_clean}")
+        # Update window title to indicate if there are unsaved changes
+        title = "Pipeline Designer"
+        if not is_clean:
+            title += " *"
+        self.setWindowTitle(title)
+        
+    def toggle_history_view(self):
+        """Toggle visibility of the undo history dock."""
+        print("[DEBUG] PipelineDesignerApp.toggle_history_view called")
+        if hasattr(self, 'undo_history_dock'):
+            self.undo_history_dock.setVisible(not self.undo_history_dock.isVisible())

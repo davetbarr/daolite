@@ -142,6 +142,10 @@ class ComponentContainer(QGraphicsItem):
             self._orig_size = self.size.size()
             event.accept()
             return
+            
+        # Store the initial position for undo tracking
+        self._initial_pos = self.pos()
+        
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
@@ -179,6 +183,16 @@ class ComponentContainer(QGraphicsItem):
             self._update_all_transfer_indicators()
             event.accept()
             return
+            
+        # Handle undo tracking for movement if position changed
+        if hasattr(self, '_initial_pos') and self.pos() != self._initial_pos and self.scene() and hasattr(self.scene(), 'parent'):
+            scene_parent = self.scene().parent()
+            if hasattr(scene_parent, 'undo_stack'):
+                from .undo_stack import MoveComponentCommand
+                command = MoveComponentCommand(self, self._initial_pos, self.pos())
+                scene_parent.undo_stack.push(command)
+                print(f"[DEBUG] Created undo command for {type(self).__name__} movement")
+            
         super().mouseReleaseEvent(event)
 
     def add_child(self, item: QGraphicsItem):

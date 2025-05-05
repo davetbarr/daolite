@@ -3,7 +3,7 @@ PipelineScene for the daolite pipeline designer.
 """
 
 import logging
-from PyQt5.QtCore import Qt, QRectF
+from PyQt5.QtCore import Qt, QRectF, QPointF
 from PyQt5.QtGui import QPen, QColor, QLinearGradient
 from PyQt5.QtWidgets import QGraphicsScene
 from .component_block import ComponentBlock
@@ -33,6 +33,10 @@ class PipelineScene(QGraphicsScene):
         self.click_connect_mode = False
         self.selected_port = None
         self.selected_block = None
+        
+        # Track moving items for undo/redo
+        self.moving_items = {}  # {item: original_position}
+        self.item_moved = False
 
     def set_theme(self, theme):
         self.theme = theme
@@ -51,6 +55,14 @@ class PipelineScene(QGraphicsScene):
         """
         Handle mouse press events for interaction with the scene.
         """
+        # Store original positions of selected items for undo/redo
+        self.moving_items = {}
+        self.item_moved = False
+        
+        for item in self.selectedItems():
+            if isinstance(item, (ComponentBlock, ComputeBox, GPUBox)):
+                self.moving_items[item] = item.pos()
+                
         super().mousePressEvent(event)
         # Add logic for mouse press event handling
 
@@ -58,6 +70,13 @@ class PipelineScene(QGraphicsScene):
         """
         Handle mouse move events for interaction with the scene.
         """
+        # Check if any tracked items have moved
+        if self.moving_items:
+            for item in self.moving_items.keys():
+                if item.pos() != self.moving_items[item]:
+                    self.item_moved = True
+                    break
+                    
         super().mouseMoveEvent(event)
         # Add logic for mouse move event handling
 
@@ -65,6 +84,38 @@ class PipelineScene(QGraphicsScene):
         """
         Handle mouse release events for interaction with the scene.
         """
+        # If items have moved, create undo commands
+        if self.item_moved and self.moving_items and hasattr(self.parent(), "undo_stack"):
+            from .undo_stack import MoveComponentCommand, CompositeCommand
+            
+            if len(self.moving_items) == 1:
+                # Single item move
+                item = next(iter(self.moving_items.keys()))
+                old_pos = self.moving_items[item]
+                new_pos = item.pos()
+                
+                if old_pos != new_pos:  # Only create command if position actually changed
+                    command = MoveComponentCommand(item, old_pos, new_pos)
+                    self.parent().undo_stack.push(command)
+                    print(f"[DEBUG] Pushed MoveComponentCommand for {item}")
+            else:
+                # Multi-item move
+                composite = CompositeCommand("Move Multiple Items")
+                
+                for item, old_pos in self.moving_items.items():
+                    new_pos = item.pos()
+                    if old_pos != new_pos:  # Only add to composite if position changed
+                        command = MoveComponentCommand(item, old_pos, new_pos)
+                        composite.add_command(command)
+                
+                if composite.commands:
+                    self.parent().undo_stack.push(composite)
+                    print(f"[DEBUG] Pushed composite move command with {len(composite.commands)} items")
+            
+        # Reset tracking
+        self.moving_items = {}
+        self.item_moved = False
+        
         super().mouseReleaseEvent(event)
         # Add logic for mouse release event handling
 
@@ -78,18 +129,78 @@ class PipelineScene(QGraphicsScene):
         from PyQt5.QtCore import Qt
         # Delete selected items
         if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
-            for item in self.selectedItems():
-                # Delete connections
-                if hasattr(item, 'disconnect'):
-                    item.disconnect()
-                    if hasattr(self, 'connections') and item in self.connections:
-                        self.connections.remove(item)
-                    self.removeItem(item)
-                # Delete components/blocks/containers
-                elif hasattr(item, '_on_delete'):
-                    item._on_delete()
+            from .undo_stack import RemoveComponentCommand, RemoveConnectionCommand, CompositeCommand
+            
+            # Handle component and connection deletion with undo support
+            if hasattr(self.parent(), 'undo_stack'):
+                items_to_delete = list(self.selectedItems())
+                
+                if items_to_delete:
+                    # If multiple items, use composite command
+                    if len(items_to_delete) > 1:
+                        composite = CompositeCommand("Delete Multiple Items")
+                        
+                        for item in items_to_delete:
+                            if hasattr(item, 'disconnect'):  # Connection
+                                command = RemoveConnectionCommand(self, item)
+                                composite.add_command(command)
+                            elif isinstance(item, (ComponentBlock, ComputeBox, GPUBox)):
+                                # Find connected connections
+                                connections = []
+                                for conn in self.connections:
+                                    if (isinstance(item, ComponentBlock) and 
+                                        (conn.start_block == item or conn.end_block == item)):
+                                        connections.append(conn)
+                                    
+                                command = RemoveComponentCommand(self, item, connections)
+                                composite.add_command(command)
+                        
+                        if composite.commands:
+                            self.parent().undo_stack.push(composite)
+                            print(f"[DEBUG] Pushed composite delete command with {len(composite.commands)} items")
+                    else:
+                        # Single item deletion
+                        item = items_to_delete[0]
+                        if hasattr(item, 'disconnect'):  # Connection
+                            command = RemoveConnectionCommand(self, item)
+                            self.parent().undo_stack.push(command)
+                        elif isinstance(item, (ComponentBlock, ComputeBox, GPUBox)):
+                            # Find connected connections
+                            connections = []
+                            for conn in self.connections:
+                                if (isinstance(item, ComponentBlock) and 
+                                    (conn.start_block == item or conn.end_block == item)):
+                                    connections.append(conn)
+                                
+                            command = RemoveComponentCommand(self, item, connections)
+                            self.parent().undo_stack.push(command)
+                else:
+                    # Old deletion logic as fallback
+                    for item in self.selectedItems():
+                        # Delete connections
+                        if hasattr(item, 'disconnect'):
+                            item.disconnect()
+                            if hasattr(self, 'connections') and item in self.connections:
+                                self.connections.remove(item)
+                            self.removeItem(item)
+                        # Delete components/blocks/containers
+                        elif hasattr(item, '_on_delete'):
+                            item._on_delete()
+            else:
+                # Old deletion logic as fallback
+                for item in self.selectedItems():
+                    # Delete connections
+                    if hasattr(item, 'disconnect'):
+                        item.disconnect()
+                        if hasattr(self, 'connections') and item in self.connections:
+                            self.connections.remove(item)
+                        self.removeItem(item)
+                    # Delete components/blocks/containers
+                    elif hasattr(item, '_on_delete'):
+                        item._on_delete()
+                        
             self.update()
-        # Undo/Redo
+        # Undo/Redo handled by parent (main window)
         elif (event.matches(QKeySequence.Undo) or
               (event.modifiers() & Qt.ControlModifier and event.key() == Qt.Key_Z)):
             if hasattr(self.parent(), 'undo_stack'):
@@ -157,3 +268,33 @@ class PipelineScene(QGraphicsScene):
             load_pipeline(self, tmp_path, dummy_counts)
         finally:
             os.remove(tmp_path)
+
+    def create_connection(self, start_block, start_port, end_block, end_port):
+        """
+        Create a new connection between components with undo support.
+        
+        Args:
+            start_block: The source component block
+            start_port: The source port name
+            end_block: The destination component block
+            end_port: The destination port name
+            
+        Returns:
+            The created connection
+        """
+        from .undo_stack import AddConnectionCommand
+        
+        connection = Connection(start_block, start_port, end_block, end_port)
+        
+        # Use undo command if available
+        if hasattr(self.parent(), 'undo_stack'):
+            command = AddConnectionCommand(self, connection)
+            self.parent().undo_stack.push(command)
+            print(f"[DEBUG] Added connection with undo support: {connection}")
+        else:
+            # Fallback for backward compatibility
+            self.addItem(connection)
+            self.connections.append(connection)
+            print(f"[DEBUG] Added connection without undo support: {connection}")
+            
+        return connection

@@ -56,16 +56,19 @@ def create_menu(main_window):
 
     # Edit menu
     edit_menu = menu_bar.addMenu("&Edit")
-    undo_action = QAction("&Undo", main_window)
-    undo_action.setShortcut(QKeySequence.Undo)
-    undo_action.triggered.connect(main_window.undo_stack.undo)
-    edit_menu.addAction(undo_action)
-
-    redo_action = QAction("&Redo", main_window)
-    redo_action.setShortcut(QKeySequence.Redo)
-    redo_action.triggered.connect(main_window.undo_stack.redo)
-    edit_menu.addAction(redo_action)
-
+    # Use the application's existing undo/redo actions with shortcuts already defined
+    edit_menu.addAction(main_window.undo_action)
+    edit_menu.addAction(main_window.redo_action)
+    
+    edit_menu.addSeparator()
+    
+    # Add history view toggle
+    history_action = QAction("Show &History", main_window, checkable=True)
+    history_action.triggered.connect(main_window.toggle_history_view)
+    edit_menu.addAction(history_action)
+    
+    edit_menu.addSeparator()
+    
     rename_action = QAction("&Rename Selected", main_window)
     rename_action.setShortcut("Ctrl+R")
     rename_action.triggered.connect(main_window._rename_selected)

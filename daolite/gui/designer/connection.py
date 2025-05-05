@@ -311,6 +311,50 @@ class Connection(QGraphicsPathItem):
                 for block, port in self.end_port.connected_to
                 if port is not self.start_port
             ]
+            
+    def connect(self, start_block, start_port, end_block, end_port):
+        """
+        Re-establish a connection between ports (used for undo operations).
+        
+        Args:
+            start_block: Source component block
+            start_port: Source port
+            end_block: Destination component block
+            end_port: Destination port
+            
+        Returns:
+            bool: True if connection was successfully re-established
+        """
+        # Set connection endpoints
+        self.start_block = start_block
+        self.start_port = start_port
+        self.end_block = end_block
+        self.end_port = end_port
+        self.temp_end_point = None
+        
+        # Update the connections in both ports
+        if start_port.port_type == PortType.OUTPUT:
+            start_port.connected_to.append((end_block, end_port))
+            end_port.connected_to.append((start_block, start_port))
+        else:
+            end_port.connected_to.append((start_block, start_port))
+            start_port.connected_to.append((end_block, end_port))
+        
+        # Update the path
+        self.update_path()
+        
+        # Make connection visible again
+        self.setVisible(True)
+        
+        # Re-establish event tracking
+        if self.scene():
+            self._setup_event_tracking()
+            
+            # Recreate transfer indicators
+            from .connection_manager import update_connection_indicators
+            update_connection_indicators(self.scene(), self)
+            
+        return True
 
     def paint(self, painter, option, widget=None):
         """Custom paint method to highlight the connection if selected."""
