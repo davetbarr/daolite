@@ -339,15 +339,9 @@ class PipelineDesignerApp(QMainWindow):
 
     def _show_about(self):
         print("[DEBUG] PipelineDesignerApp._show_about called")
-        QMessageBox.about(
-            self,
-            "About daolite Pipeline Designer",
-            """<b>daolite Pipeline Designer</b><br/><br/>
-               A visual tool for designing AO pipelines with emphasis on 
-               network and multi-compute node configurations.<br/><br/>
-               Part of the daolite package for estimating latency in 
-               Adaptive Optics Real-time Control Systems.""",
-        )
+        from .dialogs import AboutDialog
+        dlg = AboutDialog(self)
+        dlg.exec_()
 
     def _show_shortcuts(self):
         print("[DEBUG] PipelineDesignerApp._show_shortcuts called")
