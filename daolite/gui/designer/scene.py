@@ -76,14 +76,146 @@ class PipelineScene(QGraphicsScene):
                 if item.pos() != self.moving_items[item]:
                     self.item_moved = True
                     break
+        
+        # Live highlight for ComputeBox/GPUBox when moving a ComponentBlock
+        selected = self.selectedItems()
+        moving_block = None
+        if len(selected) == 1 and isinstance(selected[0], ComponentBlock):
+            moving_block = selected[0]
+        
+        if moving_block and moving_block.isUnderMouse():
+            # Get the block bounding rect in scene coordinates
+            block_rect = moving_block.sceneBoundingRect()
+            highlight_box = None
+            
+            # Check all items that might be under the block
+            for item in self.items():
+                if isinstance(item, (ComputeBox, GPUBox)) and item is not moving_block:
+                    # Check if the block significantly overlaps with the container
+                    container_rect = item.sceneBoundingRect()
+                    intersection = block_rect.intersected(container_rect)
+                    
+                    # If the intersection area is more than 30% of the block area,
+                    # consider it a potential parent
+                    if (intersection.width() * intersection.height()) > 0.3 * (block_rect.width() * block_rect.height()):
+                        highlight_box = item
+                        break
+            
+            # Highlight the potential parent container
+            for item in self.items():
+                if hasattr(item, 'set_highlight'):
+                    item.set_highlight(item is highlight_box)
+        else:
+            # Clear highlights if not dragging a component
+            for item in self.items():
+                if hasattr(item, 'set_highlight'):
+                    item.set_highlight(False)
                     
         super().mouseMoveEvent(event)
-        # Add logic for mouse move event handling
 
     def mouseReleaseEvent(self, event):
         """
         Handle mouse release events for interaction with the scene.
         """
+        # Handle drag and drop of components into containers
+        selected = self.selectedItems()
+        moving_block = None
+        if len(selected) == 1 and isinstance(selected[0], ComponentBlock):
+            moving_block = selected[0]
+            
+        if moving_block and moving_block.isUnderMouse():
+            # Get the block bounding rect in scene coordinates
+            block_rect = moving_block.sceneBoundingRect()
+            highlight_box = None
+            
+            # Check all items that might be under the block
+            for item in self.items():
+                if isinstance(item, (ComputeBox, GPUBox)) and item is not moving_block:
+                    # Check if the block significantly overlaps with the container
+                    container_rect = item.sceneBoundingRect()
+                    intersection = block_rect.intersected(container_rect)
+                    
+                    # If the intersection area is more than 30% of the block area,
+                    # consider it a potential parent
+                    if (intersection.width() * intersection.height()) > 0.3 * (block_rect.width() * block_rect.height()):
+                        highlight_box = item
+                        break
+            
+            # Get the original scene position before any parent changes
+            orig_scene_pos = moving_block.scenePos()
+            
+            # Find the best candidate container (computer box or GPU)
+            parent_box = highlight_box
+            
+            # Only consider it a drop into container if we found a container
+            if parent_box:
+                # Store any existing parent for undo handling
+                old_parent = moving_block.parentItem()
+                
+                # Convert position to parent coordinates
+                local_pos = parent_box.mapFromScene(moving_block.scenePos())
+                moving_block.setParentItem(parent_box)
+                moving_block.setPos(local_pos)
+                
+                # Assign compute resource
+                if hasattr(parent_box, 'compute'):
+                    moving_block.compute = parent_box.compute
+                elif hasattr(parent_box, 'gpu_resource'):
+                    moving_block.compute = parent_box.gpu_resource
+                    
+                # Add to parent's child_items list if applicable
+                if hasattr(parent_box, 'child_items') and moving_block not in parent_box.child_items:
+                    parent_box.child_items.append(moving_block)
+                
+                # Optimize position within the new parent
+                # Check if block is outside parent bounds or overlapping with siblings
+                box_rect = QRectF(0, 0, parent_box.size.width(), parent_box.size.height())
+                block_rect = moving_block.boundingRect()
+                block_pos_rect = QRectF(moving_block.pos().x(), moving_block.pos().y(), 
+                                        block_rect.width(), block_rect.height())
+                
+                # Check if block is outside parent bounds
+                is_outside = not box_rect.contains(block_pos_rect)
+                
+                # Check for overlaps with siblings
+                is_overlapping = False
+                for sibling in parent_box.childItems():
+                    if sibling is not moving_block and isinstance(sibling, ComponentBlock):
+                        sibling_rect = QRectF(sibling.pos().x(), sibling.pos().y(),
+                                            sibling.boundingRect().width(), 
+                                            sibling.boundingRect().height())
+                        if block_pos_rect.intersects(sibling_rect):
+                            is_overlapping = True
+                            break
+                
+                # Only adjust position if necessary
+                if is_outside or is_overlapping:
+                    if hasattr(parent_box, 'snap_child_fully_inside'):
+                        parent_box.snap_child_fully_inside(moving_block)
+                
+                # Update all connections of this block
+                for connection in self.connections:
+                    if connection.start_block == moving_block or connection.end_block == moving_block:
+                        connection.update_path()
+                        connection.update_transfer_indicators()
+            else:
+                # We're moving to no parent (dragging out of a container)
+                old_parent = moving_block.parentItem()
+                if old_parent:
+                    # Preserve the exact scene position
+                    moving_block.setParentItem(None)
+                    moving_block.setPos(orig_scene_pos)
+                    
+                    # Remove from previous parent's child_items list if applicable
+                    if hasattr(old_parent, 'child_items') and moving_block in old_parent.child_items:
+                        old_parent.child_items.remove(moving_block)
+                
+                    # Update all connections
+                    for connection in self.connections:
+                        if connection.start_block == moving_block or connection.end_block == moving_block:
+                            connection.update_path()
+                            connection.update_transfer_indicators()
+        
         # If items have moved, create undo commands
         if self.item_moved and self.moving_items and hasattr(self.parent(), "undo_stack"):
             from .undo_stack import MoveComponentCommand, CompositeCommand
@@ -117,7 +249,6 @@ class PipelineScene(QGraphicsScene):
         self.item_moved = False
         
         super().mouseReleaseEvent(event)
-        # Add logic for mouse release event handling
 
     def keyPressEvent(self, event):
         """
