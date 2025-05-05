@@ -445,9 +445,10 @@ class ComponentContainer(QGraphicsItem):
 
 class ComputeBox(ComponentContainer):
     """
-    A visual container representing a computer.
-    Contains computational components and can have GPUs attached.
+    A compute box container representing a physical computer in the pipeline.
+    Can contain components or GPU boxes as children.
     """
+
     def __init__(self, name="Computer", size=None, compute=None, cpu_resource=None):
         super().__init__(name, compute, z_value=-10)
         self.box_color = QColor(30, 70, 140)
@@ -455,9 +456,85 @@ class ComputeBox(ComponentContainer):
         self.size = QRectF(0, 0, 320, 240) if size is None else size
         self.cpu_resource = cpu_resource
         self.child_items = []
+        self.setAcceptHoverEvents(True)  # Enable hover events for tooltips
 
     def set_theme(self, theme):
         super().set_theme(theme)
+
+    def _generate_detailed_tooltip(self) -> str:
+        """Generate a detailed tooltip showing compute resource information."""
+        tooltip = f"<b>{self.name}</b> (Compute Node)<br>"
+        
+        # Add compute resource information if available
+        if self.compute:
+            tooltip += "<b>Compute Resource:</b><br>"
+            # Hardware type
+            hardware_type = getattr(self.compute, "hardware", "CPU")
+            tooltip += f"• Type: {hardware_type}<br>"
+            
+            # CPU-specific information
+            if hasattr(self.compute, "cores"):
+                tooltip += f"• Cores: {self.compute.cores}<br>"
+            
+            if hasattr(self.compute, "core_frequency"):
+                freq = self.compute.core_frequency
+                tooltip += f"• Core Frequency: {freq/1e9:.2f} GHz<br>"
+                
+            if hasattr(self.compute, "flops_per_cycle"):
+                tooltip += f"• FLOPS per cycle: {self.compute.flops_per_cycle}<br>"
+
+            # Performance metrics
+            if hasattr(self.compute, "flops"):
+                flops = self.compute.flops
+                if flops >= 1e12:
+                    tooltip += f"• Performance: {flops/1e12:.2f} TFLOPS<br>"
+                else:
+                    tooltip += f"• Performance: {flops/1e9:.2f} GFLOPS<br>"
+            
+            # Memory details
+            if hasattr(self.compute, "memory_channels") and hasattr(self.compute, "memory_width") and hasattr(self.compute, "memory_frequency"):
+                tooltip += f"• Memory channels: {self.compute.memory_channels}<br>"
+                tooltip += f"• Memory width: {self.compute.memory_width} bits<br>"
+                tooltip += f"• Memory frequency: {self.compute.memory_frequency/1e9:.2f} GHz<br>"
+            
+            if hasattr(self.compute, "memory_bandwidth"):
+                mem_bw = self.compute.memory_bandwidth / 8  # Convert from bits/s to bytes/s
+                tooltip += f"• Memory Bandwidth: {mem_bw/1e9:.2f} GB/s<br>"
+            
+            # Network information
+            if hasattr(self.compute, "network_speed"):
+                net_speed = self.compute.network_speed
+                tooltip += f"• Network Speed: {net_speed/1e9:.2f} Gbps<br>"
+            
+            # Driver overhead
+            if hasattr(self.compute, "time_in_driver"):
+                tooltip += f"• Driver Overhead: {self.compute.time_in_driver} μs<br>"
+                
+            # Attached GPUs 
+            if hasattr(self.compute, "attached_gpus") and self.compute.attached_gpus:
+                tooltip += "<br><b>Attached GPUs:</b><br>"
+                for i, gpu in enumerate(self.compute.attached_gpus):
+                    name = getattr(gpu, "name", f"GPU {i+1}")
+                    tooltip += f"• {name}<br>"
+                    
+                    # Add GPU metrics if available
+                    if hasattr(gpu, "flops"):
+                        gpu_flops = gpu.flops
+                        if gpu_flops >= 1e12:
+                            tooltip += f"  - Performance: {gpu_flops/1e12:.2f} TFLOPS<br>"
+                        else:
+                            tooltip += f"  - Performance: {gpu_flops/1e9:.2f} GFLOPS<br>"
+                            
+                    if hasattr(gpu, "memory_bandwidth"):
+                        gpu_mem_bw = gpu.memory_bandwidth / 8  # Convert from bits/s to bytes/s
+                        tooltip += f"  - Memory Bandwidth: {gpu_mem_bw/1e9:.2f} GB/s<br>"
+        
+        return tooltip
+
+    def hoverEnterEvent(self, event):
+        """Show detailed tooltip on hover."""
+        self.setToolTip(self._generate_detailed_tooltip())
+        super().hoverEnterEvent(event)
 
     def paint(self, painter, option, widget):
         super().paint(painter, option, widget)
@@ -480,9 +557,80 @@ class GPUBox(ComponentContainer):
         self.fill_color = QColor(220, 255, 200, 80)
         self.gpu_resource = gpu_resource
         self.size = QRectF(0, 0, 220, 120)
+        self.setAcceptHoverEvents(True)  # Enable hover events for tooltips
 
     def set_theme(self, theme):
         super().set_theme(theme)
+
+    def _generate_detailed_tooltip(self) -> str:
+        """Generate a detailed tooltip showing GPU resource information."""
+        tooltip = f"<b>{self.name}</b> (GPU)<br>"
+        
+        # Add GPU resource information if available
+        if self.gpu_resource:
+            tooltip += "<b>GPU Resource:</b><br>"
+            
+            # Basic information
+            gpu_name = getattr(self.gpu_resource, "name", "")
+            if gpu_name:
+                tooltip += f"• Name: {gpu_name}<br>"
+                
+            # Core information if available
+            if hasattr(self.gpu_resource, "cores"):
+                tooltip += f"• Compute Units: {self.gpu_resource.cores}<br>"
+                
+            if hasattr(self.gpu_resource, "core_frequency"):
+                freq = self.gpu_resource.core_frequency
+                tooltip += f"• Core Frequency: {freq/1e9:.2f} GHz<br>"
+                
+            # Performance metrics
+            if hasattr(self.gpu_resource, "flops"):
+                flops = self.gpu_resource.flops
+                if flops >= 1e12:
+                    tooltip += f"• Performance: {flops/1e12:.2f} TFLOPS<br>"
+                else:
+                    tooltip += f"• Performance: {flops/1e9:.2f} GFLOPS<br>"
+                    
+            # Memory information
+            if hasattr(self.gpu_resource, "memory_bandwidth"):
+                mem_bw = self.gpu_resource.memory_bandwidth / 8  # Convert from bits/s to bytes/s
+                tooltip += f"• Memory Bandwidth: {mem_bw/1e9:.2f} GB/s<br>"
+                
+            # Detailed memory specs if available
+            if hasattr(self.gpu_resource, "memory_channels"):
+                tooltip += f"• Memory channels: {self.gpu_resource.memory_channels}<br>"
+                
+            if hasattr(self.gpu_resource, "memory_width"):
+                tooltip += f"• Memory width: {self.gpu_resource.memory_width} bits<br>"
+                
+            if hasattr(self.gpu_resource, "memory_frequency"):
+                mem_freq = self.gpu_resource.memory_frequency
+                tooltip += f"• Memory frequency: {mem_freq/1e9:.2f} GHz<br>"
+            
+            # Connection information
+            if hasattr(self.gpu_resource, "network_speed"):
+                net_speed = self.gpu_resource.network_speed
+                tooltip += f"• PCIe/NVLink Speed: {net_speed/1e9:.2f} Gbps<br>"
+            
+            # Driver overhead
+            if hasattr(self.gpu_resource, "time_in_driver"):
+                tooltip += f"• Driver Overhead: {self.gpu_resource.time_in_driver} μs<br>"
+                
+            # Host computer info if available
+            parent = self.parentItem()
+            if parent and hasattr(parent, "name") and hasattr(parent, "compute"):
+                tooltip += f"<br><b>Host Computer:</b> {parent.name}<br>"
+                
+                if hasattr(parent.compute, "network_speed"):
+                    parent_net_speed = parent.compute.network_speed
+                    tooltip += f"• Host Network: {parent_net_speed/1e9:.2f} Gbps<br>"
+        
+        return tooltip
+
+    def hoverEnterEvent(self, event):
+        """Show detailed tooltip on hover."""
+        self.setToolTip(self._generate_detailed_tooltip())
+        super().hoverEnterEvent(event)
 
     def paint(self, painter, option, widget):
         super().paint(painter, option, widget)

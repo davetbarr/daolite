@@ -40,6 +40,7 @@ class ComponentBlock(QGraphicsItem):
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         self.setFlag(QGraphicsItem.ItemSendsScenePositionChanges)
         self.setAcceptedMouseButtons(Qt.LeftButton)
+        self.setAcceptHoverEvents(True)  # Enable hover events for detailed tooltips
 
     def set_theme(self, theme):
         self.theme = theme
@@ -50,6 +51,87 @@ class ComponentBlock(QGraphicsItem):
         if parent and hasattr(parent, "compute") and parent.compute is not None:
             return parent.compute
         return None
+
+    def _generate_detailed_tooltip(self) -> str:
+        """Generate a detailed tooltip showing component parameters and compute resource info."""
+        tooltip = f"<b>{self.name}</b> ({self.component_type.name})<br>"
+        tooltip += f"{self._get_description()}<br><br>"
+
+        # Add parameters section if there are any
+        if self.params:
+            tooltip += "<b>Parameters:</b><br>"
+            for key, value in self.params.items():
+                # Skip large arrays
+                if hasattr(value, 'shape') and len(getattr(value, 'shape', [])) > 0:
+                    tooltip += f"• {key}: Array {getattr(value, 'shape', '')}<br>"
+                elif key == "centroid_agenda_path" and value:
+                    # Show just the filename for agenda path
+                    import os
+                    filename = os.path.basename(value)
+                    tooltip += f"• {key}: {filename}<br>"
+                else:
+                    # Format value with units if appropriate
+                    if key == "n_bits" and isinstance(value, (int, float)):
+                        # Convert bits to more readable format
+                        if value >= 1_000_000_000:
+                            tooltip += f"• {key}: {value/1_000_000_000:.2f} Gb<br>"
+                        elif value >= 1_000_000:
+                            tooltip += f"• {key}: {value/1_000_000:.2f} Mb<br>"
+                        elif value >= 1_000:
+                            tooltip += f"• {key}: {value/1_000:.2f} kb<br>"
+                        else:
+                            tooltip += f"• {key}: {value} bits<br>"
+                    else:
+                        tooltip += f"• {key}: {value}<br>"
+        
+        # Add compute resource information if available
+        compute = self.get_compute_resource()
+        if compute:
+            tooltip += "<br><b>Compute Resource:</b><br>"
+            compute_name = getattr(compute, "name", "")
+            if compute_name:
+                tooltip += f"• Name: {compute_name}<br>"
+            
+            hardware_type = getattr(compute, "hardware", "CPU")
+            tooltip += f"• Type: {hardware_type}<br>"
+            
+            # Add hardware-specific details
+            if hardware_type == "GPU":
+                # GPU-specific information
+                if hasattr(compute, "flops"):
+                    flops = compute.flops
+                    if flops >= 1e12:
+                        tooltip += f"• Performance: {flops/1e12:.2f} TFLOPS<br>"
+                    else:
+                        tooltip += f"• Performance: {flops/1e9:.2f} GFLOPS<br>"
+                
+                if hasattr(compute, "memory_bandwidth"):
+                    mem_bw = compute.memory_bandwidth / 8  # Convert from bits/s to bytes/s
+                    tooltip += f"• Memory Bandwidth: {mem_bw/1e9:.2f} GB/s<br>"
+            else:
+                # CPU-specific information
+                if hasattr(compute, "cores"):
+                    tooltip += f"• Cores: {compute.cores}<br>"
+                
+                if hasattr(compute, "core_frequency"):
+                    freq = compute.core_frequency
+                    tooltip += f"• Core Frequency: {freq/1e9:.2f} GHz<br>"
+            
+            # Network information common to both
+            if hasattr(compute, "network_speed"):
+                net_speed = compute.network_speed
+                tooltip += f"• Network Speed: {net_speed/1e9:.2f} Gbps<br>"
+            
+            # Driver overhead
+            if hasattr(compute, "time_in_driver"):
+                tooltip += f"• Driver Overhead: {compute.time_in_driver} μs<br>"
+        
+        return tooltip
+
+    def hoverEnterEvent(self, event):
+        """Show detailed tooltip on hover."""
+        self.setToolTip(self._generate_detailed_tooltip())
+        super().hoverEnterEvent(event)
 
     def _initialize_ports(self):
         if self.component_type == ComponentType.CAMERA:
@@ -163,8 +245,9 @@ class ComponentBlock(QGraphicsItem):
             painter.setFont(QFont("Segoe UI", 7))
             painter.setPen(QColor(30, 120, 220))
             painter.drawText(int(port.position.x()) + 7, int(port.position.y()) + 2, port.label)
-            if hasattr(port, 'label'):
-                self.setToolTip(f"{self.name} - {port.label}")
+            # Remove tooltip override - it conflicts with detailed tooltip
+            # if hasattr(port, 'label'):
+            #    self.setToolTip(f"{self.name} - {port.label}")
             if port.connected_to:
                 connected_comp = port.connected_to[0][0]
                 painter.setFont(QFont("Segoe UI", 7, QFont.StyleItalic))
@@ -186,8 +269,9 @@ class ComponentBlock(QGraphicsItem):
             label_width = painter.fontMetrics().horizontalAdvance(port.label)
             painter.drawText(int(port.position.x()) - label_width - 7, int(port.position.y()) + 2, port.label)
             
-            if hasattr(port, 'label'):
-                self.setToolTip(f"{self.name} - {port.label}")
+            # Remove tooltip override - it conflicts with detailed tooltip
+            # if hasattr(port, 'label'):
+            #    self.setToolTip(f"{self.name} - {port.label}")
             if port.connected_to:
                 connected_comps = [comp[0].name for comp in port.connected_to]
                 if connected_comps:
