@@ -1,13 +1,15 @@
-from PyQt5.QtWidgets import QMainWindow, QGraphicsView, QComboBox, QUndoStack, QWidget, QMessageBox, QApplication, QFileDialog
+from PyQt5.QtWidgets import QMainWindow, QComboBox, QUndoStack, QWidget, QMessageBox, QApplication, QFileDialog
 from PyQt5.QtGui import QFont, QPainter
 from .scene import PipelineScene
+from .view import PipelineView
 from .dialogs.misc_dialogs import ShortcutHelpDialog, StyledTextInputDialog
-from daolite.gui.designer.dialogs.resource_dialog import ResourceSelectionDialog
+from .dialogs.resource_dialog import ResourceSelectionDialog
+from .dialogs.parameter_dialog import ComponentParametersDialog
 from .toolbar import create_toolbar
 from .menu import create_menu
-from .components import ComponentBlock, ComputeBox, GPUBox
+from .component_block import ComponentBlock
+from .component_container import ComputeBox, GPUBox
 from .code_generator import CodeGenerator
-from .parameter_dialog import ComponentParametersDialog
 from .style_utils import set_app_style, get_saved_theme, save_theme
 from daolite.common import ComponentType
 from daolite.compute.hardware import nvidia_rtx_4090, amd_epyc_7763
@@ -33,8 +35,10 @@ class PipelineDesignerApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("Pipeline Designer")
         self.setGeometry(100, 100, 800, 600)
-        self.scene = PipelineScene()
-        self.view = QGraphicsView(self.scene, self)
+        self.scene = PipelineScene(self)  # Explicitly set parent to self
+        print(f"[DEBUG] Scene created with parent: {self.scene.parent()}")
+        # Use our custom PipelineView instead of QGraphicsView
+        self.view = PipelineView(self.scene, self)
         self.setCentralWidget(self.view)
         self.undo_stack = QUndoStack(self)
         self.execution_method = QComboBox()
@@ -44,6 +48,9 @@ class PipelineDesignerApp(QMainWindow):
         print(f"[DEBUG] json_path: {json_path}")
         if json_path:
             self.load_pipeline(json_path)
+        
+        # Initialize selected_component attribute
+        self.selected_component = None
 
     def init_ui(self):
         print("[DEBUG] PipelineDesignerApp.init_ui called")
@@ -63,7 +70,7 @@ class PipelineDesignerApp(QMainWindow):
 
     def set_theme(self, theme_name):
         print(f"[DEBUG] PipelineDesignerApp.set_theme called with theme_name={theme_name}")
-        set_app_style(theme_name)
+        set_app_style(self, theme_name)  # Pass self as the widget parameter
         save_theme(theme_name)
 
     def show_shortcut_help(self):

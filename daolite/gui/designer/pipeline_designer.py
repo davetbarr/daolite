@@ -65,8 +65,9 @@ from daolite.config import SystemConfig, CameraConfig, OpticsConfig, PipelineCon
 from daolite.gui.centroid_agenda_tool import show_centroid_agenda_tool
 from daolite.gui.designer.dialogs.misc_dialogs import ShortcutHelpDialog, StyledTextInputDialog
 
-from .components import ComponentBlock, ComputeBox, GPUBox, TransferIndicator
-from .connection import Connection
+from .component_block import ComponentBlock
+from .component_container import ComputeBox, GPUBox
+from .connection import Connection, TransferIndicator
 from .code_generator import CodeGenerator
 from .parameter_dialog import ComponentParametersDialog
 from .connection_manager import update_connection_indicators

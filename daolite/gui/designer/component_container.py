@@ -311,7 +311,9 @@ class ComponentContainer(QGraphicsItem):
     def mouseDoubleClickEvent(self, event):
         title_rect = QRectF(0, 0, self.size.width(), 25)
         if title_rect.contains(event.pos()):
-            dlg = StyledTextInputDialog(f"Rename {type(self).__name__}", "Enter new name:", self.name, None)
+            # If double-clicking on the title, show rename dialog
+            from .dialogs.misc_dialogs import StyledTextInputDialog
+            dlg = StyledTextInputDialog(f"Rename {type(self).__name__}", "Enter new name:", self.name, self.scene().parent())
             if dlg.exec_():
                 name = dlg.getText()
                 self.name = name
@@ -319,6 +321,15 @@ class ComponentContainer(QGraphicsItem):
                     self.scene().update()
             event.accept()
             return
+        else:
+            # If double-clicking elsewhere on the container, show resource dialog
+            if self.scene() and self.scene().parent():
+                app = self.scene().parent()
+                if hasattr(app, '_get_compute_resource'):
+                    app._get_compute_resource(self)
+                    event.accept()
+                    return
+                
         super().mouseDoubleClickEvent(event)
 
 class ComputeBox(ComponentContainer):

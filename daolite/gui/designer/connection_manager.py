@@ -9,7 +9,8 @@ import logging
 from PyQt5.QtCore import QPointF, QLineF
 from daolite.common import ComponentType
 
-from .components import GPUBox, ComputeBox, TransferIndicator
+from .component_container import GPUBox, ComputeBox
+from .connection import TransferIndicator
 
 # Set up logging
 logger = logging.getLogger('ConnectionManager')

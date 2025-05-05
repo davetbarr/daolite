@@ -5,12 +5,58 @@ This module provides graphical representations of connections between components
 """
 
 from typing import Optional, List, Tuple, Any
-from PyQt5.QtWidgets import QGraphicsPathItem, QMenu, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QLabel, QVBoxLayout
+from PyQt5.QtWidgets import QGraphicsPathItem, QMenu, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QLabel, QVBoxLayout, QGraphicsRectItem, QGraphicsTextItem
 from PyQt5.QtCore import Qt, QPointF
-from PyQt5.QtGui import QPen, QPainterPath, QColor
+from PyQt5.QtGui import QPen, QPainterPath, QColor, QFont, QBrush
 
-from .components import Port, ComponentBlock, PortType, TransferIndicator
+from .port import Port, PortType
+from .component_block import ComponentBlock
 from .style_utils import set_app_style
+
+
+class TransferIndicator(QGraphicsRectItem):
+    """
+    Visual indicator for network or PCIe transfers between compute resources.
+    
+    These indicators appear on connections crossing resource boundaries.
+    """
+    
+    def __init__(self, transfer_type, parent=None):
+        super().__init__(parent)
+        self.transfer_type = transfer_type  # "PCIe" or "Network"
+        self.setRect(0, 0, 24, 16)
+        self.setZValue(10)  # Above connections, above components
+        self.setCacheMode(self.DeviceCoordinateCache)
+        
+        # Create label
+        self.label = QGraphicsTextItem(self)
+        self.label.setPlainText(transfer_type)
+        self.label.setFont(QFont("Arial", 6))
+        # Center text in the indicator
+        self.label.setPos(2, 0)
+        
+        # Associate with a connection
+        self.connection = None
+        
+    def paint(self, painter, option, widget):
+        """Paint the transfer indicator with appropriate styling."""
+        # Different colors for different transfer types
+        if self.transfer_type == "PCIe":
+            brush = QBrush(QColor(255, 200, 50, 220))  # amber, more opaque
+            pen = QPen(QColor(200, 130, 0), 1.5)
+        else:  # Network
+            brush = QBrush(QColor(100, 200, 255, 220))  # light blue, more opaque
+            pen = QPen(QColor(0, 130, 200), 1.5)
+        
+        painter.setPen(pen)
+        painter.setBrush(brush)
+        painter.drawRoundedRect(self.rect(), 4, 4)
+        
+    def set_connection(self, connection):
+        """Associate this indicator with a specific connection."""
+        self.connection = connection
+        if connection:
+            connection.add_transfer_indicator(self.transfer_type, self.pos())
 
 
 class TransferPropertiesDialog(QDialog):

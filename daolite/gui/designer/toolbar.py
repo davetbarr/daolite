@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QToolBar, QToolButton, QFrame, QSizePolicy, QLabel, QMenu
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QSize
-from .components import ComponentType
+from daolite.common import ComponentType
 
 def create_toolbar(main_window):
     print('[DEBUG] Entering create_toolbar')

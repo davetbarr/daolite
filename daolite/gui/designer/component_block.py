@@ -8,7 +8,7 @@ from PyQt5.QtGui import QPen, QBrush, QColor, QPainter, QFont, QLinearGradient
 from PyQt5.QtWidgets import QGraphicsItem, QGraphicsSceneContextMenuEvent, QMenu, QAction, QStyle
 from daolite.common import ComponentType
 from daolite.compute import ComputeResources
-from .style_utils import StyledTextInputDialog
+from .dialogs.misc_dialogs import StyledTextInputDialog
 from .port import Port, PortType
 
 class ComponentBlock(QGraphicsItem):
@@ -292,7 +292,9 @@ class ComponentBlock(QGraphicsItem):
         menu.exec_(event.screenPos())
 
     def _on_rename(self):
+        print("[DEBUG] _on_rename called")
         dlg = StyledTextInputDialog("Rename Component", "Enter new name:", self.name, None)
+        print(f"[DEBUG] Created StyledTextInputDialog: {dlg}")
         if dlg.exec_():
             name = dlg.getText()
             self.name = name
@@ -300,21 +302,37 @@ class ComponentBlock(QGraphicsItem):
                 self.scene().update()
 
     def _on_configure(self):
-        if self.scene() and self.scene().parent():
+        print("[DEBUG] _on_configure called")
+        if self.scene():
+            print(f"[DEBUG] Scene: {self.scene()}")
             app = self.scene().parent()
+            print(f"[DEBUG] App (scene parent): {app}")
             if hasattr(app, "_get_compute_resource"):
+                print(f"[DEBUG] App has _get_compute_resource method")
                 app._get_compute_resource(self)
+            else:
+                print(f"[DEBUG] App does NOT have _get_compute_resource method")
+                print(f"[DEBUG] Available methods: {[m for m in dir(app) if not m.startswith('__')]}")
 
     def _on_params(self):
-        if self.scene() and self.scene().parent():
+        print("[DEBUG] _on_params called")
+        if self.scene():
+            print(f"[DEBUG] Scene: {self.scene()}")
             app = self.scene().parent()
+            print(f"[DEBUG] App (scene parent): {app}")
             prev_selected = None
             if hasattr(app, "selected_component"):
+                print(f"[DEBUG] App has selected_component: {app.selected_component}")
                 prev_selected = app.selected_component
-            if hasattr(app, "selected_component"):
                 app.selected_component = self
+            else:
+                print(f"[DEBUG] App does NOT have selected_component attribute")
             if hasattr(app, "_configure_params"):
+                print(f"[DEBUG] App has _configure_params method")
                 app._configure_params()
+            else:
+                print(f"[DEBUG] App does NOT have _configure_params method")
+                print(f"[DEBUG] Available methods: {[m for m in dir(app) if not m.startswith('__')]}")
             if hasattr(app, "selected_component"):
                 app.selected_component = prev_selected
 
@@ -343,6 +361,15 @@ class ComponentBlock(QGraphicsItem):
         return dependencies
 
     def mouseDoubleClickEvent(self, event):
+        print(f"[DEBUG] Mouse double-click at position: {event.pos()}")
+        # Check if the click is in the title area (top ~28 pixels of the component)
+        if event.pos().y() < 28:
+            print("[DEBUG] Double-click in title area - showing rename dialog")
+            self._on_rename()
+            event.accept()
+            return
+        
+        # For clicks elsewhere on the component, show parameter configuration
         if self.scene() and self.scene().parent():
             app = self.scene().parent()
             prev_selected = None

@@ -13,16 +13,17 @@ class ResourceSelectionDialog(QDialog):
     """
     def __init__(self, parent=None, existing_resource=None):
         super().__init__(parent)
-        set_app_style(self)
         self.setWindowTitle("Configure Computer Resource")
         self.resize(440, 420)
         self.cpu_name_string = None
         layout = QVBoxLayout()
+        
         # Name field
         name_layout = QFormLayout()
         self.name_edit = QLineEdit("Computer")
         name_layout.addRow("Computer Name:", self.name_edit)
         layout.addLayout(name_layout)
+        
         # --- Dynamic CPU list ---
         cpu_factories = [(name, func) for name, func in inspect.getmembers(hardware, inspect.isfunction) if name.startswith("amd_") or name.startswith("intel_")]
         self.cpu_names = []
@@ -40,6 +41,7 @@ class ResourceSelectionDialog(QDialog):
         self.cpu_combo = QComboBox()
         self.cpu_combo.addItems(self.cpu_names)
         layout.addWidget(self.cpu_combo)
+        
         # Custom CPU fields (hidden by default)
         self.cpu_custom_fields = QFormLayout()
         self.cores_edit = QLineEdit("16")
@@ -61,9 +63,11 @@ class ResourceSelectionDialog(QDialog):
         self.cpu_custom_fields_widget.setVisible(False)
         layout.addWidget(self.cpu_custom_fields_widget)
         self.cpu_name_string = self.cpu_combo.currentText()
+        
         # --- Add GPU checkbox ---
         self.add_gpu_checkbox = QCheckBox("Add GPU")
         layout.addWidget(self.add_gpu_checkbox)
+        
         # --- GPU dropdown (hidden by default) ---
         gpu_factories = [(name, func) for name, func in inspect.getmembers(hardware, inspect.isfunction) if name.startswith("nvidia_") or name.startswith("amd_mi")]
         self.gpu_names = []
@@ -81,6 +85,7 @@ class ResourceSelectionDialog(QDialog):
         self.gpu_combo.addItems(self.gpu_names)
         self.gpu_combo.setVisible(False)
         layout.addWidget(self.gpu_combo)
+        
         # Custom GPU fields (hidden by default)
         self.gpu_custom_fields = QFormLayout()
         self.gpu_flops_edit = QLineEdit("1e12")
@@ -95,6 +100,7 @@ class ResourceSelectionDialog(QDialog):
         self.gpu_custom_fields_widget.setLayout(self.gpu_custom_fields)
         self.gpu_custom_fields_widget.setVisible(False)
         layout.addWidget(self.gpu_custom_fields_widget)
+        
         # --- Button row ---
         button_layout = QHBoxLayout()
         self.add_btn = QPushButton("Add")
@@ -104,14 +110,18 @@ class ResourceSelectionDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
+        
         self.setLayout(layout)
+        
         # --- Signals ---
         self.cpu_combo.currentIndexChanged.connect(self._on_cpu_changed)
         self.add_gpu_checkbox.toggled.connect(self._on_add_gpu_toggled)
         self.gpu_combo.currentIndexChanged.connect(self._on_gpu_changed)
+        
         # State
         self.result_type = None
         self.result_index = None
+        
         # After all widgets are created, pre-populate if editing
         if existing_resource is not None:
             # Set name
@@ -159,14 +169,21 @@ class ResourceSelectionDialog(QDialog):
                     self.gpu_mem_bw_edit.setText(str(getattr(gpu, 'memory_bandwidth', '300e9')))
                     self.gpu_network_edit.setText(str(getattr(gpu, 'network_speed', '100e9')))
                     self.gpu_time_in_driver_edit.setText(str(getattr(gpu, 'time_in_driver', '8')))
+                    
+        # Apply styling after all UI elements and connections are created
+        set_app_style(self)
+
     def _on_cpu_changed(self, idx):
         self.cpu_custom_fields_widget.setVisible(idx == len(self.cpu_names) - 1)
         self.cpu_name_string = self.cpu_combo.currentText()
+
     def _on_add_gpu_toggled(self, checked):
         self.gpu_combo.setVisible(checked)
         self.gpu_custom_fields_widget.setVisible(checked and self.gpu_combo.currentIndex() == len(self.gpu_names) - 1)
+
     def _on_gpu_changed(self, idx):
         self.gpu_custom_fields_widget.setVisible(idx == len(self.gpu_names) - 1 and self.add_gpu_checkbox.isChecked())
+
     def get_selected_resource(self):
         # CPU
         cpu_idx = self.cpu_combo.currentIndex()
@@ -206,6 +223,7 @@ class ResourceSelectionDialog(QDialog):
         # Always update attached_gpus, even if empty (removes GPU if unchecked)
         cpu_resource.attached_gpus = attached_gpus
         return cpu_resource
+
     def get_name(self):
         return self.name_edit.text().strip()
 

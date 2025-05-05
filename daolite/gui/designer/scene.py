@@ -6,8 +6,9 @@ import logging
 from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QPen, QColor, QLinearGradient
 from PyQt5.QtWidgets import QGraphicsScene
-from .components import ComponentBlock, ComputeBox, GPUBox, TransferIndicator
-from .connection import Connection
+from .component_block import ComponentBlock
+from .component_container import ComputeBox, GPUBox
+from .connection import Connection, TransferIndicator
 from .connection_manager import update_connection_indicators
 
 logger = logging.getLogger('PipelineDesigner')
@@ -19,6 +20,7 @@ class PipelineScene(QGraphicsScene):
     """
     def __init__(self, parent=None, theme='light'):
         super().__init__(parent)
+        print(f"[DEBUG] Scene initialized with parent: {parent}")
         self.setSceneRect(0, 0, 2000, 1500)
         self.theme = theme
         # Currently active connection during creation
@@ -68,7 +70,8 @@ class PipelineScene(QGraphicsScene):
 
     def keyPressEvent(self, event):
         """
-        Handle key press events for deleting items, undo/redo, and zooming.
+        Handle key press events for deleting items and undo/redo.
+        Zoom functionality has been moved to PipelineView.
         """
         from PyQt5.QtWidgets import QUndoStack
         from PyQt5.QtGui import QKeySequence
@@ -95,13 +98,6 @@ class PipelineScene(QGraphicsScene):
               (event.modifiers() & Qt.ControlModifier and event.key() == Qt.Key_Y)):
             if hasattr(self.parent(), 'undo_stack'):
                 self.parent().undo_stack.redo()
-        # Zoom in/out
-        elif event.key() in (Qt.Key_Plus, Qt.Key_Equal):
-            for view in self.views():
-                view.scale(1.2, 1.2)
-        elif event.key() in (Qt.Key_Minus, Qt.Key_Underscore):
-            for view in self.views():
-                view.scale(0.8, 0.8)
         else:
             super().keyPressEvent(event)
 

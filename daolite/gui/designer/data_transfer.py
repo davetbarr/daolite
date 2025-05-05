@@ -17,7 +17,7 @@ def determine_transfer_chain(src_comp, dest_comp):
     Handles multi-step transfers such as GPU->GPU across computers.
     Returns a list of transfer types in order (e.g., ["PCIe", "Network", "PCIe"])
     """
-    from .components import GPUBox, ComputeBox
+    from .component_container import GPUBox, ComputeBox
     chain = []
     src_res = src_comp.get_compute_resource()
     dest_res = dest_comp.get_compute_resource()

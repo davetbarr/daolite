@@ -21,7 +21,8 @@ from daolite.compute.hardware import (
 )
 from daolite.compute import create_compute_resources
 
-from .components import ComputeBox, GPUBox, ComponentBlock
+from .component_block import ComponentBlock
+from .component_container import ComputeBox, GPUBox
 from .connection import Connection
 from .connection_manager import update_connection_indicators
 from .data_transfer import estimate_data_size

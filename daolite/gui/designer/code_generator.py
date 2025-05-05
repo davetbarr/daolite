@@ -7,7 +7,7 @@ This module generates executable Python code from a visual pipeline design.
 from typing import List, Dict, Tuple, Optional
 
 from daolite.common import ComponentType
-from .components import ComponentBlock
+from .component_block import ComponentBlock
 from daolite.compute import create_compute_resources
 import datetime
 

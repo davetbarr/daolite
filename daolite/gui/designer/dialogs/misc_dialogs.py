@@ -4,7 +4,6 @@ from ..style_utils import set_app_style
 class ShortcutHelpDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        set_app_style(self)
         self.setWindowTitle("Keyboard Shortcuts")
         layout = QVBoxLayout(self)
         text = QTextEdit()
@@ -32,11 +31,13 @@ class ShortcutHelpDialog(QDialog):
         btn = QPushButton("Close")
         btn.clicked.connect(self.accept)
         layout.addWidget(btn)
+        
+        # Apply styling after all UI elements are created
+        set_app_style(self)
 
 class StyledTextInputDialog(QDialog):
     def __init__(self, title, label, default_text="", parent=None):
         super().__init__(parent)
-        set_app_style(self)
         self.setWindowTitle(title)
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(label))
@@ -46,6 +47,9 @@ class StyledTextInputDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+        
+        # Apply styling after all UI elements are created
+        set_app_style(self)
 
     def getText(self):
         return self.line_edit.text()
