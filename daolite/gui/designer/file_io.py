@@ -410,24 +410,28 @@ def load_pipeline(scene, filename, component_counts):
             try:
                 # Extract the numeric part from the component name
                 name_without_prefix = name
-                prefix = comp_type.value
-                if name.startswith(prefix):
+                prefix = comp_type.name.title()  # e.g., "Camera"
+                if isinstance(name, str) and name.startswith(prefix):
                     name_without_prefix = name[len(prefix):]
-                
                 # Convert to int if possible, otherwise use 0
                 comp_number = 0
-                if name_without_prefix.isdigit():
+                if isinstance(name_without_prefix, str) and name_without_prefix.isdigit():
                     comp_number = int(name_without_prefix)
-                
-                # Update the counter
-                component_counts[comp_type] = max(
-                    component_counts[comp_type],
-                    comp_number
-                )
+                # Update the counter, ensure comp_type is a valid key
+                if comp_type in component_counts:
+                    component_counts[comp_type] = max(
+                        component_counts[comp_type],
+                        comp_number
+                    )
+                else:
+                    component_counts[comp_type] = comp_number
             except Exception as e:
                 logger.debug(f"Could not update component count from name {name}: {str(e)}")
                 # Just increment the count if we can't parse the name
-                component_counts[comp_type] += 1
+                if comp_type in component_counts:
+                    component_counts[comp_type] += 1
+                else:
+                    component_counts[comp_type] = 1
         
         # Create transfer components in the scene first
         # This ensures they exist when connections are created

@@ -63,6 +63,7 @@ from daolite.compute.hardware import (
 )
 from daolite.config import SystemConfig, CameraConfig, OpticsConfig, PipelineConfig
 from daolite.gui.centroid_agenda_tool import show_centroid_agenda_tool
+from daolite.gui.designer.dialogs.misc_dialogs import ShortcutHelpDialog, StyledTextInputDialog
 
 from .components import ComponentBlock, ComputeBox, GPUBox, TransferIndicator
 from .connection import Connection
@@ -78,57 +79,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger('PipelineDesigner')
-
-
-class ShortcutHelpDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        set_app_style(self)
-        self.setWindowTitle("Keyboard Shortcuts")
-        layout = QVBoxLayout(self)
-        text = QTextEdit()
-        text.setReadOnly(True)
-        text.setPlainText(
-            """
-            Keyboard Shortcuts:
-            ------------------
-            ⌘N / Ctrl+N: New Pipeline
-            ⌘O / Ctrl+O: Open Pipeline
-            ⌘S / Ctrl+S: Save Pipeline
-            ⌘Z / Ctrl+Z: Undo
-            ⌘Y / Ctrl+Y: Redo
-            Delete/Backspace: Delete Selected
-            ⌘Q / Ctrl+Q: Quit
-            ⌘G / Ctrl+G: Generate Code
-            ⌘R / Ctrl+R: Run Pipeline
-            ⌘E / Ctrl+E: Export Config
-            ⌘H / Ctrl+H: Show Shortcuts
-            ⌘+: Zoom In
-            ⌘-: Zoom Out
-            ⌘0: Reset Zoom
-            """)
-        layout.addWidget(text)
-        btn = QPushButton("Close")
-        btn.clicked.connect(self.accept)
-        layout.addWidget(btn)
-
-
-class StyledTextInputDialog(QDialog):
-    def __init__(self, title, label, default_text="", parent=None):
-        super().__init__(parent)
-        set_app_style(self)
-        self.setWindowTitle(title)
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(label))
-        self.line_edit = QLineEdit(default_text)
-        layout.addWidget(self.line_edit)
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-    def getText(self):
-        return self.line_edit.text()
 
 
 class PipelineScene(QGraphicsScene):

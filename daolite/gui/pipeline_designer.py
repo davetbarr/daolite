@@ -1,4 +1,4 @@
-from daolite.gui.designer.pipeline_designer import PipelineDesignerApp
+from daolite.gui.designer.main_window import PipelineDesignerApp
 import sys
 import tempfile
 import logging
@@ -8,12 +8,8 @@ logging.basicConfig(filename=logfile.name, level=logging.INFO, filemode='w')
 print(f"Logging to {logfile.name}")
 
 def main():
-    """
-    Entry point for daolite-pipeline-designer console script.
-    Accepts an optional JSON file argument from sys.argv.
-    """
     json_path = sys.argv[1] if len(sys.argv) > 1 else None
-    PipelineDesignerApp.run(json_path)
+    PipelineDesignerApp.run(json_path=json_path)
 
 if __name__ == "__main__":
     main()
