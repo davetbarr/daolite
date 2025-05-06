@@ -11,6 +11,7 @@ from daolite.common import ComponentType
 
 from .component_container import GPUBox, ComputeBox
 from .connection import TransferIndicator
+from .data_transfer import determine_transfer_type, determine_transfer_chain
 
 # Set up logging
 logger = logging.getLogger('ConnectionManager')
@@ -42,6 +43,16 @@ def update_connection_indicators(scene, connection):
     if not connection.start_port or not connection.end_port:
         logger.warning("Connection has null start_port or end_port")
         return
+    
+    # Get transfer chain to determine needed indicators
+    transfer_chain = determine_transfer_chain(src_block, dst_block)
+    
+    # Early exit for local transfers (no indicators needed)
+    if not transfer_chain:
+        logger.debug(f"No transfer indicators needed for local transfer between {src_block.name} and {dst_block.name}")
+        return
+    
+    logger.debug(f"Transfer chain between {src_block.name} and {dst_block.name}: {transfer_chain}")
     
     # Helper function to determine if a component runs on a GPU
     def is_gpu(comp, res):
@@ -550,6 +561,23 @@ def update_connection_indicators(scene, connection):
                 indicator.setPos(indicator_pos)
                 indicator.set_connection(connection)
                 transfer_indicators.append(indicator)
+    
+    # GPU -> GPU on same GPU (add a GPU-Local indicator)
+    elif src_is_gpu and dst_is_gpu and not different_computers and "GPU-Local" in transfer_chain:
+        logger.debug(f"Adding GPU-Local transfer indicator for GPU-to-GPU connection on same GPU")
+        
+        # Place at midpoint of the line
+        point = connection_line.pointAt(0.5)
+        indicator = TransferIndicator("GPU-Local")
+        indicator_pos = calculate_indicator_position(point, connection_line, "GPU-Local")
+        indicator.setPos(indicator_pos)
+        indicator.set_connection(connection)
+        transfer_indicators.append(indicator)
+    
+    # Local CPU-to-CPU on same computer - no indicator needed
+    elif not transfer_chain or (len(transfer_chain) == 1 and transfer_chain[0] == "Local"):
+        logger.debug(f"No transfer indicator needed for local RAM transfer between {src_block.name} and {dst_block.name}")
+        return
     
     # Add all the indicators to the scene
     for indicator in transfer_indicators:

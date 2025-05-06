@@ -151,11 +151,20 @@ class PipelineDesignerApp(QMainWindow):
             compute_resource = dlg.get_selected_resource()
             cpu_name = getattr(compute_resource, "name", "Computer")
             compute_box = ComputeBox(cpu_name, compute=compute_resource, cpu_resource=cpu)
+            
+            # Get the center of the current view in scene coordinates
             view_center = self.view.mapToScene(self.view.viewport().rect().center())
-            compute_box.setPos(view_center.x() - 160, view_center.y() - 110)
+            
+            # Center the compute box at this position by accounting for its size
+            compute_box.setPos(
+                view_center.x() - compute_box.size.width() / 2,
+                view_center.y() - compute_box.size.height() / 2
+            )
+            
             command = AddComponentCommand(self.scene, compute_box)
             self.undo_stack.push(command)
-            print(f"[DEBUG] Added compute_box: {compute_box}")
+            print(f"[DEBUG] Added compute_box: {compute_box} at center position: {compute_box.pos()}")
+            
             if hasattr(compute_resource, 'attached_gpus'):
                 for idx, gpu_resource in enumerate(compute_resource.attached_gpus):
                     gpu_name = getattr(gpu_resource, 'name', f"GPU{idx+1}")
@@ -189,13 +198,19 @@ class PipelineDesignerApp(QMainWindow):
         if dlg.exec_():
             gpu_resource = dlg.get_selected_resource()
         gpu_box = GPUBox(name, gpu_resource=gpu_resource)
-        # Place GPUBox at a default offset inside the ComputeBox
-        gpu_box.setPos(30, 60 + 40 * len(getattr(compute_box, 'child_items', [])))
+        
+        # Center the GPU box within the compute box
+        # Use default size of 220x120 for GPU box
+        gpu_box.setPos(
+            (compute_box.size.width() - gpu_box.size.width()) / 2,
+            (compute_box.size.height() - gpu_box.size.height()) / 2
+        )
+        
         if hasattr(compute_box, 'add_child'):
             compute_box.add_child(gpu_box)
         command = AddComponentCommand(self.scene, gpu_box)
         self.undo_stack.push(command)
-        print(f"[DEBUG] Added gpu_box: {gpu_box}")
+        print(f"[DEBUG] Added gpu_box: {gpu_box} at center position: {gpu_box.pos()}")
 
     def load_pipeline(self, json_path):
         print(f"[DEBUG] PipelineDesignerApp.load_pipeline called with json_path={json_path}")
@@ -459,7 +474,19 @@ class PipelineDesignerApp(QMainWindow):
             changed_params = {}
             for param_name, new_value in new_params.items():
                 old_value = old_params.get(param_name)
-                if old_value != new_value:
+                
+                # Special handling for numpy arrays to prevent ValueError
+                import numpy as np
+                if isinstance(old_value, np.ndarray) or isinstance(new_value, np.ndarray):
+                    # If one is array and other is not, they're different
+                    if not (isinstance(old_value, np.ndarray) and isinstance(new_value, np.ndarray)):
+                        changed_params[param_name] = new_value
+                    # If both are arrays, compare shapes first, then values if shapes match
+                    elif isinstance(old_value, np.ndarray) and isinstance(new_value, np.ndarray):
+                        if old_value.shape != new_value.shape or not np.array_equal(old_value, new_value):
+                            changed_params[param_name] = new_value
+                # Normal comparison for non-array values
+                elif old_value != new_value:
                     changed_params[param_name] = new_value
                     
             # If parameters were changed, check for propagation

@@ -10,6 +10,7 @@ from .component_block import ComponentBlock
 from .component_container import ComputeBox, GPUBox
 from .connection import Connection, TransferIndicator
 from .connection_manager import update_connection_indicators
+from .port import Port, PortType
 
 logger = logging.getLogger('PipelineDesigner')
 
@@ -62,14 +63,105 @@ class PipelineScene(QGraphicsScene):
         for item in self.selectedItems():
             if isinstance(item, (ComponentBlock, ComputeBox, GPUBox)):
                 self.moving_items[item] = item.pos()
+        
+        # Connection creation logic
+        pos = event.scenePos()
+        item = self.itemAt(pos, self.views()[0].transform())
+        port = None
+        
+        if event.button() == Qt.LeftButton:
+            if isinstance(item, ComponentBlock):
+                port = item.find_port_at_point(pos)
+                if port:
+                    # Click-to-connect logic
+                    if not self.click_connect_mode:
+                        # First click: select port
+                        self.selected_port = port
+                        self.selected_block = item
+                        self.click_connect_mode = True
+                        self.update()  # For visual feedback
+                        return
+                    else:
+                        # Second click: try to connect
+                        if port is not self.selected_port and self.selected_port is not None:
+                            # Only allow output->input or input->output
+                            if self.selected_port.port_type != port.port_type:
+                                # Always connect output to input
+                                if self.selected_port.port_type == PortType.INPUT:
+                                    src_block, src_port = item, port
+                                    dst_block, dst_port = self.selected_block, self.selected_port
+                                else:
+                                    src_block, src_port = self.selected_block, self.selected_port
+                                    dst_block, dst_port = item, port
+                                
+                                # Create connection
+                                from .connection import Connection
+                                conn = Connection(src_block, src_port)
+                                if conn.complete_connection(dst_block, dst_port):
+                                    self.addItem(conn)
+                                    self.connections.append(conn)
+                                    
+                                    # Log connection creation
+                                    print(f"[DEBUG] Connection created from '{src_block.name}' to '{dst_block.name}'")
+                                    
+                                    # Update connection indicators
+                                    from .connection_manager import update_connection_indicators
+                                    update_connection_indicators(self, conn)
+                                
+                                # Reset state
+                                self.selected_port = None
+                                self.selected_block = None
+                                self.click_connect_mode = False
+                                self.update()
+                                return
+                        
+                        # If invalid, just reset
+                        self.selected_port = None
+                        self.selected_block = None
+                        self.click_connect_mode = False
+                        self.update()
+                        return
+            
+            # Drag-to-connect fallback
+            if not self.click_connect_mode:
+                if isinstance(item, ComponentBlock):
+                    port = item.find_port_at_point(pos)
+                    if port:
+                        from .connection import Connection
+                        self.start_port = port
+                        self.start_block = item
+                        self.current_connection = Connection(item, port)
+                        self.addItem(self.current_connection)
+                        self.current_connection.set_temp_end_point(pos)
+                        return
+                        
+        # Connection selection for deletion
+        if event.button() == Qt.RightButton:
+            if isinstance(item, Connection):
+                # Show context menu for deletion
+                from PyQt5.QtWidgets import QMenu
+                menu = QMenu()
+                delete_action = menu.addAction("Delete Connection")
+                action = menu.exec_(event.screenPos())
+                if action == delete_action:
+                    item.disconnect()
+                    if item in self.connections:
+                        self.connections.remove(item)
+                    self.removeItem(item)
+                    self.update()
+                return
                 
         super().mousePressEvent(event)
-        # Add logic for mouse press event handling
 
     def mouseMoveEvent(self, event):
         """
         Handle mouse move events for interaction with the scene.
         """
+        # Update temporary connection line during drag-to-connect
+        if self.current_connection:
+            self.current_connection.set_temp_end_point(event.scenePos())
+            return
+
         # Check if any tracked items have moved
         if self.moving_items:
             for item in self.moving_items.keys():
@@ -117,6 +209,41 @@ class PipelineScene(QGraphicsScene):
         """
         Handle mouse release events for interaction with the scene.
         """
+        # Handle connection completion if we're in the middle of creating one
+        if self.current_connection and event.button() == Qt.LeftButton:
+            pos = event.scenePos()
+            item = self.itemAt(pos, self.views()[0].transform())
+            if isinstance(item, ComponentBlock):
+                port = item.find_port_at_point(pos)
+                if port and port is not self.start_port:
+                    # Complete the connection
+                    if self.current_connection.complete_connection(item, port):
+                        self.connections.append(self.current_connection)
+                        connection = self.current_connection
+                        
+                        # Get source and destination blocks and their compute resources
+                        src_block = self.start_block
+                        dst_block = item
+                        
+                        # Log the connection creation
+                        print(f"[DEBUG] Connection created from '{src_block.name}' to '{dst_block.name}'")
+                        
+                        # Update connection indicators
+                        update_connection_indicators(self, connection)
+                        
+                        self.current_connection = None
+                        self.start_port = None
+                        self.start_block = None
+                        self.update()
+                        return
+            
+            # Remove incomplete connection
+            if self.current_connection:
+                self.removeItem(self.current_connection)
+                self.current_connection = None
+                self.start_port = None
+                self.start_block = None
+
         # Handle drag and drop of components into containers
         selected = self.selectedItems()
         moving_block = None
@@ -345,10 +472,28 @@ class PipelineScene(QGraphicsScene):
 
     def drawForeground(self, painter, rect):
         """
-        Draw the foreground of the scene.
+        Draw the foreground of the scene, including visual feedback for click-to-connect.
         """
+        # Draw port highlight when in click-to-connect mode
+        if self.click_connect_mode and self.selected_port:
+            painter.save()
+            # Draw a prominent highlight around the selected port
+            painter.setPen(QPen(QColor(255, 60, 60), 3, Qt.DashLine))
+            pos = self.selected_port.get_scene_position()
+            painter.drawEllipse(pos, 12, 12)  # Draw larger circle to make it more visible
+            
+            # Add a glow effect
+            for i in range(3):
+                glow_size = 15 + i*3
+                glow_opacity = 100 - i*30
+                glow_pen = QPen(QColor(255, 100, 100, glow_opacity), 1.5, Qt.SolidLine)
+                painter.setPen(glow_pen)
+                painter.drawEllipse(pos, glow_size, glow_size)
+                
+            painter.restore()
+        
+        # Continue with normal foreground drawing
         super().drawForeground(painter, rect)
-        # Add logic for drawing the foreground
 
     def drawBackground(self, painter, rect):
         """
