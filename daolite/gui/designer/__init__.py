@@ -5,6 +5,16 @@ This module provides components for the visual design of adaptive optics pipelin
 with emphasis on network and multi-compute node configurations.
 """
 
-from .pipeline_designer import PipelineDesignerApp
+from .main_window import PipelineDesignerApp
+from .undo_stack import (
+    AddComponentCommand, RemoveComponentCommand, MoveComponentCommand, 
+    RenameComponentCommand, AddConnectionCommand, RemoveConnectionCommand, 
+    ChangeParameterCommand, CompositeCommand
+)
 
-__all__ = ["PipelineDesignerApp"]
+__all__ = [
+    "PipelineDesignerApp",
+    "AddComponentCommand", "RemoveComponentCommand", "MoveComponentCommand",
+    "RenameComponentCommand", "AddConnectionCommand", "RemoveConnectionCommand",
+    "ChangeParameterCommand", "CompositeCommand"
+]

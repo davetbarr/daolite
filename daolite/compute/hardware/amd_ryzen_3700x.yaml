@@ -1,0 +1,13 @@
+name: "AMD Ryzen 7 3700X (Zen 2)"
+description: "AMD Ryzen 7 3700X 8-Core Desktop Processor (2019)"
+
+# Hardware specifications
+hardware: "CPU"
+cores: 8
+core_frequency: 3.6e9   # 3.6 GHz base clock
+flops_per_cycle: 32     # AVX2 FLOPS per cycle
+memory_channels: 2
+memory_width: 64        # 64 bits per channel
+memory_frequency: 3200e6  # 3200 MHz DDR4
+network_speed: 10e9     # 10 Gbps network
+time_in_driver: 5        # 5μs driver overhead

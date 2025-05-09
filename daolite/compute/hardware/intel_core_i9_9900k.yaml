@@ -1,0 +1,13 @@
+name: "Intel Core i9-9900K (Coffee Lake)"
+description: "Intel Core i9-9900K 8-Core Desktop Processor (2018)"
+
+# Hardware specifications
+hardware: "CPU"
+cores: 8
+core_frequency: 3.6e9   # 3.6 GHz base clock
+flops_per_cycle: 32     # AVX2 FLOPS per cycle
+memory_channels: 2
+memory_width: 64        # 64 bits per channel
+memory_frequency: 2666e6  # 2666 MHz DDR4
+network_speed: 10e9     # 10 Gbps network
+time_in_driver: 5        # 5μs driver overhead

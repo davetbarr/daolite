@@ -5,12 +5,145 @@ This module provides graphical representations of connections between components
 """
 
 from typing import Optional, List, Tuple, Any
-from PyQt5.QtWidgets import QGraphicsPathItem, QMenu, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QLabel, QVBoxLayout
+from PyQt5.QtWidgets import QGraphicsPathItem, QMenu, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QLabel, QVBoxLayout, QGraphicsRectItem, QGraphicsTextItem
 from PyQt5.QtCore import Qt, QPointF
-from PyQt5.QtGui import QPen, QPainterPath, QColor
+from PyQt5.QtGui import QPen, QPainterPath, QColor, QFont, QBrush
 
-from .components import Port, ComponentBlock, PortType, TransferIndicator
+from .port import Port, PortType
+from .component_block import ComponentBlock
 from .style_utils import set_app_style
+
+
+class TransferIndicator(QGraphicsRectItem):
+    """
+    Visual indicator for network or PCIe transfers between compute resources.
+    
+    These indicators appear on connections crossing resource boundaries.
+    """
+    
+    def __init__(self, transfer_type, parent=None):
+        super().__init__(parent)
+        self.transfer_type = transfer_type  # "PCIe" or "Network"
+        self.setRect(0, 0, 24, 16)
+        self.setZValue(10)  # Above connections, above components
+        self.setCacheMode(self.DeviceCoordinateCache)
+        self.setAcceptHoverEvents(True)  # Enable hover events for tooltips
+        
+        # Create label
+        self.label = QGraphicsTextItem(self)
+        self.label.setPlainText(transfer_type)
+        self.label.setFont(QFont("Arial", 6))
+        # Center text in the indicator
+        self.label.setPos(2, 0)
+        
+        # Associate with a connection
+        self.connection = None
+
+    def _generate_detailed_tooltip(self) -> str:
+        """Generate a detailed tooltip showing transfer type and specs."""
+        if not self.connection:
+            return f"{self.transfer_type} Transfer"
+        
+        # Get the connection's source and destination components
+        src_comp = getattr(self.connection, 'start_block', None)
+        dst_comp = getattr(self.connection, 'end_block', None)
+        
+        if not src_comp or not dst_comp:
+            return f"{self.transfer_type} Transfer"
+            
+        # Get compute resources
+        src_compute = src_comp.get_compute_resource()
+        dst_compute = dst_comp.get_compute_resource()
+        
+        tooltip = f"<b>{self.transfer_type} Transfer</b><br>"
+        tooltip += f"From: {src_comp.name}<br>"
+        tooltip += f"To: {dst_comp.name}<br><br>"
+        
+        # Add data size information if available
+        data_size = getattr(self.connection, 'data_size', None)
+        if data_size:
+            try:
+                size_value = float(data_size)
+                # Format based on size
+                if size_value >= 1_000_000_000:
+                    tooltip += f"Data Size: {size_value/1_000_000_000:.2f} GB<br>"
+                elif size_value >= 1_000_000:
+                    tooltip += f"Data Size: {size_value/1_000_000:.2f} MB<br>"
+                elif size_value >= 1_000:
+                    tooltip += f"Data Size: {size_value/1_000:.2f} KB<br>"
+                else:
+                    tooltip += f"Data Size: {size_value} bytes<br>"
+            except (ValueError, TypeError):
+                tooltip += f"Data Size: {data_size}<br>"
+                
+        # Add grouping information if available
+        grouping = getattr(self.connection, 'grouping', None)
+        if grouping:
+            tooltip += f"Grouping: {grouping}<br><br>"
+            
+        # Add transfer-specific details
+        if self.transfer_type == "PCIe":
+            tooltip += "<b>PCIe Transfer Details:</b><br>"
+            
+            # Get PCIe generation if available from compute resources
+            if src_compute and hasattr(src_compute, 'pcie_gen'):
+                tooltip += f"• PCIe Generation: {src_compute.pcie_gen}<br>"
+            elif dst_compute and hasattr(dst_compute, 'pcie_gen'):
+                tooltip += f"• PCIe Generation: {dst_compute.pcie_gen}<br>"
+                
+            # Show bandwidth information
+            if src_compute and hasattr(src_compute, 'network_speed'):
+                tooltip += f"• Bandwidth: {src_compute.network_speed/1e9:.2f} Gbps<br>"
+            elif dst_compute and hasattr(dst_compute, 'network_speed'):
+                tooltip += f"• Bandwidth: {dst_compute.network_speed/1e9:.2f} Gbps<br>"
+                
+            # Show driver overhead
+            if src_compute and hasattr(src_compute, 'time_in_driver'):
+                tooltip += f"• Driver Overhead: {src_compute.time_in_driver} μs<br>"
+            elif dst_compute and hasattr(dst_compute, 'time_in_driver'):
+                tooltip += f"• Driver Overhead: {dst_compute.time_in_driver} μs<br>"
+            
+        elif self.transfer_type == "Network":
+            tooltip += "<b>Network Transfer Details:</b><br>"
+            
+            # Show network speeds
+            if src_compute and hasattr(src_compute, 'network_speed'):
+                tooltip += f"• Source Network: {src_compute.network_speed/1e9:.2f} Gbps<br>"
+            if dst_compute and hasattr(dst_compute, 'network_speed'):
+                tooltip += f"• Dest Network: {dst_compute.network_speed/1e9:.2f} Gbps<br>"
+                
+            # Get driver overhead
+            if src_compute and hasattr(src_compute, 'time_in_driver'):
+                tooltip += f"• Source Driver Overhead: {src_compute.time_in_driver} μs<br>"
+            if dst_compute and hasattr(dst_compute, 'time_in_driver'):
+                tooltip += f"• Dest Driver Overhead: {dst_compute.time_in_driver} μs<br>"
+        
+        return tooltip
+    
+    def hoverEnterEvent(self, event):
+        """Show detailed tooltip on hover."""
+        self.setToolTip(self._generate_detailed_tooltip())
+        super().hoverEnterEvent(event)
+
+    def paint(self, painter, option, widget):
+        """Paint the transfer indicator with appropriate styling."""
+        # Different colors for different transfer types
+        if self.transfer_type == "PCIe":
+            brush = QBrush(QColor(255, 200, 50, 220))  # amber, more opaque
+            pen = QPen(QColor(200, 130, 0), 1.5)
+        else:  # Network
+            brush = QBrush(QColor(100, 200, 255, 220))  # light blue, more opaque
+            pen = QPen(QColor(0, 130, 200), 1.5)
+        
+        painter.setPen(pen)
+        painter.setBrush(brush)
+        painter.drawRoundedRect(self.rect(), 4, 4)
+        
+    def set_connection(self, connection):
+        """Associate this indicator with a specific connection."""
+        self.connection = connection
+        if connection:
+            connection.add_transfer_indicator(self.transfer_type, self.pos())
 
 
 class TransferPropertiesDialog(QDialog):
@@ -76,9 +209,17 @@ class Connection(QGraphicsPathItem):
         )
         self.setZValue(-1)  # Below components
         self.setFlag(self.ItemIsSelectable, True)  # Make connection selectable
+        self.setAcceptHoverEvents(True)  # Enable hover events for tooltips
 
         # For tracking during creation
         self.temp_end_point: Optional[QPointF] = None
+        
+        # Data transfer properties
+        self.data_size = None
+        self.grouping = None
+        
+        # Estimate initial data size based on components
+        self._estimate_data_size()
 
         self.update_path()
 
@@ -99,44 +240,101 @@ class Connection(QGraphicsPathItem):
             
         # Also track parent containers
         self._track_parent_containers()
-            
-    def _track_parent_containers(self):
-        """Track changes in parent containers (GPU boxes, Compute boxes)."""
-        # For source component parent containers
-        if not self.scene():
+    
+    def _estimate_data_size(self):
+        """Estimate data size based on connected components if not explicitly set."""
+        if self.data_size is not None:
             return
             
-        if self.start_block:
-            parent = self.start_block.parentItem()
-            if parent and parent.scene() == self.scene():
-                parent.installSceneEventFilter(self)
-                # Also track grandparent (e.g., ComputeBox containing a GPUBox)
-                grandparent = parent.parentItem() if hasattr(parent, 'parentItem') else None
-                if grandparent and grandparent.scene() == self.scene():
-                    grandparent.installSceneEventFilter(self)
-                    
-        # For destination component parent containers  
-        if self.end_block:
-            parent = self.end_block.parentItem()
-            if parent and parent.scene() == self.scene():
-                parent.installSceneEventFilter(self)
-                # Also track grandparent (e.g., ComputeBox containing a GPUBox)
-                grandparent = parent.parentItem() if hasattr(parent, 'parentItem') else None
-                if grandparent and grandparent.scene() == self.scene():
-                    grandparent.installSceneEventFilter(self)
-        
-    def sceneEventFilter(self, watched: Any, event: Any) -> bool:
-        """Filter scene events for connected components and containers."""
-        # Check for item change events that might affect indicators
-        if event.type() in [11]:  # QEvent.GraphicsSceneMove = 11
-            # Item moved - update the connection path and indicators
-            self.update_path()
-            # Also refresh transfer indicators
-            self.update_transfer_indicators()
-            return False  # Let the event propagate
+        if not self.start_block or not self.end_block:
+            return
             
-        # Let the event propagate to other handlers
-        return False
+        try:
+            # Import locally to avoid circular import issues
+            from .data_transfer import estimate_data_size
+            estimated_size = estimate_data_size(self.start_block, self.end_block)
+            
+            if estimated_size > 0:
+                # Convert from bits to bytes
+                self.data_size = str(int(estimated_size / 8))
+        except Exception as e:
+            # Just log the error and continue - estimation is optional
+            print(f"Error estimating data size: {e}")
+    
+    def _generate_detailed_tooltip(self) -> str:
+        """Generate a detailed tooltip with connection information."""
+        if not self.start_block or not self.end_block:
+            return "Connection"
+            
+        tooltip = f"<b>Connection</b><br>"
+        tooltip += f"From: {self.start_block.name}<br>"
+        tooltip += f"To: {self.end_block.name}<br><br>"
+        
+        # Get component types for additional context
+        src_type = self.start_block.component_type.name if hasattr(self.start_block, 'component_type') else "?"
+        dst_type = self.end_block.component_type.name if hasattr(self.end_block, 'component_type') else "?"
+        tooltip += f"Source Type: {src_type}<br>"
+        tooltip += f"Destination Type: {dst_type}<br><br>"
+        
+        # Add data size information if available
+        if self.data_size:
+            try:
+                size_value = float(self.data_size)
+                # Format based on size
+                if size_value >= 1_000_000_000:
+                    tooltip += f"<b>Data Size:</b> {size_value/1_000_000_000:.2f} GB<br>"
+                elif size_value >= 1_000_000:
+                    tooltip += f"<b>Data Size:</b> {size_value/1_000_000:.2f} MB<br>"
+                elif size_value >= 1_000:
+                    tooltip += f"<b>Data Size:</b> {size_value/1_000:.2f} KB<br>"
+                else:
+                    tooltip += f"<b>Data Size:</b> {size_value} bytes<br>"
+            except (ValueError, TypeError):
+                tooltip += f"<b>Data Size:</b> {self.data_size}<br>"
+                
+        # Add grouping information if available
+        if self.grouping:
+            tooltip += f"<b>Grouping:</b> {self.grouping}<br>"
+            
+        # Add transfer indicators info if available
+        if self.transfer_indicators:
+            tooltip += "<br><b>Transfer Types:</b> "
+            types = set(indicator[0] for indicator in self.transfer_indicators)
+            tooltip += ", ".join(types)
+        
+        # Get compute resources for additional info
+        src_compute = self.start_block.get_compute_resource()
+        dst_compute = self.end_block.get_compute_resource()
+        
+        if src_compute != dst_compute and src_compute is not None and dst_compute is not None:
+            tooltip += "<br><br><b>Transfer Between Different Resources:</b>"
+            
+            # Source resource info
+            src_name = getattr(src_compute, "name", "") or "Source"
+            src_type = getattr(src_compute, "hardware", "CPU")
+            tooltip += f"<br>• {src_name} ({src_type})"
+            
+            if hasattr(src_compute, "network_speed"):
+                tooltip += f" - {src_compute.network_speed/1e9:.1f} Gbps"
+                
+            # Destination resource info
+            dst_name = getattr(dst_compute, "name", "") or "Destination" 
+            dst_type = getattr(dst_compute, "hardware", "CPU")
+            tooltip += f"<br>• {dst_name} ({dst_type})"
+            
+            if hasattr(dst_compute, "network_speed"):
+                tooltip += f" - {dst_compute.network_speed/1e9:.1f} Gbps"
+                
+        return tooltip
+    
+    def hoverEnterEvent(self, event):
+        """Show detailed tooltip on hover."""
+        self.setToolTip(self._generate_detailed_tooltip())
+        super().hoverEnterEvent(event)
+        
+    def update_tooltip(self):
+        """Update the tooltip with current connection data."""
+        self.setToolTip(self._generate_detailed_tooltip())
         
     def update_path(self):
         """Update the connection path between source and destination ports."""
@@ -225,9 +423,13 @@ class Connection(QGraphicsPathItem):
         if self.start_port.port_type == PortType.OUTPUT:
             self.start_port.connected_to.append((end_block, end_port))
             end_port.connected_to.append((self.start_block, self.start_port))
+            # Handle parameter inheritance: Source -> Destination
+            self._handle_parameter_inheritance(self.start_block, end_block)
         else:
             end_port.connected_to.append((self.start_block, self.start_port))
             self.start_port.connected_to.append((end_block, end_port))
+            # Handle parameter inheritance: Destination -> Source
+            self._handle_parameter_inheritance(end_block, self.start_block)
 
         # Update the path
         self.update_path()
@@ -241,6 +443,39 @@ class Connection(QGraphicsPathItem):
             update_connection_indicators(self.scene(), self)
             
         return True
+        
+    def _handle_parameter_inheritance(self, source_block, target_block):
+        """Handle parameter inheritance between components when connected."""
+        if not hasattr(source_block, 'params') or not source_block.params:
+            return  # No parameters to inherit
+            
+        # Import locally to avoid circular imports
+        from .parameter_inheritance import get_inheritable_parameters
+        from .dialogs.parameter_inheritance_dialog import ParameterInheritanceDialog
+        
+        # Check for inheritable parameters
+        inheritable_params = get_inheritable_parameters(source_block, target_block)
+        if not inheritable_params:
+            return  # No inheritable parameters
+            
+        # Show inheritance dialog
+        if self.scene() and self.scene().parent():
+            app = self.scene().parent()
+            dlg = ParameterInheritanceDialog(
+                target_block.component_type, 
+                inheritable_params, 
+                [source_block.name],
+                app
+            )
+            
+            if dlg.exec_():
+                # Get selected parameters
+                selected_params = dlg.get_selected_parameters()
+                if selected_params:
+                    # Update target component parameters
+                    if not hasattr(target_block, 'params'):
+                        target_block.params = {}
+                    target_block.params.update(selected_params)
 
     def disconnect(self):
         """Remove connection between ports."""
@@ -265,6 +500,50 @@ class Connection(QGraphicsPathItem):
                 for block, port in self.end_port.connected_to
                 if port is not self.start_port
             ]
+            
+    def connect(self, start_block, start_port, end_block, end_port):
+        """
+        Re-establish a connection between ports (used for undo operations).
+        
+        Args:
+            start_block: Source component block
+            start_port: Source port
+            end_block: Destination component block
+            end_port: Destination port
+            
+        Returns:
+            bool: True if connection was successfully re-established
+        """
+        # Set connection endpoints
+        self.start_block = start_block
+        self.start_port = start_port
+        self.end_block = end_block
+        self.end_port = end_port
+        self.temp_end_point = None
+        
+        # Update the connections in both ports
+        if start_port.port_type == PortType.OUTPUT:
+            start_port.connected_to.append((end_block, end_port))
+            end_port.connected_to.append((start_block, start_port))
+        else:
+            end_port.connected_to.append((start_block, start_port))
+            start_port.connected_to.append((end_block, end_port))
+        
+        # Update the path
+        self.update_path()
+        
+        # Make connection visible again
+        self.setVisible(True)
+        
+        # Re-establish event tracking
+        if self.scene():
+            self._setup_event_tracking()
+            
+            # Recreate transfer indicators
+            from .connection_manager import update_connection_indicators
+            update_connection_indicators(self.scene(), self)
+            
+        return True
 
     def paint(self, painter, option, widget=None):
         """Custom paint method to highlight the connection if selected."""
@@ -324,7 +603,8 @@ class Connection(QGraphicsPathItem):
             data_size, grouping = dlg.get_values()
             self.data_size = data_size
             self.grouping = grouping
-            self.setToolTip(f"Data Size: {data_size} bytes\nGrouping: {grouping}")
+            # Update tooltip with new values
+            self.update_tooltip()
         event.accept()
 
     def contextMenuEvent(self, event):
@@ -342,7 +622,8 @@ class Connection(QGraphicsPathItem):
                 data_size, grouping = dlg.get_values()
                 self.data_size = data_size
                 self.grouping = grouping
-                self.setToolTip(f"Data Size: {data_size} bytes\nGrouping: {grouping}")
+                # Update tooltip with new values
+                self.update_tooltip()
         elif action == delete_action:
             self.disconnect()
             if self.scene():

@@ -16,7 +16,7 @@ class ComponentType(Enum):
     RECONSTRUCTION = auto()
     CONTROL = auto()
     NETWORK = auto()
-    DM = auto()
+    DM = auto()  # Represents Deformable Mirror components (terminal pipeline points)
     OTHER = auto()
 
 

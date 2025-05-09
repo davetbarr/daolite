@@ -1,0 +1,13 @@
+name: "Intel Core i9-12900K (Alder Lake)"
+description: "Intel Core i9-12900K 16-Core Hybrid Desktop Processor (2021)"
+
+# Hardware specifications
+hardware: "CPU"
+cores: 16  # 8 P-cores + 8 E-cores
+core_frequency: 3.2e9   # 3.2 GHz base clock P-cores
+flops_per_cycle: 32     # AVX2 FLOPS per cycle
+memory_channels: 2
+memory_width: 64        # 64 bits per channel
+memory_frequency: 4800e6  # 4800 MHz DDR5
+network_speed: 10e9     # 10 Gbps network
+time_in_driver: 5        # 5μs driver overhead

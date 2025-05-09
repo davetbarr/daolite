@@ -1,0 +1,13 @@
+name: "Intel Xeon E5-2690 v4 (Broadwell)"
+description: "Intel Xeon E5-2690 v4 14-Core Server Processor (2016)"
+
+# Hardware specifications
+hardware: "CPU"
+cores: 14
+core_frequency: 2.6e9   # 2.6 GHz base clock
+flops_per_cycle: 32     # AVX2 FLOPS per cycle
+memory_channels: 4
+memory_width: 64        # 64 bits per channel
+memory_frequency: 2400e6  # 2400 MHz DDR4
+network_speed: 40e9     # 40 Gbps network
+time_in_driver: 5        # 5μs driver overhead

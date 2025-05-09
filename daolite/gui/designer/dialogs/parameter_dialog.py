@@ -22,7 +22,7 @@ from PyQt5.QtWidgets import (
 )
 
 from daolite.common import ComponentType
-from .style_utils import set_app_style
+from ..style_utils import set_app_style
 
 
 class ComponentParametersDialog(QDialog):
@@ -48,7 +48,6 @@ class ComponentParametersDialog(QDialog):
             parent: Parent widget
         """
         super().__init__(parent)
-        set_app_style(self)
         self.component_type = component_type
         self.current_params = current_params or {}
         self.param_widgets = {}
@@ -80,6 +79,9 @@ class ComponentParametersDialog(QDialog):
         layout.addLayout(button_layout)
 
         self.setLayout(layout)
+        
+        # Apply styling after all UI elements are created
+        set_app_style(self)
 
     def _add_component_params(self, form_layout: QFormLayout):
         """
@@ -97,7 +99,39 @@ class ComponentParametersDialog(QDialog):
             ComponentType.CALIBRATION: ("daolite.pipeline.calibration", "PixelCalibration"),
             ComponentType.CONTROL: ("daolite.pipeline.control", "FullFrameControl"),
             ComponentType.NETWORK: ("daolite.utils.network", "network_transfer"),
+            # Add DeformableMirror components
+            ComponentType.DM: ("daolite.simulation.deformable_mirror", "StandardDM"),
         }
+        
+        # Special handling for DM components - allow selection of different DM types
+        if self.component_type == ComponentType.DM:
+            dm_layout = QHBoxLayout()
+            dm_type_label = QLabel("DM Type:")
+            dm_type_combo = QComboBox()
+            dm_type_combo.addItems(["StandardDM", "DMController", "WavefrontCorrector"])
+            
+            # Set current value if available
+            current_dm_type = self.current_params.get("dm_type", "StandardDM")
+            dm_type_combo.setCurrentText(current_dm_type)
+            
+            # Connect to function that updates parameter fields
+            dm_type_combo.currentTextChanged.connect(lambda text: self._update_dm_params(text, form_layout))
+            
+            dm_layout.addWidget(dm_type_label)
+            dm_layout.addWidget(dm_type_combo)
+            form_layout.addRow("", dm_layout)
+            
+            # Store the combo box for later retrieval
+            self.param_widgets["dm_type"] = dm_type_combo
+            
+            # Update import path based on selected DM type
+            dm_type = dm_type_combo.currentText()
+            func_map[ComponentType.DM] = ("daolite.simulation.deformable_mirror", dm_type)
+            
+            # Call the update function to initially populate the form
+            self._update_dm_params(dm_type, form_layout)
+            return
+            
         func_info = func_map.get(self.component_type)
         if not func_info:
             return  # Unknown component type
@@ -135,6 +169,62 @@ class ComponentParametersDialog(QDialog):
             else:
                 default = str(param.default) if param.default is not inspect.Parameter.empty else ""
                 self._add_numeric_param(form_layout, param.name, param.name.replace("_", " ").title(), default=default)
+    
+    def _update_dm_params(self, dm_type, form_layout):
+        """
+        Update parameter fields based on selected DM type
+        
+        Args:
+            dm_type: The type of DM component (StandardDM, DMController, WavefrontCorrector)
+            form_layout: Form layout to update
+        """
+        import inspect
+        import importlib
+        
+        # Clear existing fields (except the dm_type combo box)
+        for name, widget in list(self.param_widgets.items()):
+            if name != "dm_type" and widget.parent() == self:
+                widget.deleteLater()
+                del self.param_widgets[name]
+        
+        # Get the parameters for the selected DM type
+        try:
+            module = importlib.import_module("daolite.simulation.deformable_mirror")
+            func = getattr(module, dm_type)
+            
+            # Add actuator parameters for all DM types
+            n_actuators_value = self.current_params.get("n_actuators", "5000")
+            self._add_numeric_param(form_layout, "n_actuators", "Number of Actuators", default=str(n_actuators_value))
+            
+            bits_per_actuator_value = self.current_params.get("bits_per_actuator", "16") 
+            self._add_numeric_param(form_layout, "bits_per_actuator", "Bits per Actuator", default=str(bits_per_actuator_value))
+            
+            # Add parameter descriptions based on DM type
+            if dm_type == "StandardDM":
+                desc = "Basic deformable mirror that tracks network transfer times for commands"
+            elif dm_type == "DMController":
+                desc = "DM controller that tracks network transfer times for commands"
+            elif dm_type == "WavefrontCorrector":
+                desc = "Wavefront corrector that tracks network transfer times for commands"
+            else:
+                desc = "Deformable mirror endpoint component"
+                
+            description_label = QLabel(desc)
+            description_label.setWordWrap(True)
+            description_label.setStyleSheet("font-style: italic; color: #666;")
+            form_layout.addRow("", description_label)
+            
+            # Add a note about PCIe transfers
+            note_label = QLabel("Note: If the preceding component is on a GPU, PCIe transfer timing will be included in the simulation.")
+            note_label.setWordWrap(True)
+            note_label.setStyleSheet("font-style: italic; color: #3366cc;")
+            form_layout.addRow("", note_label)
+            
+        except Exception as e:
+            print(f"Error loading DM parameters: {e}")
+            error_label = QLabel(f"Error loading parameters for {dm_type}")
+            error_label.setStyleSheet("color: red;")
+            form_layout.addRow("", error_label)
 
     def _add_numeric_param(
         self,

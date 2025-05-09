@@ -1,0 +1,9 @@
+name: "AMD Radeon RX 580 (Polaris)"
+description: "AMD Radeon RX 580 Graphics Card (2017)"
+
+# Hardware specifications
+hardware: "GPU"
+fp32_tflops: 6.2e12     # 6.2 TFLOPS
+memory_bandwidth: 256e9  # 256 GB/s
+network_speed: 16e9     # PCIe 3.0 x16 (16 GB/s)
+time_in_driver: 18      # Driver overhead

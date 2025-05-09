@@ -1,0 +1,9 @@
+name: "NVIDIA Tesla K80 (Kepler)"
+description: "NVIDIA Tesla K80 Dual-GPU Accelerator (2014)"
+
+# Hardware specifications
+hardware: "GPU"
+fp32_tflops: 8.7e12     # 8.7 TFLOPS (dual GPU)
+memory_bandwidth: 480e9  # 480 GB/s (combined)
+network_speed: 16e9     # PCIe 3.0 x16 (16 GB/s)
+time_in_driver: 25      # Higher driver overhead for older accelerator

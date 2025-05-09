@@ -111,13 +111,13 @@ class TestReconstruction(unittest.TestCase):
         """Test group processing helper."""
         n_slopes = 100
         time = _process_group(
-            n_slopes=n_slopes, n_acts=self.n_acts, compute_resources=self.cr, scale=1.0
+            n_slopes=n_slopes, n_acts=self.n_acts, compute_resources=self.cr, flop_scale=1.0, mem_scale=1.0
         )
         self.assertGreater(time, 0)
 
         # Test scaling
         time_scaled = _process_group(
-            n_slopes=n_slopes, n_acts=self.n_acts, compute_resources=self.cr, scale=2.0
+            n_slopes=n_slopes, n_acts=self.n_acts, compute_resources=self.cr, flop_scale=2.0, mem_scale=2.0
         )
         # With scale=2.0, the time should be approximately half of the original time
         self.assertAlmostEqual(time_scaled * 2, time)

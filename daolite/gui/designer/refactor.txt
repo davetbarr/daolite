@@ -1,0 +1,94 @@
+Refactor Plan for daolite/gui/designer
+====================================
+
+Goal: Refactor pipeline_designer.py and components.py into smaller, reusable building blocks for improved maintainability, readability, and testability.
+
+1. Identify Logical Modules and Responsibilities
+------------------------------------------------
+- pipeline_designer.py: Main app window, scene/view logic, dialogs, toolbar/menu, utility methods, event handling.
+- components.py: Visual pipeline components, port/connection logic, drawing/painting logic.
+
+2. Proposed Modules and Their Responsibilities
+----------------------------------------------
+A. Scene and View
+   - scene.py: PipelineScene and scene logic (event handling, connection management, drag/drop, etc.)
+   - view.py: Custom QGraphicsView subclass or view-specific logic (zoom, pan, etc.)
+
+B. Components and Containers
+   - component_block.py: ComponentBlock and related logic (painting, parameter/port management)
+   - component_container.py: ComputeBox, GPUBox, and other container classes
+   - port.py: Port, PortType, and port-specific logic
+
+C. Connections
+   - connection.py: Connection, TransferIndicator, and connection/transfer-specific dialogs
+
+D. Dialogs
+   - dialogs/resource_selection_dialog.py: Resource selection dialog
+   - dialogs/parameter_dialog.py: Parameter editing dialog
+   - dialogs/text_input_dialog.py: Styled text input dialog
+   - dialogs/shortcut_help_dialog.py: Keyboard shortcut help dialog
+   - dialogs/about_dialog.py: About dialog
+
+E. Toolbar and Menu
+   - toolbar.py: Toolbar creation and logic
+   - menu.py: Menu bar creation and logic
+
+F. Application
+   - main_window.py: PipelineDesignerApp (main window), high-level orchestration, glue code
+   - app.py: Entry point for launching the application
+
+G. Utilities
+   - style_utils.py: Styling/theme utilities (already exists)
+   - undo_stack.py: Undo/redo stack and commands (if complex)
+   - data_transfer_utils.py: Data transfer estimation and chain logic
+
+3. Refactoring Steps
+--------------------
+Step 1: Extract component classes to their own files (component_block.py, component_container.py, port.py).
+Step 2: Extract scene and view logic (scene.py, view.py).
+Step 3: Extract dialogs to dialogs/ subpackage.
+Step 4: Extract toolbar and menu logic (toolbar.py, menu.py).
+Step 5: Refactor main application (main_window.py).
+Step 6: Move utility functions to appropriate modules.
+Step 7: Update entry point and imports.
+
+4. General Guidelines
+---------------------
+- Minimize circular imports; use local imports if needed.
+- Use relative imports within the package.
+- Document each module/class with docstrings.
+- Write tests for each module as you refactor.
+- Update README and developer docs to reflect new structure.
+
+5. Example Directory Structure After Refactor
+--------------------------------------------
+designer/
+    __init__.py
+    main_window.py
+    scene.py
+    view.py
+    toolbar.py
+    menu.py
+    component_block.py
+    component_container.py
+    port.py
+    connection.py
+    data_transfer_utils.py
+    undo_stack.py
+    style_utils.py
+    dialogs/
+        __init__.py
+        resource_selection_dialog.py
+        parameter_dialog.py
+        text_input_dialog.py
+        shortcut_help_dialog.py
+        about_dialog.py
+
+6. Benefits
+-----------
+- Easier navigation and maintainability
+- Reusability of components and dialogs
+- Improved testability
+- Isolated changes, less risk of breaking unrelated code
+
+Refer to this file for progress and as a checklist during the refactor.

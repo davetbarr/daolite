@@ -5,6 +5,7 @@ import logging
 from daolite import Pipeline, PipelineComponent, ComponentType
 from daolite.compute import create_compute_resources
 from daolite.simulation.camera import PCOCamLink, GigeVisionCamera, RollingShutterCamera
+from daolite.simulation.deformable_mirror import StandardDM, DMController, WavefrontCorrector
 from daolite.pipeline.centroider import Centroider
 from daolite.pipeline.reconstruction import Reconstruction
 from daolite.pipeline.control import FullFrameControl
@@ -18,15 +19,25 @@ import tempfile
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 FUNCTION_MAP = {
+    # Camera components
     "PCOCamLink": PCOCamLink,
     "GigeVisionCamera": GigeVisionCamera,
     "RollingShutterCamera": RollingShutterCamera,
+    
+    # Pipeline components
     "Centroider": Centroider,
     "Reconstruction": Reconstruction,
     "FullFrameControl": FullFrameControl,
     "PixelCalibration": PixelCalibration,
+    
+    # Network/transfer components
     "TimeOnNetwork": TimeOnNetwork,
     "network_transfer": network_transfer,
+    
+    # DeformableMirror components
+    "StandardDM": StandardDM,
+    "DMController": DMController,
+    "WavefrontCorrector": WavefrontCorrector,
 }
 
 
@@ -140,7 +151,19 @@ def run_pipeline_and_return_pipe(json_path, debug=False):
                 ComponentType.CONTROL: "FullFrameControl",
                 ComponentType.CALIBRATION: "PixelCalibration",
                 ComponentType.NETWORK: "TimeOnNetwork",
+                ComponentType.DM: "StandardDM",  # Default to StandardDM for DM type
             }.get(comp_type, None)
+            
+            # For DM components, check for specific DM types in params
+            if comp_type == ComponentType.DM and "dm_type" in params:
+                dm_type = params["dm_type"]
+                if dm_type == "dm_controller":
+                    func_name = "DMController"
+                elif dm_type == "wavefront_corrector":
+                    func_name = "WavefrontCorrector"
+                # Remove the dm_type param as it's not needed by the function
+                params.pop("dm_type", None)
+                
         function = FUNCTION_MAP.get(func_name)
         if function is None:
             raise TypeError(
@@ -153,7 +176,8 @@ def run_pipeline_and_return_pipe(json_path, debug=False):
         # Check if function requires parameters that aren't in params
         required_params = {
             param.name for param in sig.parameters.values() 
-            if param.default == inspect.Parameter.empty and param.name != 'self'
+            if param.default == inspect.Parameter.empty and param.name != 'self' 
+            and param.kind != inspect.Parameter.VAR_KEYWORD  # Ignore **kwargs
         }
         # Remove parameters that will be injected later
         ignorable_params = {"compute_resources", "start_times"}

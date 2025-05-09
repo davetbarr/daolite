@@ -1,0 +1,13 @@
+name: "Intel Core i7-7700K (Kaby Lake)"
+description: "Intel Core i7-7700K 4-Core Desktop Processor (2017)"
+
+# Hardware specifications
+hardware: "CPU"
+cores: 4
+core_frequency: 4.2e9   # 4.2 GHz base clock
+flops_per_cycle: 16     # AVX2 FLOPS per cycle
+memory_channels: 2
+memory_width: 64        # 64 bits per channel
+memory_frequency: 2400e6  # 2400 MHz DDR4
+network_speed: 1e9      # 1 Gbps network
+time_in_driver: 5        # 5μs driver overhead

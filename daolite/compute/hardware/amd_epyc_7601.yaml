@@ -1,0 +1,13 @@
+name: "AMD EPYC 7601 (Naples)"
+description: "AMD EPYC 7601 32-Core Server Processor (2017)"
+
+# Hardware specifications
+hardware: "CPU"
+cores: 32
+core_frequency: 2.2e9   # 2.2 GHz base clock
+flops_per_cycle: 16     # FP capability per cycle
+memory_channels: 8
+memory_width: 64        # 64 bits per channel
+memory_frequency: 2666e6  # 2666 MHz DDR4
+network_speed: 40e9     # 40 Gbps network
+time_in_driver: 5        # 5μs driver overhead

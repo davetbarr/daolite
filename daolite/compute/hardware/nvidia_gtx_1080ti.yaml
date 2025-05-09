@@ -1,0 +1,9 @@
+name: "NVIDIA GeForce GTX 1080 Ti (Pascal)"
+description: "NVIDIA GeForce GTX 1080 Ti Graphics Card (2017)"
+
+# Hardware specifications
+hardware: "GPU"
+fp32_tflops: 11.3e12    # 11.3 TFLOPS
+memory_bandwidth: 484e9  # 484 GB/s
+network_speed: 16e9     # PCIe 3.0 x16 (16 GB/s)
+time_in_driver: 15      # Driver overhead

@@ -179,13 +179,15 @@ def Centroider(
     compute_resources: ComputeResources,
     start_times: np.ndarray,
     group: int = 50,
-    scale: float = 1.0,
+    flop_scale: float = 1.0,
+    mem_scale: float = 1.0,
     square_diff: bool = False,
     n_workers: int = 1,
     delay_start: int = 0,
     sort: bool = False,
     agenda: Optional[np.ndarray] = None,
     debug: bool = False,
+    **kwargs,  # To catch legacy 'scale' parameter
 ) -> np.ndarray:
     """
     Main centroiding pipeline that handles timing for the complete centroiding process.
@@ -196,18 +198,29 @@ def Centroider(
         compute_resources: ComputeResources instance
         start_times: Array of shape (rows, 2) with start/end times
         group: Number of subapertures per group
-        scale: Scaling factor for computation time
+        flop_scale: Computational scaling factor for FLOPS (default: 1.0)
+        mem_scale: Memory bandwidth scaling factor (default: 1.0)
         square_diff: Use square difference instead of cross-correlation
         n_workers: Number of parallel workers
         delay_start: Delay start time by N groups
         sort: Whether to sort centroids
         agenda: Optional array or filename specifying number of subaps per iteration
         debug: Enable debug output
+        **kwargs: Catches legacy parameters (e.g., 'scale')
 
     Returns:
         np.ndarray: Array of shape (rows, 2) with processing start/end times
     """
-    print("Agenda:", agenda)
+    # For backward compatibility - check for legacy scale parameter
+    if 'scale' in kwargs and kwargs['scale'] != 1.0:
+        if flop_scale == 1.0 and mem_scale == 1.0:
+            flop_scale = kwargs['scale']
+            mem_scale = kwargs['scale']
+            if debug:
+                print(f"Warning: Using legacy 'scale' parameter ({kwargs['scale']}). Consider using flop_scale and mem_scale instead.")
+    
+    if debug and agenda is not None:
+        print("Agenda:", agenda)
     
     # Support agenda as filename or array
     if agenda is not None and isinstance(agenda, str):
@@ -235,7 +248,8 @@ def Centroider(
         total_time = 0
     else:
         total_time = _process_group(
-            n_subs, n_pix_per_subap, compute_resources, square_diff, sort, scale, debug
+            n_subs, n_pix_per_subap, compute_resources, square_diff, sort, 
+            flop_scale, mem_scale, debug
         )
 
     timings[0, 0] = start_times[delay_start, 1]
@@ -257,7 +271,8 @@ def Centroider(
                 compute_resources,
                 square_diff,
                 sort,
-                scale,
+                flop_scale,
+                mem_scale,
                 debug,
             )
 
@@ -281,21 +296,61 @@ def _process_group(
     compute_resources: ComputeResources,
     square_diff: bool,
     sort: bool,
-    scale: float,
+    flop_scale: float,
+    mem_scale: float,
     debug: bool,
 ) -> float:
-    """Helper to process a group of subapertures."""
+    """
+    Helper to process a group of subapertures with separate scaling factors.
+    
+    Args:
+        n_subs: Number of subapertures to process
+        n_pix_per_subap: Number of pixels per subaperture
+        compute_resources: ComputeResources instance
+        square_diff: Whether to use square difference algorithm
+        sort: Whether to sort centroids
+        flop_scale: Computational scaling factor for FLOPS
+        mem_scale: Memory scaling factor for bandwidth
+        debug: Enable debug output
+        
+    Returns:
+        float: Total processing time with scaling applied
+    """
+    # Create a modified ComputeResources instance to apply scaling
+    modified_resources = ComputeResources(
+        hardware=compute_resources.hardware,
+        memory_bandwidth=compute_resources.memory_bandwidth * mem_scale,
+        flops=compute_resources.flops * flop_scale,
+        network_speed=compute_resources.network_speed,
+        time_in_driver=compute_resources.time_in_driver,
+        core_fudge=compute_resources.core_fudge,
+        mem_fudge=compute_resources.mem_fudge,
+        network_fudge=compute_resources.network_fudge,
+        adjust=compute_resources.adjust,
+        cores=compute_resources.cores,
+        core_frequency=compute_resources.core_frequency,
+        flops_per_cycle=compute_resources.flops_per_cycle,
+        memory_frequency=compute_resources.memory_frequency,
+        memory_width=compute_resources.memory_width,
+        memory_channels=compute_resources.memory_channels,
+    )
+    
+    # Run operations with the modified resource
     if square_diff:
-        corr_time = SquareDiff(n_subs, n_pix_per_subap, compute_resources, debug)
+        corr_time = SquareDiff(n_subs, n_pix_per_subap, modified_resources, debug)
         cent_time = 0
     else:
-        corr_time = CrossCorrelate(n_subs, n_pix_per_subap, compute_resources, debug)
-        cent_time = Centroid(n_subs, n_pix_per_subap, compute_resources, sort, debug)
+        corr_time = CrossCorrelate(n_subs, n_pix_per_subap, modified_resources, debug)
+        cent_time = Centroid(n_subs, n_pix_per_subap, modified_resources, sort, debug)
 
-    ref_time = ReferenceSlopes(n_subs, n_pix_per_subap, compute_resources, debug)
-    err_time = Error(n_subs, n_pix_per_subap, compute_resources, debug)
+    ref_time = ReferenceSlopes(n_subs, n_pix_per_subap, modified_resources, debug)
+    err_time = Error(n_subs, n_pix_per_subap, modified_resources, debug)
 
-    return (corr_time + cent_time + ref_time + err_time) / scale
+    if debug:
+        print(f"FLOP scaling factor: {flop_scale}")
+        print(f"Memory scaling factor: {mem_scale}")
+        
+    return corr_time + cent_time + ref_time + err_time
 
 
 def ReferenceSlopes(

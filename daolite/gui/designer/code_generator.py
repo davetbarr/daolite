@@ -7,7 +7,7 @@ This module generates executable Python code from a visual pipeline design.
 from typing import List, Dict, Tuple, Optional
 
 from daolite.common import ComponentType
-from .components import ComponentBlock
+from .component_block import ComponentBlock
 from daolite.compute import create_compute_resources
 import datetime
 
@@ -422,8 +422,22 @@ class CodeGenerator:
             lines.append(f'    "n_valid_subaps": {n_valid_subaps},  # 80x80')
             lines.append(f'    "n_pix_per_subap": {n_pix_per_subap},  # 16 pixels per subap')
             lines.append(f'    "group": {group},  # Default group size')
+        # RECONSTRUCTION - Add required parameters for Reconstruction components
+        elif component.component_type == ComponentType.RECONSTRUCTION:
+            # These parameters are required by the Reconstruction function
+            n_slopes = component.params.get("n_slopes", 12800)  # Default: 6400 subaps * 2 (x,y slopes)
+            n_acts = component.params.get("n_acts", 5000)      # Default: 5000 actuators (large AO system)
+            group = component.params.get("group", 50)          # Default group size
+            lines.append(f'    "n_slopes": {n_slopes},  # 6400 subaps * 2 (x,y slopes)')
+            lines.append(f'    "n_acts": {n_acts},  # Typical number of actuators for a large AO system')
+            lines.append(f'    "group": {group},  # Default group size')
+        # CONTROL - Add sensible defaults for control components
+        elif component.component_type == ComponentType.CONTROL:
+            n_acts = component.params.get("n_acts", 5000)
+            lines.append(f'    "n_acts": {n_acts},  # Typical number of actuators')
+            
         # Add custom parameters from component, skipping those already added
-        already = {"n_pixels", "group", "n_valid_subaps", "n_pix_per_subap"}
+        already = {"n_pixels", "group", "n_valid_subaps", "n_pix_per_subap", "n_slopes", "n_acts"}
         # Process remaining parameters
         processed_params = {}
         for key, value in component.params.items():
