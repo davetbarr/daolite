@@ -1,0 +1,9 @@
+name: "NVIDIA Tesla P100 (Pascal)"
+description: "NVIDIA Tesla P100 HPC/Datacenter GPU Accelerator (2016)"
+
+# Hardware specifications
+hardware: "GPU"
+fp32_tflops: 10.6e12    # 10.6 TFLOPS
+memory_bandwidth: 732e9  # 732 GB/s (HBM2)
+network_speed: 32e9     # NVLink 1.0 or PCIe 3.0 x16
+time_in_driver: 20      # Driver overhead for datacenter GPU

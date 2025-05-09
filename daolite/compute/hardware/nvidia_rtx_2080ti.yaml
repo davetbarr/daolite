@@ -1,0 +1,9 @@
+name: "NVIDIA GeForce RTX 2080 Ti (Turing)"
+description: "NVIDIA GeForce RTX 2080 Ti Graphics Card (2018)"
+
+# Hardware specifications
+hardware: "GPU"
+fp32_tflops: 13.4e12    # 13.4 TFLOPS
+memory_bandwidth: 616e9  # 616 GB/s
+network_speed: 16e9     # PCIe 3.0 x16 (16 GB/s)
+time_in_driver: 12      # Driver overhead

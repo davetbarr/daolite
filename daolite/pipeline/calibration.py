@@ -45,7 +45,8 @@ def PixelCalibration(
     n_workers: int = 1,
     bitdepth: int = 16,
     group: Optional[int] = None,
-    scale: float = 1.0,
+    flop_scale: float = 1.0,
+    mem_scale: float = 1.0,
     debug: bool = False,
 ) -> np.ndarray:
     """
@@ -59,7 +60,8 @@ def PixelCalibration(
         n_workers: Number of workers (default: 1)
         bitdepth: Bit depth of the pixel data (default: 16)
         group: Number of groups to process (default: use start_times length)
-        scale: Computational scaling factor (default: 1.0)
+        flop_scale: Computational scaling factor for FLOPS (default: 1.0)
+        mem_scale: Memory bandwidth scaling factor (default: 1.0)
         debug: Enable debug output
 
     Returns:
@@ -83,10 +85,12 @@ def PixelCalibration(
     flops_per_group = _calibration_flops(pixels_per_group)
     mem_ops_per_group = _calibration_mem(pixels_per_group, bitdepth)
 
-    # Calculate computation time per group
-    computation_time = (
-        compute_resources.total_time(mem_ops_per_group, flops_per_group) / scale
-    )  # Apply scaling factor
+    # Calculate memory time and computation time separately with their own scaling factors
+    memory_time = compute_resources.load_time(mem_ops_per_group) / mem_scale
+    compute_time = compute_resources.calc_time(flops_per_group) / flop_scale
+    
+    # Total computation time is the sum of memory and compute times
+    computation_time = memory_time + compute_time
 
     if debug:
         print("\n*************Pixel Calibration************")
@@ -94,7 +98,11 @@ def PixelCalibration(
         print(f"Pixels per group: {pixels_per_group}")
         print(f"FLOPS per group: {flops_per_group}")
         print(f"Memory operations per group: {mem_ops_per_group}")
-        print(f"Computation time per group: {computation_time:.2f} μs")
+        print(f"Memory time per group: {memory_time:.2f} μs")
+        print(f"Compute time per group: {compute_time:.2f} μs")
+        print(f"Total computation time per group: {computation_time:.2f} μs")
+        print(f"FLOP scaling factor: {flop_scale}")
+        print(f"Memory scaling factor: {mem_scale}")
         
     # Handle scalar input - just return the computation time
     if is_scalar:

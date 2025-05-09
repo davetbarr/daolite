@@ -1,0 +1,9 @@
+name: "AMD Radeon RX Vega 64 (Vega)"
+description: "AMD Radeon RX Vega 64 Graphics Card (2017)"
+
+# Hardware specifications
+hardware: "GPU"
+fp32_tflops: 12.7e12    # 12.7 TFLOPS
+memory_bandwidth: 484e9  # 484 GB/s
+network_speed: 16e9     # PCIe 3.0 x16 (16 GB/s)
+time_in_driver: 15      # Driver overhead

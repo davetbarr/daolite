@@ -1,0 +1,13 @@
+name: "AMD EPYC 7402 (Rome)"
+description: "AMD EPYC 7402 24-Core Server Processor (2019)"
+
+# Hardware specifications
+hardware: "CPU"
+cores: 24
+core_frequency: 2.8e9   # 2.8 GHz base clock
+flops_per_cycle: 32     # AVX2 FLOPS per cycle
+memory_channels: 8
+memory_width: 64        # 64 bits per channel
+memory_frequency: 3200e6  # 3200 MHz DDR4
+network_speed: 100e9    # 100 Gbps network
+time_in_driver: 5       # 5μs driver overhead

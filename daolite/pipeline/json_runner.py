@@ -153,7 +153,8 @@ def run_pipeline_and_return_pipe(json_path, debug=False):
         # Check if function requires parameters that aren't in params
         required_params = {
             param.name for param in sig.parameters.values() 
-            if param.default == inspect.Parameter.empty and param.name != 'self'
+            if param.default == inspect.Parameter.empty and param.name != 'self' 
+            and param.kind != inspect.Parameter.VAR_KEYWORD  # Ignore **kwargs
         }
         # Remove parameters that will be injected later
         ignorable_params = {"compute_resources", "start_times"}

@@ -1,0 +1,13 @@
+name: "Intel Core i7-4770K (Haswell)"
+description: "Intel Core i7-4770K 4-Core Desktop Processor (2013)"
+
+# Hardware specifications
+hardware: "CPU"
+cores: 4
+core_frequency: 3.5e9   # 3.5 GHz base clock
+flops_per_cycle: 16     # AVX2 FLOPS per cycle
+memory_channels: 2
+memory_width: 64        # 64 bits per channel
+memory_frequency: 1600e6  # 1600 MHz DDR3
+network_speed: 1e9      # 1 Gbps network
+time_in_driver: 5        # 5μs driver overhead

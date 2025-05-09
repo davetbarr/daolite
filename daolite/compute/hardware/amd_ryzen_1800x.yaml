@@ -1,0 +1,13 @@
+name: "AMD Ryzen 7 1800X (Zen 1)"
+description: "AMD Ryzen 7 1800X 8-Core Desktop Processor (2017)"
+
+# Hardware specifications
+hardware: "CPU"
+cores: 8
+core_frequency: 3.6e9   # 3.6 GHz base clock
+flops_per_cycle: 16     # AVX FLOPS per cycle (no AVX2 in Zen 1)
+memory_channels: 2
+memory_width: 64        # 64 bits per channel
+memory_frequency: 2666e6  # 2666 MHz DDR4
+network_speed: 10e9     # 10 Gbps network
+time_in_driver: 5        # 5μs driver overhead

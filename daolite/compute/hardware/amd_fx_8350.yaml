@@ -1,0 +1,13 @@
+name: "AMD FX-8350 (Bulldozer)"
+description: "AMD FX-8350 8-Core Desktop Processor (2012)"
+
+# Hardware specifications
+hardware: "CPU"
+cores: 8  # Actually 4 modules with 2 integer cores each
+core_frequency: 4.0e9   # 4.0 GHz base clock
+flops_per_cycle: 8      # Limited FP capability compared to later designs
+memory_channels: 2
+memory_width: 64        # 64 bits per channel
+memory_frequency: 1866e6  # 1866 MHz DDR3
+network_speed: 1e9      # 1 Gbps network
+time_in_driver: 5        # 5μs driver overhead
