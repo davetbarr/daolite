@@ -152,12 +152,110 @@ def update_connection_indicators(scene, connection):
     is_camera_connection = src_block.component_type == ComponentType.CAMERA
     if is_camera_connection:
         logger.debug(f"Camera connection detected: {src_block.name} → {dst_block.name}")
+        
+    # Check if destination is a DM component (new special case)
+    is_dm_connection = dst_block.component_type == ComponentType.DM
+    if is_dm_connection:
+        logger.debug(f"DM connection detected: {src_block.name} → {dst_block.name}")
     
     # Create appropriate transfer indicators based on the container types and component types
     transfer_indicators = []
     
+    # SPECIAL CASE: Always add Network indicator for DM components receiving from any compute
+    if is_dm_connection and src_parent:
+        logger.debug(f"Adding Network transfer indicator for connection to DM")
+        
+        # Find intersection with source compute box boundary
+        src_compute_boundary = None
+        
+        # First try to find the compute box
+        if src_compute_box:
+            src_compute_boundary = find_boundary_intersection(start_pos, end_pos, src_compute_box)
+        
+        # Place on the compute box boundary if found
+        if src_compute_boundary:
+            logger.debug(f"Network transfer indicator added for DM at source compute box boundary: {src_compute_boundary.x():.1f}, {src_compute_boundary.y():.1f}")
+            indicator = TransferIndicator("Network")
+            indicator_pos = calculate_indicator_position(src_compute_boundary, connection_line, "Network")
+            indicator.setPos(indicator_pos)
+            indicator.set_connection(connection)
+            transfer_indicators.append(indicator)
+        else:
+            # If no intersection found, place indicator at 2/3 along the connection line
+            point = connection_line.pointAt(2/3)
+            logger.debug(f"Placing Network indicator along line for DM connection at {point.x():.1f}, {point.y():.1f}")
+            indicator = TransferIndicator("Network")
+            
+            # Use the helper function for better positioning
+            indicator_pos = calculate_indicator_position(point, connection_line, "Network")
+            indicator.setPos(indicator_pos)
+            indicator.set_connection(connection)
+            transfer_indicators.append(indicator)
+        
+        # If source is GPU, also add PCIe indicator
+        src_is_gpu_container = isinstance(src_parent, GPUBox)
+        
+        # More robust check for GPU source
+        is_source_gpu = src_is_gpu or src_is_gpu_container
+        
+        # Additional check for GPU indicators in container name
+        if not is_source_gpu and src_parent and hasattr(src_parent, 'name'):
+            parent_name = src_parent.name.lower() if src_parent.name else ""
+            if ('gpu' in parent_name or 'mi' in parent_name or 'rtx' in parent_name or 
+                'a100' in parent_name or 'h100' in parent_name):
+                is_source_gpu = True
+                logger.debug(f"Detected GPU source from container name: {src_parent.name}")
+
+        # Explicitly log GPU detection status
+        logger.debug(f"Source GPU detection: src_is_gpu={src_is_gpu}, src_is_gpu_container={src_is_gpu_container}, final determination={is_source_gpu}")
+        
+        if is_source_gpu:
+            logger.debug(f"Adding PCIe indicator for GPU source to DM connection: {src_block.name}")
+            # First try to find GPU container
+            gpu_container = None
+            if isinstance(src_parent, GPUBox):
+                gpu_container = src_parent
+                logger.debug(f"Found GPU container: {gpu_container.name if hasattr(gpu_container, 'name') else 'unnamed'}")
+            
+            # If we found a GPU container, place at its boundary
+            if gpu_container:
+                gpu_boundary = find_boundary_intersection(start_pos, end_pos, gpu_container)
+                if gpu_boundary:
+                    logger.debug(f"PCIe transfer indicator added for GPU->DM at GPU boundary: {gpu_boundary.x():.1f}, {gpu_boundary.y():.1f}")
+                    indicator = TransferIndicator("PCIe")
+                    indicator_pos = calculate_indicator_position(gpu_boundary, connection_line, "PCIe")
+                    indicator.setPos(indicator_pos)
+                    indicator.set_connection(connection)
+                    transfer_indicators.append(indicator)
+                else:
+                    # Fallback: place PCIe indicator at 1/3 along the connection line
+                    point = connection_line.pointAt(1/3)
+                    logger.debug(f"Placing PCIe indicator along line for GPU->DM (no boundary) at {point.x():.1f}, {point.y():.1f}")
+                    indicator = TransferIndicator("PCIe")
+                    
+                    # Use the helper function for better positioning
+                    indicator_pos = calculate_indicator_position(point, connection_line, "PCIe")
+                    indicator.setPos(indicator_pos)
+                    indicator.set_connection(connection)
+                    transfer_indicators.append(indicator)
+            else:
+                # No GPU container found, but source is a GPU resource
+                # Place at 1/3 along the connection line
+                point = connection_line.pointAt(1/3)
+                logger.debug(f"Placing PCIe indicator along line for GPU->DM (no GPU container) at {point.x():.1f}, {point.y():.1f}")
+                indicator = TransferIndicator("PCIe")
+                
+                # Use the helper function for better positioning
+                indicator_pos = calculate_indicator_position(point, connection_line, "PCIe")
+                indicator.setPos(indicator_pos)
+                indicator.set_connection(connection)
+                transfer_indicators.append(indicator)
+                logger.debug(f"Added PCIe indicator for GPU source without container")
+        else:
+            logger.debug(f"No PCIe indicator needed - source is not GPU: {src_block.name}")
+    
     # SPECIAL CASE: Always add Network indicator for camera components connecting to any compute
-    if is_camera_connection and dst_parent:
+    elif is_camera_connection and dst_parent:
         logger.debug(f"Adding Network transfer indicator for camera connection to compute")
         
         # Find intersection with destination compute box boundary

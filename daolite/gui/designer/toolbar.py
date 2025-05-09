@@ -108,6 +108,7 @@ def create_toolbar(main_window):
         ("Centroider", ComponentType.CENTROIDER, "view-split-left-right"),
         ("Reconstruction", ComponentType.RECONSTRUCTION, "system-run"),
         ("Control", ComponentType.CONTROL, "media-playback-start"),
+        ("DM", ComponentType.DM, "video-display"),  # Added DeformableMirror button
     ]
     for label, ctype, icon in comp_buttons:
         print(f'[DEBUG] Adding component button: {label}')

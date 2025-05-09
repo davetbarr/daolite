@@ -37,6 +37,7 @@ class PipelineDesignerApp(QMainWindow):
             ComponentType.RECONSTRUCTION: 0,
             ComponentType.CONTROL: 0,
             ComponentType.NETWORK: 0,
+            ComponentType.DM: 0,  # Add DeformableMirror component counting
         }
         super().__init__()
         self.setWindowTitle("Pipeline Designer")

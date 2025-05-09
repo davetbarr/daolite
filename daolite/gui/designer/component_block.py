@@ -146,6 +146,15 @@ class ComponentBlock(QGraphicsItem):
             self.input_ports.append(input_port)
             self.output_ports.append(output_port)
         elif self.component_type == ComponentType.CONTROL:
+            # Update Control component to have both input and output ports
+            input_port = Port(PortType.INPUT, QPointF(0, 40), "commands in")
+            output_port = Port(PortType.OUTPUT, QPointF(190, 40), "commands out")
+            input_port.parent = self
+            output_port.parent = self
+            self.input_ports.append(input_port)
+            self.output_ports.append(output_port)
+        elif self.component_type == ComponentType.DM:
+            # DeformableMirror component has only input port (it's a terminal component)
             input_port = Port(PortType.INPUT, QPointF(0, 40), "commands")
             input_port.parent = self
             self.input_ports.append(input_port)
@@ -293,6 +302,7 @@ class ComponentBlock(QGraphicsItem):
             ComponentType.CONTROL: QColor(255, 255, 240),
             ComponentType.NETWORK: QColor(255, 240, 255),
             ComponentType.CALIBRATION: QColor(240, 255, 255),
+            ComponentType.DM: QColor(255, 220, 200),  # Peachy color for DM components
         }
         return colors.get(self.component_type, QColor(245, 245, 245))
 
@@ -308,6 +318,7 @@ class ComponentBlock(QGraphicsItem):
             ComponentType.CONTROL: "DM/actuator control",
             ComponentType.NETWORK: "PCIe/network transfer",
             ComponentType.CALIBRATION: "Pixel/offset calibration",
+            ComponentType.DM: "Deformable mirror hardware",  # Description for DM components
         }
         return descs.get(self.component_type, "AO pipeline component")
 

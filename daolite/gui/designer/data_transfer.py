@@ -27,6 +27,10 @@ def determine_transfer_type(src_comp, dest_comp):
     # Camera components always connect via network (and PCIe if dest is GPU)
     if src_comp.component_type == ComponentType.CAMERA:
         return "Network"
+        
+    # DM components are endpoints that always receive via network
+    if dest_comp.component_type == ComponentType.DM:
+        return "Network"
 
     # Helper to get ComputeBox for a component
     def get_compute_box(comp):
@@ -102,6 +106,14 @@ def determine_transfer_chain(src_comp, dest_comp):
         chain.append("Network")
         if dest_parent and isinstance(dest_parent, GPUBox):
             chain.append("PCIe")
+        return chain
+        
+    # DM components are endpoints that always receive via network
+    # and need PCIe transfer if the source is on a GPU
+    if dest_comp.component_type == ComponentType.DM:
+        if src_is_gpu:
+            chain.append("PCIe")  # First get data from GPU to CPU
+        chain.append("Network")   # Then network transfer to DM
         return chain
 
     # GPU -> GPU (different computers): PCIe (GPU1->host1) + Network (host1->host2) + PCIe (host2->GPU2)
@@ -187,6 +199,12 @@ def estimate_data_size(src_comp, dest_comp):
         n_actuators = src_comp.params.get("n_acts", 5000)
         bit_size = 32
         return n_actuators * bit_size
+        
+    elif dest_comp.component_type == ComponentType.DM:
+        # For DMs, use the actual parameters for actuator count and bits per actuator
+        n_actuators = dest_comp.params.get("n_actuators", 5000)  # Default ELT scale
+        bits_per_actuator = dest_comp.params.get("bits_per_actuator", 16)  # Default 16-bit
+        return n_actuators * bits_per_actuator
     
     # Fallback to a reasonable default for AO data
     return 1024 * 1024 * 16  # 1MP at 16-bit

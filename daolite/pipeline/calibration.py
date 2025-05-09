@@ -77,6 +77,12 @@ def PixelCalibration(
     # If start_times is an array and group is None, use its length
     elif not is_scalar and group is None:
         group = len(start_times)
+        
+    # Ensure group is an integer
+    try:
+        group = int(group)
+    except (TypeError, ValueError):
+        raise TypeError(f"'group' parameter must be convertible to an integer, got {type(group).__name__}")
 
     # Calculate pixels per group
     pixels_per_group = n_pixels // group + 1
