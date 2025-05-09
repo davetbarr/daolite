@@ -111,18 +111,16 @@ class TestReconstruction(unittest.TestCase):
         """Test group processing helper."""
         n_slopes = 100
         time = _process_group(
-            n_slopes=n_slopes, n_acts=self.n_acts, compute_resources=self.cr
+            n_slopes=n_slopes, n_acts=self.n_acts, compute_resources=self.cr, scale=1.0
         )
         self.assertGreater(time, 0)
 
         # Test scaling
-        # Assuming 'scale' is no longer a parameter of _process_group
-        # If scaling is handled differently or removed, this part of the test may need to be re-evaluated.
-        # For now, let's call it without scale and expect the time to be the same as the non-scaled time.
         time_scaled = _process_group(
-            n_slopes=n_slopes, n_acts=self.n_acts, compute_resources=self.cr
+            n_slopes=n_slopes, n_acts=self.n_acts, compute_resources=self.cr, scale=2.0
         )
-        self.assertAlmostEqual(time_scaled, time)
+        # With scale=2.0, the time should be approximately half of the original time
+        self.assertAlmostEqual(time_scaled * 2, time)
 
 if __name__ == "__main__":
     unittest.main()
