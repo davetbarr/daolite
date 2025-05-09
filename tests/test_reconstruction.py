@@ -119,8 +119,8 @@ class TestReconstruction(unittest.TestCase):
         time_scaled = _process_group(
             n_slopes=n_slopes, n_acts=self.n_acts, compute_resources=self.cr, scale=2.0
         )
+        # With scale=2.0, the time should be approximately half of the original time
         self.assertAlmostEqual(time_scaled * 2, time)
-
 
 if __name__ == "__main__":
     unittest.main()
