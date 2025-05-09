@@ -12,8 +12,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8"]
-        os: [ubuntu-latest]
+        # Simplified matrix with just a single Python version and two OSes
+        python-version: ["3.9"]
+        os: [ubuntu-latest, macos-latest]
+        # Commented out the full matrix for future use
+        # python-version: ["3.8", "3.9", "3.10", "3.11"]
+        # os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
     - uses: actions/checkout@v3
@@ -22,6 +26,19 @@ jobs:
       uses: actions/setup-python@v3
       with:
         python-version: ${{ matrix.python-version }}
+        cache: 'pip' # Enable pip caching
+
+    - name: Get pip cache directory
+      id: pip-cache
+      run: echo "::set-output name=dir::$(pip cache dir)"
+
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ${{ steps.pip-cache.outputs.dir }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
 
     - name: Install dependencies
       run: |
@@ -33,13 +50,14 @@ jobs:
 
     - name: Test with pytest
       run: |
-        pytest tests/ --cov=daolite --cov-report=xml
+        pytest tests/ --cov=daolite --cov-report=xml --cov-report=html --junitxml=junit/test-results.xml
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()  # Upload test results even if tests fail
       with:
-        token: ${{ secrets.CODECOV_TOKEN }} # Optional: if you use Codecov
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: true
+        name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
+        path: |
+          junit/test-results.xml
+          coverage.xml
+          htmlcov/
