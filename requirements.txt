@@ -7,3 +7,4 @@ pyqt5>=5.15.0
 pytest
 pytest-cov
 sphinx
+psutil>=5.8.0
