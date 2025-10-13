@@ -182,8 +182,26 @@ def run_pipeline_and_return_pipe(json_path, debug=False):
         # Remove parameters that will be injected later
         ignorable_params = {"compute_resources", "start_times"}
         missing_params = required_params - set(params.keys()) - ignorable_params
+        
+        # Also check if we'll get agenda params from old-style params
+        # This prevents spurious warnings when using backward compatibility
         if missing_params:
-            print(f"Warning: Missing required parameters for {name} ({comp_type.name}): {missing_params}")
+            satisfied_by_compat = set()
+            # Check if we have old-style params that will satisfy agenda requirements
+            if comp_type == ComponentType.CENTROIDER:
+                if "n_valid_subaps" in params and "centroid_agenda" in missing_params:
+                    satisfied_by_compat.add("centroid_agenda")
+            elif comp_type == ComponentType.CALIBRATION:
+                if "n_pixels" in params and "pixel_agenda" in missing_params:
+                    satisfied_by_compat.add("pixel_agenda")
+            elif comp_type == ComponentType.RECONSTRUCTION:
+                if "n_slopes" in params and "centroid_agenda" in missing_params:
+                    satisfied_by_compat.add("centroid_agenda")
+            
+            missing_params = missing_params - satisfied_by_compat
+            if missing_params:
+                print(f"Warning: Missing required parameters for {name} ({comp_type.name}): {missing_params}")
+        
         # Add sensible defaults based on component type (no duplicate warning)
         missing_params_for_defaults = required_params - set(params.keys())
         if comp_type == ComponentType.CAMERA:
@@ -224,9 +242,19 @@ def run_pipeline_and_return_pipe(json_path, debug=False):
         # Add back the compat params
         filtered_params.update(compat_params)
         
+        # Build set of satisfied parameters including those satisfied by compat params
+        satisfied_params = set(filtered_params.keys())
+        # Map compat params to the params they satisfy
+        if "_n_valid_subaps_compat" in satisfied_params:
+            satisfied_params.add("centroid_agenda")
+        if "_n_pixels_compat" in satisfied_params:
+            satisfied_params.add("pixel_agenda")
+        if "_n_slopes_compat" in satisfied_params:
+            satisfied_params.add("centroid_agenda")
+        
         # Double-check we've got all required parameters (excluding ignorable)
         for param in required_params:
-            if param not in filtered_params and param not in ignorable_params:
+            if param not in satisfied_params and param not in ignorable_params:
                 print(f"Error: Required parameter '{param}' is missing for {name} ({comp_type.name})")
         
         pipeline_comp = PipelineComponent(
