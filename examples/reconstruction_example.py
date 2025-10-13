@@ -5,7 +5,13 @@ import numpy as np
 
 start_times = np.zeros([1, 2])
 
+# Create centroid agenda - 200 slopes (100 subapertures * 2 for X and Y)
+centroid_agenda = np.array([200], dtype=int)
+
 result = Reconstruction(
-    n_slopes=200, n_acts=500, compute_resources=hardware.amd_epyc_7763(), start_times=start_times
+    compute_resources=hardware.amd_epyc_7763(),
+    start_times=start_times,
+    centroid_agenda=centroid_agenda,
+    n_acts=500
 )
 print("Reconstruction timing:", result)

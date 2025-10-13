@@ -16,5 +16,13 @@ start_times = np.array([
     [2099.984, 2277.76]
 ])
 
-result = Centroider(start_times=start_times, n_valid_subaps=100, n_pix_per_subap=16, compute_resources=hardware.amd_epyc_7763())
+# Create centroid agenda - 100 subapertures per iteration
+centroid_agenda = np.ones(10, dtype=int) * 100
+
+result = Centroider(
+    compute_resources=hardware.amd_epyc_7763(),
+    start_times=start_times,
+    centroid_agenda=centroid_agenda,
+    n_pix_per_subap=16
+)
 print("Centroiding timing:", result)

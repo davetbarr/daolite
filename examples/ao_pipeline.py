@@ -81,7 +81,8 @@ def run_single_pipeline(config_file=None):
 
     # For simplicity, distribute subapertures evenly across packets
     # In reality, this would depend on camera readout pattern
-    centroid_agenda = np.ones(n_groups) * (n_valid_subaps / n_groups)
+    centroid_agenda = np.ones(n_groups, dtype=int) * (n_valid_subaps // n_groups)
+    pixel_agenda = np.ones(n_groups, dtype=int) * (config.camera.n_pixels // n_groups)
 
     # ======= Pipeline Timing Simulation =======
 
@@ -96,36 +97,32 @@ def run_single_pipeline(config_file=None):
 
     # 2. Pixel calibration
     calibration_timing = PixelCalibration(
-        n_pixels=config.camera.n_pixels,
         compute_resources=config.compute,
         start_times=camera_timing,
-        group=n_groups,
-        scale=config.optics.calibration_scale,
+        pixel_agenda=pixel_agenda,
+        flop_scale=config.optics.calibration_scale,
         debug=True,
     )
 
     # 3. Centroiding
     centroid_timing = Centroider(
-        n_valid_subaps=n_valid_subaps,
-        n_pix_per_subap=config.camera.pixels_per_subaperture,
         compute_resources=config.compute,
         start_times=calibration_timing,
-        scale=config.optics.centroid_scale,
-        square_diff=config.pipeline.use_square_diff,
+        centroid_agenda=centroid_agenda,
+        n_pix_per_subap=config.camera.pixels_per_subaperture,
+        flop_scale=config.optics.centroid_scale,
         sort=config.pipeline.use_sorting,
-        agenda=centroid_agenda,
         n_workers=config.pipeline.n_workers,
         debug=True,
     )
 
     # 4. Wavefront reconstruction
     reconstruction_timing = Reconstruction(
-        n_slopes=n_valid_subaps * 2,  # X and Y slopes
-        n_acts=config.optics.n_actuators,
         compute_resources=config.compute,
         start_times=centroid_timing,
-        scale=config.optics.reconstruction_scale,
-        agenda=centroid_agenda,
+        centroid_agenda=centroid_agenda,
+        n_acts=config.optics.n_actuators,
+        flop_scale=config.optics.reconstruction_scale,
         debug=True,
     )
 

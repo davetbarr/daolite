@@ -56,13 +56,14 @@ def run_standard_dm_example():
     )
 
     # Add a reconstruction component that depends on the camera
+    centroid_agenda = np.array([640] * 10, dtype=int)  # 6400 centroids split into 10 groups
     pipeline.add_component(
         PipelineComponent(
             component_type=ComponentType.RECONSTRUCTION,
             name="Reconstruction",
             compute=compute_resources,
             function=Reconstruction,
-            params={"n_slopes": 6400, "n_acts": 5000, "group": 10},
+            params={"centroid_agenda": centroid_agenda, "n_acts": 5000},
             dependencies=["Camera"],
         )
     )
@@ -120,13 +121,14 @@ def run_dm_controller_example():
     )
 
     # Add a reconstruction component that depends on the camera
+    centroid_agenda = np.array([640] * 10, dtype=int)  # 6400 centroids split into 10 groups
     pipeline.add_component(
         PipelineComponent(
             component_type=ComponentType.RECONSTRUCTION,
             name="Reconstruction",
             compute=compute_resources,
             function=Reconstruction,
-            params={"n_slopes": 6400, "n_acts": 5000, "group": 10},
+            params={"centroid_agenda": centroid_agenda, "n_acts": 5000},
             dependencies=["Camera"],
         )
     )

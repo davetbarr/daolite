@@ -4,7 +4,7 @@ from daolite.pipeline.json_runner import run_pipeline_from_json
 from daolite.pipeline.reconstruction import Reconstruction
 
 results = run_pipeline_from_json("examples/config_example.json")
-
+print("Pipeline results:", results)
 # # Optionally visualize
 # try:
 #     from daolite.pipeline.pipeline import Pipeline, PipelineComponent, ComponentType
