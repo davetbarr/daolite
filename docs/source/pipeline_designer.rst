@@ -3,6 +3,15 @@
 Pipeline Designer GUI
 =====================
 
+.. warning::
+   **EXPERIMENTAL FEATURE**
+   
+   The Pipeline Designer GUI is currently in experimental development phase and may be unstable. 
+   Users may experience crashes or unexpected behavior. Use with caution and save your work frequently.
+   
+   For production pipelines, we recommend using the JSON pipeline format directly or the 
+   programmatic API until the GUI reaches a stable release.
+
 Overview
 --------
 
