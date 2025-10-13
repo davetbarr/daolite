@@ -18,7 +18,7 @@ from daolite.config import Config, SystemConfig
 from daolite.pipeline import Pipeline, PipelineComponent
 
 # Version information
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "David Barr"
 
 # Export public API
