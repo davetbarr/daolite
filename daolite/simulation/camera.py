@@ -184,3 +184,91 @@ def RollingShutterCamera(
         )
 
     return timings
+
+
+def simulate_pco_readout(height=1024, width=1024):
+    """
+    Simulate the readout pattern of a PCO sensor with:
+    - Two sensor halves
+    - Reading 4 rows at a time from each half
+    - Reading from center outward
+    - 8 lines in parallel (4 from each half)
+
+    Args:
+        height: Sensor height in pixels (default: 1024)
+        width: Sensor width in pixels (default: 1024)
+
+    Returns:
+        np.ndarray: 2D array showing readout sequence number for each pixel (0 to height*width-1)
+    """
+    # Create a sensor array filled with -1 to indicate unprocessed pixels
+    sensor = np.full((height, width), -1, dtype=int)
+
+    # Calculate center row
+    center_row = height // 2
+
+    # Readout sequence counter starting from 0
+    sequence = 0
+
+    # Calculate how many steps of 4 rows we need to cover the entire height
+    max_steps = (height + 7) // 8  # Ceiling division to handle odd sizes
+
+    # Track row sets to make sure we don't process the same row twice
+    processed_rows = set()
+
+    # Process rows from center outward
+    for step in range(max_steps):
+        # Get rows from upper half (going up from center)
+        upper_rows = []
+        for i in range(4):
+            row = center_row - 1 - step * 4 - i  # Start from center_row-1 going up
+            if 0 <= row < height and row not in processed_rows:
+                upper_rows.append(row)
+                processed_rows.add(row)
+
+        # Get rows from lower half (going down from center)
+        lower_rows = []
+        for i in range(4):
+            row = center_row + step * 4 + i  # Start from center_row going down
+            if 0 <= row < height and row not in processed_rows:
+                lower_rows.append(row)
+                processed_rows.add(row)
+
+        # Process all columns for these rows
+        for col in range(width):
+            # Process upper rows first for this column
+            for row in upper_rows:
+                sensor[row, col] = sequence
+                sequence += 1
+
+            # Then process lower rows for this column
+            for row in lower_rows:
+                sensor[row, col] = sequence
+                sequence += 1
+
+    # Check if we missed any rows
+    unprocessed_rows = []
+    for row in range(height):
+        if row not in processed_rows:
+            unprocessed_rows.append(row)
+
+    # Process any remaining unprocessed rows
+    for row in unprocessed_rows:
+        processed_rows.add(row)
+        for col in range(width):
+            sensor[row, col] = sequence
+            sequence += 1
+
+    # Verify all pixels have been assigned
+    expected_pixels = height * width
+    assigned_pixels = np.count_nonzero(sensor >= 0)  # Count all assigned pixels
+
+    if assigned_pixels != expected_pixels:
+        print(f"Warning: Assigned {assigned_pixels} pixels, expected {expected_pixels}")
+
+    # Check every value is unique and ranges from 0 to width*height-1
+    assert len(np.unique(sensor)) == height * width, "Readout values should be unique"
+    assert np.min(sensor) == 0, "Readout should start from 0"
+    assert np.max(sensor) == height * width - 1, "Readout should end at width*height-1"
+
+    return sensor

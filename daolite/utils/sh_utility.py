@@ -174,3 +174,126 @@ def getAvailableSubAps(readoutMap, nPixels, nPixPerSubAp, pixelAgenda, subApMap)
         listOfSubAps.append(PerPacketList)
 
     return availableSubAps
+
+
+def readout_by_pixel_agenda(readout_pattern, pixel_agenda):
+    """
+    Map pixels to packet numbers based on readout order and pixel agenda
+
+    Args:
+        readout_pattern (numpy.ndarray): 2D array showing readout order for each pixel
+        pixel_agenda (numpy.ndarray): 2D array [nPackets x 2] where each row is [packet_number, pixels_in_packet]
+
+    Returns:
+        numpy.ndarray: 2D array same shape as readout_pattern, with packet numbers for each pixel
+    """
+    packet_map = np.zeros_like(readout_pattern)
+
+    # Convert pixel_agenda to cumulative pixels received
+    cumulative_pixels = np.cumsum(pixel_agenda[:, 1])
+    cumulative_pixels = np.insert(cumulative_pixels, 0, 0)  # Add 0 at the beginning
+
+    # For each packet, mark which pixels belong to it
+    for i in range(len(pixel_agenda)):
+        start_pixel = cumulative_pixels[i]
+        end_pixel = cumulative_pixels[i + 1]
+
+        # Find all pixels with readout order in this range
+        mask = (readout_pattern >= start_pixel) & (readout_pattern < end_pixel)
+        packet_map[mask] = i
+
+    return packet_map
+
+
+def getSubApCentrePoints(subApMap, subApPix, width, height, guardPixels):
+    """
+    Calculate pixel coordinates of subaperture centers
+
+    Args:
+        subApMap (numpy.ndarray): 2D array showing subaperture layout
+        subApPix (int): Number of pixels per subaperture along one dimension
+        width (int): Total image width in pixels
+        height (int): Total image height in pixels
+        guardPixels (int): Number of guard pixels around subapertures
+
+    Returns:
+        numpy.ndarray: Array of [x, y] coordinates for each subaperture center
+    """
+    nSubAps = int(np.max(subApMap))
+    centres = np.zeros((nSubAps, 2))
+
+    # Get the dimensions of the subaperture map
+    map_height, map_width = subApMap.shape
+
+    # Calculate scaling factors from map coordinates to pixel coordinates
+    scale_x = width / map_width
+    scale_y = height / map_height
+
+    # Find center of each subaperture
+    for i in range(nSubAps):
+        # Find position in the map (map coordinates are row, col)
+        positions = np.where(subApMap == (i + 1))
+
+        if len(positions[0]) > 0:
+            # Get the first occurrence (there should only be one per subaperture)
+            map_row = positions[0][0]
+            map_col = positions[1][0]
+
+            # Convert from map coordinates to pixel coordinates
+            # Add 0.5 to get center of the map cell, then scale
+            pixel_x = (map_col + 0.5) * scale_x
+            pixel_y = (map_row + 0.5) * scale_y
+
+            centres[i] = [pixel_x, pixel_y]
+
+    return centres
+
+
+def calculate_centroid_agenda(packet_map, centres, subApPix):
+    """
+    Determine when each subaperture becomes available for centroid calculation
+
+    Args:
+        packet_map (numpy.ndarray): 2D array with packet number for each pixel
+        centres (numpy.ndarray): Array of [x, y] coordinates for subaperture centers
+        subApPix (int): Number of pixels per subaperture along one dimension
+
+    Returns:
+        numpy.ndarray: Number of centroids that can be calculated after each packet
+    """
+    nPackets = int(np.max(packet_map)) + 1
+    nSubAps = len(centres)
+    centroid_agenda = np.zeros(nPackets, dtype=int)
+
+    half_subap = subApPix / 2.0
+
+    # Track which subapertures have been completed
+    completed = np.zeros(nSubAps, dtype=bool)
+
+    # For each packet, check which subapertures become complete
+    for packet_num in range(nPackets):
+        for subap_idx in range(nSubAps):
+            if completed[subap_idx]:
+                continue
+
+            # Get the subaperture bounds
+            cx, cy = centres[subap_idx]
+            x_min = int(cx - half_subap)
+            x_max = int(cx + half_subap)
+            y_min = int(cy - half_subap)
+            y_max = int(cy + half_subap)
+
+            # Check if all pixels in this subaperture have been received
+            # (i.e., their packet number <= current packet)
+            subap_region = packet_map[y_min:y_max, x_min:x_max]
+
+            if np.all(subap_region <= packet_num):
+                centroid_agenda[packet_num] += 1
+                completed[subap_idx] = True
+
+    # Verify we found all subapertures
+    assert (
+        np.sum(centroid_agenda) == nSubAps
+    ), f"Centroid agenda sum ({np.sum(centroid_agenda)}) doesn't match number of subapertures ({nSubAps})"
+
+    return centroid_agenda
