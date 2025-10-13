@@ -201,7 +201,28 @@ def run_pipeline_and_return_pipe(json_path, debug=False):
             if "n_acts" in missing_params_for_defaults:
                 params["n_acts"] = 5000  # Default actuator count for ELT
         
+        # Transform old API parameters to new agenda-based API
+        # This allows backward compatibility with old JSON files
+        if comp_type == ComponentType.CENTROIDER:
+            if "n_valid_subaps" in params and "centroid_agenda" not in params:
+                # Create a default centroid_agenda from n_valid_subaps
+                # We'll create it as a single-element agenda in the pipeline execution
+                # For now, just store the n_valid_subaps value
+                params["_n_valid_subaps_compat"] = params.pop("n_valid_subaps")
+        elif comp_type == ComponentType.CALIBRATION:
+            if "n_pixels" in params and "pixel_agenda" not in params:
+                # Store for compatibility transformation
+                params["_n_pixels_compat"] = params.pop("n_pixels")
+        elif comp_type == ComponentType.RECONSTRUCTION:
+            if "n_slopes" in params and "centroid_agenda" not in params:
+                # Store for compatibility transformation  
+                params["_n_slopes_compat"] = params.pop("n_slopes")
+        
+        # Keep compatibility params even if they're not in the function signature
+        compat_params = {k: v for k, v in params.items() if k.startswith("_") and k.endswith("_compat")}
         filtered_params = {k: v for k, v in params.items() if k in sig.parameters}
+        # Add back the compat params
+        filtered_params.update(compat_params)
         
         # Double-check we've got all required parameters (excluding ignorable)
         for param in required_params:

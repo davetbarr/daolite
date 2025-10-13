@@ -3,11 +3,8 @@
 import unittest
 import numpy as np
 from daolite.compute import create_compute_resources
-from daolite.pipeline.calibration import (
-    PixelCalibration,
-    _calibration_flops,
-    _calibration_mem,
-)
+from daolite.pipeline.calibration import PixelCalibration
+from daolite.utils.algorithm_ops import _calibration_flops, _calibration_mem
 
 
 class TestCalibration(unittest.TestCase):
@@ -44,10 +41,13 @@ class TestCalibration(unittest.TestCase):
 
     def test_pixel_calibration(self):
         """Test full pixel calibration pipeline."""
+        # Create pixel agenda - same number of pixels per iteration
+        pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
+        
         timings = PixelCalibration(
-            n_pixels=self.n_pixels,
             compute_resources=self.cr,
             start_times=self.start_times,
+            pixel_agenda=pixel_agenda,
         )
 
         self.assertEqual(timings.shape, (50, 2))
@@ -57,13 +57,13 @@ class TestCalibration(unittest.TestCase):
         self.assertEqual(timings[0, 0], self.start_times[0, 1])
 
         # Test with different configurations
-        configs = [{"group": 25}, {"debug": True}]  # Removed {"scale": 2.0}
+        configs = [{"debug": True}, {"flop_scale": 2.0}]
 
         for config in configs:
             timings = PixelCalibration(
-                n_pixels=self.n_pixels,
                 compute_resources=self.cr,
                 start_times=self.start_times,
+                pixel_agenda=pixel_agenda,
                 **config
             )
             self.assertEqual(timings.shape, (50, 2))
@@ -71,16 +71,19 @@ class TestCalibration(unittest.TestCase):
 
     def test_scaling(self):
         """Test timing scales with pixel count."""
+        pixel_agenda_base = np.ones(50, dtype=int) * self.n_pixels
+        pixel_agenda_2x = np.ones(50, dtype=int) * (self.n_pixels * 2)
+        
         timings_base = PixelCalibration(
-            n_pixels=self.n_pixels,
             compute_resources=self.cr,
             start_times=self.start_times,
+            pixel_agenda=pixel_agenda_base,
         )
 
         timings_2x = PixelCalibration(
-            n_pixels=self.n_pixels * 2,
             compute_resources=self.cr,
             start_times=self.start_times,
+            pixel_agenda=pixel_agenda_2x,
         )
 
         # Total time should increase with more pixels
@@ -96,10 +99,12 @@ class TestCalibration(unittest.TestCase):
             irregular_times[i, 0] = i * 20  # Larger gaps
             irregular_times[i, 1] = i * 20 + 5
 
+        pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
+        
         timings = PixelCalibration(
-            n_pixels=self.n_pixels,
             compute_resources=self.cr,
             start_times=irregular_times,
+            pixel_agenda=pixel_agenda,
         )
 
         # Each calibration should start after its input
@@ -112,25 +117,27 @@ class TestCalibration(unittest.TestCase):
 
     def test_computation_scaling(self):
         """Test computation time scaling."""
+        pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
+        
         timings_base = PixelCalibration(
-            n_pixels=self.n_pixels,
             compute_resources=self.cr,
             start_times=self.start_times,
+            pixel_agenda=pixel_agenda,
         )
 
         timings_fast = PixelCalibration(
-            n_pixels=self.n_pixels,
             compute_resources=self.cr,
             start_times=self.start_times,
+            pixel_agenda=pixel_agenda,
+            flop_scale=2.0,
+            mem_scale=2.0,
         )
 
         # Processing time should scale inversely with scale factor
-        # Since scale is removed, we expect times to be equal or test logic needs rethink
         time_base = timings_base[0, 1] - timings_base[0, 0]
         time_fast = timings_fast[0, 1] - timings_fast[0, 0]
-        # If scale is no longer a parameter, this assertion might need to be changed
-        # For now, assuming removal means no scaling, so times should be equal.
-        self.assertAlmostEqual(time_fast, time_base)
+        # With both scales=2.0, time should be approximately half
+        self.assertAlmostEqual(time_fast * 2, time_base, places=1)
 
 
 if __name__ == "__main__":

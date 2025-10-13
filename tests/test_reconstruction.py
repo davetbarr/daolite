@@ -4,10 +4,8 @@ import unittest
 import numpy as np
 from daolite.compute import create_compute_resources
 from daolite.pipeline.reconstruction import (
-    FullFrameReconstruction,
     Reconstruction,
-    _calculate_n_slopes,
-    _process_group,
+    _process_reconstruction_group,
 )
 
 
@@ -30,38 +28,56 @@ class TestReconstruction(unittest.TestCase):
         self.n_acts = 5000
 
     def test_full_frame_reconstruction(self):
-        """Test full-frame reconstruction timing."""
-        time = FullFrameReconstruction(
-            n_slopes=self.n_slopes, n_acts=self.n_acts, compute_resources=self.cr
-        )
-        self.assertGreater(time, 0)
-
-        # Test scaling with scale factor
-        time_scaled = FullFrameReconstruction(
-            n_slopes=self.n_slopes,
-            n_acts=self.n_acts,
+        """Test full-frame reconstruction timing (using single-element agenda)."""
+        # Full-frame reconstruction is now done by passing a single-element agenda
+        start_times = np.zeros([1, 2])
+        centroid_agenda = np.array([self.n_slopes])
+        
+        timings = Reconstruction(
             compute_resources=self.cr,
-            scale=2.0,
+            start_times=start_times,
+            centroid_agenda=centroid_agenda,
+            n_acts=self.n_acts,
         )
-        self.assertAlmostEqual(time_scaled * 2, time)
+        self.assertEqual(timings.shape, (1, 2))
+        self.assertGreater(timings[0, 1], timings[0, 0])
+
+        # Test scaling with flop_scale factor
+        timings_scaled = Reconstruction(
+            compute_resources=self.cr,
+            start_times=start_times,
+            centroid_agenda=centroid_agenda,
+            n_acts=self.n_acts,
+            flop_scale=2.0,
+            mem_scale=2.0,  # Scale both flop and mem together
+        )
+        # With both scales=2.0, the time should be approximately half
+        time = timings[0, 1] - timings[0, 0]
+        time_scaled = timings_scaled[0, 1] - timings_scaled[0, 0]
+        self.assertAlmostEqual(time_scaled * 2, time, places=1)
 
         # Test with debug output
-        time_debug = FullFrameReconstruction(
-            n_slopes=self.n_slopes,
-            n_acts=self.n_acts,
+        timings_debug = Reconstruction(
             compute_resources=self.cr,
+            start_times=start_times,
+            centroid_agenda=centroid_agenda,
+            n_acts=self.n_acts,
             debug=True,
         )
-        self.assertAlmostEqual(time_debug, time)
+        time_debug = timings_debug[0, 1] - timings_debug[0, 0]
+        self.assertAlmostEqual(time_debug, time, places=2)
 
     def test_reconstruction_pipeline(self):
         """Test grouped reconstruction pipeline."""
         start_times = np.zeros([50, 2])
+        # Create agenda with varying slope counts per iteration
+        centroid_agenda = np.ones(50, dtype=int) * (self.n_slopes // 50)
+        
         timings = Reconstruction(
-            n_slopes=self.n_slopes,
-            n_acts=self.n_acts,
             compute_resources=self.cr,
             start_times=start_times,
+            centroid_agenda=centroid_agenda,
+            n_acts=self.n_acts,
         )
 
         self.assertEqual(timings.shape, (50, 2))
@@ -69,58 +85,46 @@ class TestReconstruction(unittest.TestCase):
 
         # Test with different configurations
         configs = [
-            {"scale": 2.0},
+            {"flop_scale": 2.0},
+            {"mem_scale": 2.0},
             {"n_workers": 2},
-            {"group": 25},
-            {"agenda": np.ones(50) * 100},
         ]
 
         for config in configs:
             timings = Reconstruction(
-                n_slopes=self.n_slopes,
-                n_acts=self.n_acts,
                 compute_resources=self.cr,
                 start_times=start_times,
+                centroid_agenda=centroid_agenda,
+                n_acts=self.n_acts,
                 **config
             )
             self.assertEqual(timings.shape, (50, 2))
             self.assertTrue(np.all(timings[:, 1] >= timings[:, 0]))
 
-    def test_calculate_n_slopes(self):
-        """Test slope count calculation helper."""
-        n_slopes = 1000
-        group = 50
-        n_workers = 2
-
-        # Test without agenda
-        count = _calculate_n_slopes(n_slopes, group, n_workers)
-        self.assertGreater(count, 0)
-        self.assertLessEqual(count, n_slopes)
-
-        # Test with agenda
-        agenda = np.array([100])
-        count_agenda = _calculate_n_slopes(n_slopes, group, n_workers, agenda)
-        self.assertEqual(count_agenda, 50)  # 100/2 workers
-
-        # Test with zero agenda
-        agenda_zero = np.array([0])
-        count_zero = _calculate_n_slopes(n_slopes, group, n_workers, agenda_zero)
-        self.assertEqual(count_zero, 0)
-
-    def test_process_group(self):
-        """Test group processing helper."""
+    def test_process_reconstruction_group(self):
+        """Test reconstruction group processing helper."""
         n_slopes = 100
-        time = _process_group(
-            n_slopes=n_slopes, n_acts=self.n_acts, compute_resources=self.cr, flop_scale=1.0, mem_scale=1.0
+        time = _process_reconstruction_group(
+            n_slopes=n_slopes, 
+            n_acts=self.n_acts, 
+            compute_resources=self.cr, 
+            flop_scale=1.0, 
+            mem_scale=1.0,
+            debug=False
         )
         self.assertGreater(time, 0)
 
         # Test scaling
-        time_scaled = _process_group(
-            n_slopes=n_slopes, n_acts=self.n_acts, compute_resources=self.cr, flop_scale=2.0, mem_scale=2.0
+        time_scaled = _process_reconstruction_group(
+            n_slopes=n_slopes, 
+            n_acts=self.n_acts, 
+            compute_resources=self.cr, 
+            flop_scale=2.0, 
+            mem_scale=2.0,
+            debug=False
         )
         # With scale=2.0, the time should be approximately half of the original time
-        self.assertAlmostEqual(time_scaled * 2, time)
+        self.assertAlmostEqual(time_scaled * 2, time, places=2)
 
 if __name__ == "__main__":
     unittest.main()

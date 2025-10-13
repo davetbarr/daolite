@@ -7,57 +7,13 @@ offset calculation, saturation handling, and DM power estimation.
 """
 
 from daolite.compute import ComputeResources
-
-
-# Operation complexity functions
-def _integration_flops(m: int) -> int:
-    """Calculate FLOPS for integration operation."""
-    return 2 * m
-
-
-def _integration_mem(m: int) -> int:
-    """Calculate memory for integration operation."""
-    return 2 * m
-
-
-def _pid_flops(m: int) -> int:
-    """Calculate FLOPS for PID control."""
-    return 6 * m
-
-
-def _pid_mem(m: int) -> int:
-    """Calculate memory for PID control."""
-    return 2 * m
-
-
-def _offset_flops(m: int) -> int:
-    """Calculate FLOPS for offset computation."""
-    return m
-
-
-def _offset_mem(m: int) -> int:
-    """Calculate memory for offset computation."""
-    return 2 * m
-
-
-def _saturation_flops(m: int) -> int:
-    """Calculate FLOPS for saturation handling."""
-    return 2 * m
-
-
-def _saturation_mem(m: int) -> int:
-    """Calculate memory for saturation handling."""
-    return 2 * m
-
-
-def _dm_power_flops(m: int) -> int:
-    """Calculate FLOPS for DM power estimation."""
-    return 2 * m
-
-
-def _dm_power_mem(m: int) -> int:
-    """Calculate memory for DM power estimation."""
-    return 2 * m
+from daolite.utils.algorithm_ops import (
+    _integration_flops, _integration_mem,
+    _pid_flops, _pid_mem,
+    _offset_flops, _offset_mem,
+    _saturation_flops, _saturation_mem,
+    _dm_power_flops, _dm_power_mem
+)
 
 
 def Integrator(

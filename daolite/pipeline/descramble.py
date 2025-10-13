@@ -8,34 +8,7 @@ of pixel calibration operations in adaptive optics systems.
 import numpy as np
 from typing import Optional
 from daolite.compute import ComputeResources
-
-
-def _calibration_flops(n_pixels: int) -> int:
-    """
-    Calculate number of floating point operations for pixel calibration.
-
-    Args:
-        n_pixels: Number of pixels to calibrate
-
-    Returns:
-        int: Number of floating point operations
-    """
-    # Operations: dark subtraction, flat field division
-    return 2 * n_pixels
-
-
-def _calibration_mem(n_pixels: int, bit_depth: int) -> int:
-    """
-    Calculate memory operations for pixel calibration.
-
-    Args:
-        n_pixels: Number of pixels to calibrate
-
-    Returns:
-        int: Number of memory operations in bits
-    """
-    # Read pixel, read dark, read flat, write calibrated pixel
-    return  bit_depth*n_pixels + 3*n_pixels*32
+from daolite.utils.algorithm_ops import _calibration_flops, _calibration_mem
 
 
 def Descramble(

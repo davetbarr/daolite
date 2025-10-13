@@ -162,6 +162,30 @@ class Pipeline:
                     dep = component.dependencies[-1]
                     params["start_times"] = self.timing_results[dep]
 
+            # Handle agenda-based API compatibility
+            # If start_times is present and agenda is missing, create agenda from legacy params
+            if params.get("start_times") is not None:
+                start_times = params["start_times"]
+                n_iterations = len(start_times)
+                
+                # Centroider: create centroid_agenda from n_valid_subaps
+                if ("centroid_agenda" not in params and 
+                    "_n_valid_subaps_compat" in params):
+                    n_subaps = params.pop("_n_valid_subaps_compat")
+                    params["centroid_agenda"] = np.ones(n_iterations, dtype=int) * n_subaps
+                
+                # Calibration: create pixel_agenda from n_pixels
+                if ("pixel_agenda" not in params and 
+                    "_n_pixels_compat" in params):
+                    n_pixels = params.pop("_n_pixels_compat")
+                    params["pixel_agenda"] = np.ones(n_iterations, dtype=int) * n_pixels
+                
+                # Reconstruction: create centroid_agenda from n_slopes
+                if ("centroid_agenda" not in params and 
+                    "_n_slopes_compat" in params):
+                    n_slopes = params.pop("_n_slopes_compat")
+                    params["centroid_agenda"] = np.ones(n_iterations, dtype=int) * n_slopes
+
             # Add compute_resources if needed
             if (
                 "compute_resources" in component.function.__code__.co_varnames

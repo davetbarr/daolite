@@ -11,8 +11,10 @@ from daolite.pipeline.extended_source_centroider import (
     SquareDiff,
     ExtendedSourceCentroider,
 )
+from daolite.pipeline.pyramid_centroider import PyramidCentroider
+from daolite.pipeline.calibration import PixelCalibration
 from daolite.pipeline.descramble import Descramble
-from daolite.pipeline.reconstruction import FullFrameReconstruction, Reconstruction
+from daolite.pipeline.reconstruction import Reconstruction
 from daolite.pipeline.control import (
     Integrator,
     Offset,
@@ -32,10 +34,13 @@ __all__ = [
     "CrossCorrelate",
     "SquareDiff",
     "ExtendedSourceCentroider",
+    # Pyramid wavefront sensor
+    "PyramidCentroider",
+    # Calibration
+    "PixelCalibration",
     # Pixel descrambling
     "Descramble",
     # Reconstruction
-    "FullFrameReconstruction",
     "Reconstruction",
     # Control
     "Integrator",

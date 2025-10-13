@@ -4,12 +4,14 @@ import unittest
 import numpy as np
 from daolite.compute import create_compute_resources
 from daolite.pipeline.centroider import (
-    CrossCorrelate,
     Centroid,
     ReferenceSlopes,
     Error,
-    SquareDiff,
     Centroider,
+)
+from daolite.pipeline.extended_source_centroider import (
+    CrossCorrelate,
+    SquareDiff,
 )
 
 
@@ -96,11 +98,13 @@ class TestCentroider(unittest.TestCase):
     def test_centroider_full_pipeline(self):
         """Test complete centroiding pipeline."""
         start_times = np.zeros([50, 2])
+        centroid_agenda = np.ones(50, dtype=int) * self.n_subaps
+        
         timings = Centroider(
-            n_valid_subaps=self.n_subaps,
-            n_pix_per_subap=self.n_pixels,
             compute_resources=self.cr,
             start_times=start_times,
+            centroid_agenda=centroid_agenda,
+            n_pix_per_subap=self.n_pixels,
         )
 
         self.assertEqual(timings.shape, (50, 2))
@@ -110,19 +114,17 @@ class TestCentroider(unittest.TestCase):
 
         # Test with different configurations
         configs = [
-            {"square_diff": True},
             {"sort": True},
             {"n_workers": 2},
             {"delay_start": 5},
-            {"agenda": np.ones(50) * 100},
         ]
 
         for config in configs:
             timings = Centroider(
-                n_valid_subaps=self.n_subaps,
-                n_pix_per_subap=self.n_pixels,
                 compute_resources=self.cr,
                 start_times=start_times,
+                centroid_agenda=centroid_agenda,
+                n_pix_per_subap=self.n_pixels,
                 **config
             )
             self.assertEqual(timings.shape, (50, 2))
@@ -131,11 +133,13 @@ class TestCentroider(unittest.TestCase):
     def test_single_subaperture(self):
         """Test centroiding with single subaperture."""
         start_times = np.zeros([1, 2])
+        centroid_agenda = np.array([1], dtype=int)
+        
         timings = Centroider(
-            n_valid_subaps=1,
-            n_pix_per_subap=self.n_pixels,
             compute_resources=self.cr,
             start_times=start_times,
+            centroid_agenda=centroid_agenda,
+            n_pix_per_subap=self.n_pixels,
         )
         self.assertEqual(timings.shape, (1, 2))
         self.assertGreater(timings[0, 1], timings[0, 0])
