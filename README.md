@@ -329,6 +329,27 @@ Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTIN
 
 For detailed guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Citation
+
+If you use daolite in your research, please cite:
+
+**BibTeX:**
+```bibtex
+@software{david_2025_17342890,
+  author       = {David, Barr},
+  title        = {davetbarr/daolite: v0.1.0 - First Public Alpha},
+  month        = oct,
+  year         = 2025,
+  publisher    = {Zenodo},
+  version      = {v0.1.0},
+  doi          = {10.5281/zenodo.17342890},
+  url          = {https://doi.org/10.5281/zenodo.17342890},
+}
+```
+
+**APA:**
+> David, B. (2025). davetbarr/daolite: v0.1.0 - First Public Alpha (v0.1.0). Zenodo. https://doi.org/10.5281/zenodo.17342890
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0 - see LICENSE file for details.

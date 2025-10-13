@@ -22,6 +22,20 @@ daolite — Adaptive Optics Latency Analysis
 What is daolite?
 ================
 
+.. raw:: html
+
+   <div style="text-align: center; margin: 1.5em 0;">
+      <a href="https://doi.org/10.5281/zenodo.17342890" target="_blank">
+         <img src="https://zenodo.org/badge/DOI/10.5281/zenodo.17342890.svg" alt="DOI">
+      </a>
+      <a href="https://github.com/davetbarr/daolite" target="_blank">
+         <img src="https://img.shields.io/badge/License-GPL%20v3-blue.svg" alt="License: GPL v3">
+      </a>
+      <a href="https://www.python.org/" target="_blank">
+         <img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+">
+      </a>
+   </div>
+
 daolite is a Python package for modeling the computational timing and latency of adaptive optics (AO) systems. It helps you:
 
 * **Design AO Systems**: Compare different hardware configurations before building

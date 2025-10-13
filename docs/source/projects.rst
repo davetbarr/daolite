@@ -14,15 +14,30 @@ Citing daolite
 
 If you use daolite in your research or project, please cite:
 
+**BibTeX:**
+
 .. code-block:: bibtex
 
-   @software{daolite2024,
-     author = {Barr, David},
-     title = {daolite: Durham Adaptive Optics Latency Inspection and Timing Estimator},
-     year = {2024},
-     publisher = {GitHub},
-     url = {https://github.com/durhamAO/daolite}
+   @software{david_2025_17342890,
+     author       = {David, Barr},
+     title        = {davetbarr/daolite: v0.1.0 - First Public Alpha},
+     month        = oct,
+     year         = 2025,
+     publisher    = {Zenodo},
+     version      = {v0.1.0},
+     doi          = {10.5281/zenodo.17342890},
+     url          = {https://doi.org/10.5281/zenodo.17342890},
    }
+
+**APA:**
+
+   David, B. (2025). davetbarr/daolite: v0.1.0 - First Public Alpha (v0.1.0). Zenodo. https://doi.org/10.5281/zenodo.17342890
+
+**DOI Badge:**
+
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.17342890.svg
+   :target: https://doi.org/10.5281/zenodo.17342890
+   :alt: DOI
 
 Academic Publications
 ---------------------
