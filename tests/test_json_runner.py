@@ -1,11 +1,12 @@
 """Unit tests for the JSON pipeline runner and pipeline integration."""
 
-import unittest
-import tempfile
 import json
 import os
+import tempfile
+import unittest
+
+from daolite import ComponentType, Pipeline, PipelineComponent
 from daolite.pipeline import json_runner
-from daolite import Pipeline, PipelineComponent, ComponentType
 
 
 class TestJsonRunner(unittest.TestCase):
@@ -88,7 +89,7 @@ class TestJsonRunner(unittest.TestCase):
             # Patch PipelineComponent to capture dependencies
             from unittest.mock import patch
 
-            with patch("daolite.PipelineComponent") as MockComp:
+            with patch("daolite.PipelineComponent"):
                 json_runner.run_pipeline_from_json(temp_path)
                 # Check that dependencies are set
                 # (This is a smoke test; for full check, inspect the pipeline object)

@@ -12,7 +12,7 @@ Supports three operating modes:
 """
 
 import numpy as np
-from typing import Optional
+
 from daolite.compute import ComputeResources
 
 
@@ -20,7 +20,7 @@ def PyramidCentroider(
     compute_resources: ComputeResources,
     start_times: np.ndarray,
     centroid_agenda: np.ndarray,
-    mode: str = 'slopes',
+    mode: str = "slopes",
     n_workers: int = 1,
     delay_start: int = 0,
     flop_scale: float = 1.0,
@@ -40,16 +40,16 @@ def PyramidCentroider(
         flop_scale (float): Scaling factor for FLOPS
         mem_scale (float): Scaling factor for memory operations
         debug (bool): Enable debug output
-        
+
     Returns:
         np.ndarray: Array of shape (rows, 2) with processing start/end times
-        
+
     Raises:
         ValueError: If mode is not one of 'intensity', 'slopes', or 'ESC'
     """
-    if mode not in ['intensity', 'slopes', 'ESC']:
+    if mode not in ["intensity", "slopes", "ESC"]:
         raise ValueError(f"Mode must be 'intensity', 'slopes', or 'ESC', got '{mode}'")
-    
+
     iterations = start_times.shape[0]
     n_subs = centroid_agenda[0]
     timings = np.zeros([iterations, 2])
@@ -59,8 +59,7 @@ def PyramidCentroider(
         total_time = 0
     else:
         total_time = _process_pyramid_group(
-            n_subs, compute_resources, mode,
-            flop_scale, mem_scale, debug
+            n_subs, compute_resources, mode, flop_scale, mem_scale, debug
         )
 
     timings[0, 0] = start_times[delay_start, 1]
@@ -69,7 +68,7 @@ def PyramidCentroider(
     # Process remaining groups
     for i in range(1, iterations):
         n_subs = centroid_agenda[i]
-        
+
         if n_subs == 0:
             total_time = 0
         else:
@@ -85,7 +84,7 @@ def PyramidCentroider(
         start = max(timings[i - 1, 1], start_times[i, 1])
         timings[i, 0] = start
         timings[i, 1] = timings[i, 0] + total_time
-        
+
     if debug:
         print("*************PyramidCentroider************")
         print(f"Mode: {mode}")
@@ -102,13 +101,13 @@ def _process_pyramid_group(
     mode: str,
     flop_scale: float,
     mem_scale: float,
-    debug: bool
+    debug: bool,
 ) -> float:
     """
     Helper to process a group of pyramid subapertures with scaling factors.
-    
+
     Calculates FLOPS and memory operations based on the pyramid sensor mode.
-    
+
     Args:
         n_subs: Number of subapertures to process
         compute_resources: ComputeResources instance
@@ -116,58 +115,58 @@ def _process_pyramid_group(
         flop_scale: Computational scaling factor for FLOPS
         mem_scale: Memory scaling factor for bandwidth
         debug: Enable debug output
-        
+
     Returns:
         float: Total processing time with scaling applied
     """
     # Calculate operations based on mode
-    if mode == 'intensity':
+    if mode == "intensity":
         # Intensity mode: normalize pixels + copy operation
         # Normalization: sum all pixels (2*n_subs operations) + divide by total (4 operations)
         norm_flops = 2 * n_subs + 4
         norm_mem = n_subs * 32
-        
+
         # Copy operation
         copy_flops = n_subs
         copy_mem = n_subs * 32
-        
+
         total_flops = norm_flops + copy_flops
         total_mem = norm_mem + copy_mem
-        
-    elif mode == 'slopes':
+
+    elif mode == "slopes":
         # Slopes mode: normalize 4 quadrants + compute slopes + reference subtraction
         # Normalization: 2 operations per quadrant * 4 quadrants per sub + 4
         norm_flops = 2 * n_subs * 4 + 4
         norm_mem = n_subs * 32 * 4
-        
+
         # Slope computation: 8 operations per subaperture (differences between quadrants)
         slope_flops = n_subs * 8
         slope_mem = n_subs * 32 * 4
-        
+
         # Reference slope subtraction
         ref_slope_subtraction_flops = n_subs
         ref_slope_subtraction_mem = n_subs * 32
-        
+
         total_flops = norm_flops + slope_flops + ref_slope_subtraction_flops
         total_mem = norm_mem + slope_mem + ref_slope_subtraction_mem
 
-    elif mode == 'ESC':
+    elif mode == "ESC":
         # Extended Source Correlation mode: similar to slopes but with more operations
         # Normalization across 4 quadrants
         norm_flops = 2 * n_subs * 4 + 4
         norm_mem = n_subs * 32 * 4
-        
+
         # Extended slope computation: 16 operations per subaperture
         slope_flops = n_subs * 16
         slope_mem = n_subs * 32 * 4
-        
+
         # Reference slope subtraction
         ref_slope_subtraction_flops = n_subs
         ref_slope_subtraction_mem = n_subs * 32
-        
+
         total_flops = norm_flops + slope_flops + ref_slope_subtraction_flops
         total_mem = norm_mem + slope_mem + ref_slope_subtraction_mem
-    
+
     # Apply scaling and compute times
     mem_time = compute_resources.load_time(total_mem) / mem_scale
     flops_time = compute_resources.calc_time(total_flops) / flop_scale

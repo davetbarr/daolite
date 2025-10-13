@@ -1,12 +1,13 @@
 # Basic AO pipeline using the Pipeline API
-from daolite.pipeline.pipeline import Pipeline, PipelineComponent, ComponentType
-from daolite.compute.compute_resources import hardware
-from daolite.simulation.camera import PCOCamLink
-from daolite.pipeline.centroider import Centroider
-from daolite.pipeline.reconstruction import Reconstruction
-from daolite.pipeline.control import FullFrameControl
-from daolite.pipeline.calibration import PixelCalibration
 import numpy as np
+
+from daolite.compute.compute_resources import hardware
+from daolite.pipeline.calibration import PixelCalibration
+from daolite.pipeline.centroider import Centroider
+from daolite.pipeline.control import FullFrameControl
+from daolite.pipeline.pipeline import ComponentType, Pipeline, PipelineComponent
+from daolite.pipeline.reconstruction import Reconstruction
+from daolite.simulation.camera import PCOCamLink
 
 pipeline = Pipeline()
 

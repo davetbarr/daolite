@@ -1,7 +1,9 @@
 """Unit tests for pixel calibration module."""
 
 import unittest
+
 import numpy as np
+
 from daolite.compute import create_compute_resources
 from daolite.pipeline.calibration import PixelCalibration
 from daolite.utils.algorithm_ops import _calibration_flops, _calibration_mem
@@ -43,7 +45,7 @@ class TestCalibration(unittest.TestCase):
         """Test full pixel calibration pipeline."""
         # Create pixel agenda - same number of pixels per iteration
         pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
-        
+
         timings = PixelCalibration(
             compute_resources=self.cr,
             start_times=self.start_times,
@@ -64,7 +66,7 @@ class TestCalibration(unittest.TestCase):
                 compute_resources=self.cr,
                 start_times=self.start_times,
                 pixel_agenda=pixel_agenda,
-                **config
+                **config,
             )
             self.assertEqual(timings.shape, (50, 2))
             self.assertTrue(np.all(timings[:, 1] >= timings[:, 0]))
@@ -73,7 +75,7 @@ class TestCalibration(unittest.TestCase):
         """Test timing scales with pixel count."""
         pixel_agenda_base = np.ones(50, dtype=int) * self.n_pixels
         pixel_agenda_2x = np.ones(50, dtype=int) * (self.n_pixels * 2)
-        
+
         timings_base = PixelCalibration(
             compute_resources=self.cr,
             start_times=self.start_times,
@@ -100,7 +102,7 @@ class TestCalibration(unittest.TestCase):
             irregular_times[i, 1] = i * 20 + 5
 
         pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
-        
+
         timings = PixelCalibration(
             compute_resources=self.cr,
             start_times=irregular_times,
@@ -118,7 +120,7 @@ class TestCalibration(unittest.TestCase):
     def test_computation_scaling(self):
         """Test computation time scaling."""
         pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
-        
+
         timings_base = PixelCalibration(
             compute_resources=self.cr,
             start_times=self.start_times,

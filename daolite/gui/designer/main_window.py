@@ -1,24 +1,39 @@
-from PyQt5.QtWidgets import QMainWindow, QComboBox, QUndoStack, QWidget, QMessageBox, QApplication, QFileDialog, QUndoView, QDockWidget
-from PyQt5.QtGui import QFont, QPainter, QKeySequence, QCursor
 from PyQt5.QtCore import Qt
-from .scene import PipelineScene
-from .view import PipelineView
-from .dialogs.misc_dialogs import ShortcutHelpDialog, StyledTextInputDialog
-from .dialogs.resource_dialog import ResourceSelectionDialog
-from .dialogs.parameter_dialog import ComponentParametersDialog
-from .toolbar import create_toolbar
-from .menu import create_menu
+from PyQt5.QtGui import QCursor, QKeySequence
+from PyQt5.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QDockWidget,
+    QFileDialog,
+    QMainWindow,
+    QMessageBox,
+    QUndoStack,
+    QUndoView,
+    QWidget,
+)
+
+from daolite.common import ComponentType
+from daolite.compute.hardware import amd_epyc_7763, nvidia_rtx_4090
+from daolite.config import CameraConfig, OpticsConfig
+
+from .code_generator import CodeGenerator
 from .component_block import ComponentBlock
 from .component_container import ComputeBox, GPUBox
-from .code_generator import CodeGenerator
-from .style_utils import set_app_style, get_saved_theme, save_theme
+from .dialogs.misc_dialogs import ShortcutHelpDialog, StyledTextInputDialog
+from .dialogs.parameter_dialog import ComponentParametersDialog
+from .dialogs.resource_dialog import ResourceSelectionDialog
+from .menu import create_menu
+from .scene import PipelineScene
+from .style_utils import get_saved_theme, save_theme, set_app_style
+from .toolbar import create_toolbar
 from .undo_stack import (
-    AddComponentCommand, RemoveComponentCommand, MoveComponentCommand, 
-    RenameComponentCommand, AddConnectionCommand, RemoveConnectionCommand, 
-    ChangeParameterCommand, CompositeCommand
+    AddComponentCommand,
+    ChangeParameterCommand,
+    RemoveComponentCommand,
+    RenameComponentCommand,
 )
-from daolite.common import ComponentType
-from daolite.compute.hardware import nvidia_rtx_4090, amd_epyc_7763
+from .view import PipelineView
+
 
 class PipelineDesignerApp(QMainWindow):
     """
@@ -26,10 +41,13 @@ class PipelineDesignerApp(QMainWindow):
     Provides a graphical interface for designing AO pipelines with emphasis on
     network and multi-compute node configurations.
     """
+
     def __init__(self, json_path=None):
         print("[DEBUG] PipelineDesignerApp.__init__ called")
         self.theme = get_saved_theme()
-        self.pipeline_title = "AO Pipeline"  # Ensure pipeline_title is always initialized
+        self.pipeline_title = (
+            "AO Pipeline"  # Ensure pipeline_title is always initialized
+        )
         self.component_counts = {
             ComponentType.CAMERA: 0,
             ComponentType.CALIBRATION: 0,
@@ -55,7 +73,7 @@ class PipelineDesignerApp(QMainWindow):
         print(f"[DEBUG] json_path: {json_path}")
         if json_path:
             self.load_pipeline(json_path)
-        
+
         # Initialize selected_component attribute
         self.selected_component = None
 
@@ -68,7 +86,7 @@ class PipelineDesignerApp(QMainWindow):
         self._create_undo_view()
         self.statusBar().showMessage("Ready")
         self.set_theme(get_saved_theme())
-        
+
     def _create_undo_view(self):
         """Create a dock widget with an undo history view."""
         print("[DEBUG] PipelineDesignerApp._create_undo_view called")
@@ -80,22 +98,22 @@ class PipelineDesignerApp(QMainWindow):
         # Hide by default, can be shown from menu
         dock.setVisible(False)
         self.undo_history_dock = dock
-        
+
     def _setup_undo_redo_actions(self):
         """Set up actions for undo/redo with keyboard shortcuts."""
         print("[DEBUG] PipelineDesignerApp._setup_undo_redo_actions called")
         # Create undo action with Ctrl+Z shortcut
         self.undo_action = self.undo_stack.createUndoAction(self, "Undo")
         self.undo_action.setShortcut(QKeySequence.Undo)
-        
+
         # Create redo action with Ctrl+Shift+Z shortcut
         self.redo_action = self.undo_stack.createRedoAction(self, "Redo")
         self.redo_action.setShortcut(QKeySequence.Redo)
-        
+
         # Add actions to the window so shortcuts work globally
         self.addAction(self.undo_action)
         self.addAction(self.redo_action)
-        
+
         # Connect undo stack's clean state to application state if needed
         self.undo_stack.cleanChanged.connect(self._handle_clean_state_changed)
 
@@ -109,7 +127,9 @@ class PipelineDesignerApp(QMainWindow):
         create_menu(self)
 
     def set_theme(self, theme_name):
-        print(f"[DEBUG] PipelineDesignerApp.set_theme called with theme_name={theme_name}")
+        print(
+            f"[DEBUG] PipelineDesignerApp.set_theme called with theme_name={theme_name}"
+        )
         set_app_style(self, theme_name)  # Pass self as the widget parameter
         save_theme(theme_name)
 
@@ -119,7 +139,9 @@ class PipelineDesignerApp(QMainWindow):
         dialog.exec_()
 
     def add_component(self, component_type):
-        print(f"[DEBUG] PipelineDesignerApp.add_component called with component_type={component_type}")
+        print(
+            f"[DEBUG] PipelineDesignerApp.add_component called with component_type={component_type}"
+        )
         if component_type == ComponentType.COMPUTE:
             component = ComputeBox()
         elif component_type == ComponentType.GPU:
@@ -151,24 +173,28 @@ class PipelineDesignerApp(QMainWindow):
             cpu = dlg.cpu_name()
             compute_resource = dlg.get_selected_resource()
             cpu_name = getattr(compute_resource, "name", "Computer")
-            compute_box = ComputeBox(cpu_name, compute=compute_resource, cpu_resource=cpu)
-            
+            compute_box = ComputeBox(
+                cpu_name, compute=compute_resource, cpu_resource=cpu
+            )
+
             # Get the center of the current view in scene coordinates
             view_center = self.view.mapToScene(self.view.viewport().rect().center())
-            
+
             # Center the compute box at this position by accounting for its size
             compute_box.setPos(
                 view_center.x() - compute_box.size.width() / 2,
-                view_center.y() - compute_box.size.height() / 2
+                view_center.y() - compute_box.size.height() / 2,
             )
-            
+
             command = AddComponentCommand(self.scene, compute_box)
             self.undo_stack.push(command)
-            print(f"[DEBUG] Added compute_box: {compute_box} at center position: {compute_box.pos()}")
-            
-            if hasattr(compute_resource, 'attached_gpus'):
+            print(
+                f"[DEBUG] Added compute_box: {compute_box} at center position: {compute_box.pos()}"
+            )
+
+            if hasattr(compute_resource, "attached_gpus"):
                 for idx, gpu_resource in enumerate(compute_resource.attached_gpus):
-                    gpu_name = getattr(gpu_resource, 'name', f"GPU{idx+1}")
+                    gpu_name = getattr(gpu_resource, "name", f"GPU{idx+1}")
                     gpu_box = GPUBox(gpu_name, gpu_resource=gpu_resource)
                     gpu_box.setPos(30, 60 + 40 * idx)
                     compute_box.add_child(gpu_box)
@@ -186,7 +212,11 @@ class PipelineDesignerApp(QMainWindow):
                 compute_box = item
                 break
         if not compute_box:
-            QMessageBox.information(self, "No Computer Selected", "Please select a computer box to add a GPU to.")
+            QMessageBox.information(
+                self,
+                "No Computer Selected",
+                "Please select a computer box to add a GPU to.",
+            )
             return
         dlg = StyledTextInputDialog("Add GPU", "Enter GPU name:", "GPU", self)
         if not dlg.exec_():
@@ -199,24 +229,26 @@ class PipelineDesignerApp(QMainWindow):
         if dlg.exec_():
             gpu_resource = dlg.get_selected_resource()
         gpu_box = GPUBox(name, gpu_resource=gpu_resource)
-        
+
         # Center the GPU box within the compute box
         # Use default size of 220x120 for GPU box
         gpu_box.setPos(
             (compute_box.size.width() - gpu_box.size.width()) / 2,
-            (compute_box.size.height() - gpu_box.size.height()) / 2
+            (compute_box.size.height() - gpu_box.size.height()) / 2,
         )
-        
-        if hasattr(compute_box, 'add_child'):
+
+        if hasattr(compute_box, "add_child"):
             compute_box.add_child(gpu_box)
         command = AddComponentCommand(self.scene, gpu_box)
         self.undo_stack.push(command)
         print(f"[DEBUG] Added gpu_box: {gpu_box} at center position: {gpu_box.pos()}")
 
     def load_pipeline(self, json_path):
-        print(f"[DEBUG] PipelineDesignerApp.load_pipeline called with json_path={json_path}")
+        print(
+            f"[DEBUG] PipelineDesignerApp.load_pipeline called with json_path={json_path}"
+        )
         try:
-            with open(json_path, 'r') as file:
+            with open(json_path, "r") as file:
                 data = file.read()
                 self.scene.load_from_json(data)
                 self.statusBar().showMessage(f"Loaded pipeline from {json_path}")
@@ -229,7 +261,7 @@ class PipelineDesignerApp(QMainWindow):
     def run(json_path=None):
         print(f"[DEBUG] PipelineDesignerApp.run called with json_path={json_path}")
         import sys
-        from PyQt5.QtWidgets import QApplication
+
         app = QApplication(sys.argv)
         window = PipelineDesignerApp(json_path=json_path)
         window.show()
@@ -252,7 +284,9 @@ class PipelineDesignerApp(QMainWindow):
 
     def _save_pipeline(self):
         print("[DEBUG] PipelineDesignerApp._save_pipeline called")
-        dlg = StyledTextInputDialog("Set Pipeline Title", "Enter pipeline title:", self.pipeline_title, self)
+        dlg = StyledTextInputDialog(
+            "Set Pipeline Title", "Enter pipeline title:", self.pipeline_title, self
+        )
         if not dlg.exec_():
             print("[DEBUG] Save pipeline cancelled by user")
             return
@@ -263,11 +297,9 @@ class PipelineDesignerApp(QMainWindow):
         print(f"[DEBUG] Save pipeline filename: {filename}")
         if filename:
             from .file_io import save_pipeline_to_file
+
             success = save_pipeline_to_file(
-                self.scene,
-                self._get_all_components(),
-                self.scene.connections,
-                filename
+                self.scene, self._get_all_components(), self.scene.connections, filename
             )
             print(f"[DEBUG] Save pipeline success: {success}")
             if success:
@@ -282,16 +314,13 @@ class PipelineDesignerApp(QMainWindow):
     def _load_pipeline(self):
         print("[DEBUG] PipelineDesignerApp._load_pipeline called")
         from .file_io import load_pipeline
+
         filename, _ = QFileDialog.getOpenFileName(
             self, "Load Pipeline Design", "", "JSON Files (*.json);;All Files (*)"
         )
         print(f"[DEBUG] Load pipeline filename: {filename}")
         if filename:
-            success = load_pipeline(
-                self.scene,
-                filename,
-                self.component_counts
-            )
+            success = load_pipeline(self.scene, filename, self.component_counts)
             print(f"[DEBUG] Load pipeline success: {success}")
             if success:
                 QMessageBox.information(
@@ -307,16 +336,22 @@ class PipelineDesignerApp(QMainWindow):
         if not self.selected_component:
             print("[DEBUG] No selected component to rename")
             return
-        dlg = StyledTextInputDialog("Rename Component", "Enter new name:", self.selected_component.name, self)
+        dlg = StyledTextInputDialog(
+            "Rename Component", "Enter new name:", self.selected_component.name, self
+        )
         if dlg.exec_():
             old_name = self.selected_component.name
             new_name = dlg.getText()
-            print(f"[DEBUG] Renaming component {self.selected_component} from {old_name} to {new_name}")
-            
+            print(
+                f"[DEBUG] Renaming component {self.selected_component} from {old_name} to {new_name}"
+            )
+
             # Create and push the rename command
-            command = RenameComponentCommand(self.selected_component, old_name, new_name)
+            command = RenameComponentCommand(
+                self.selected_component, old_name, new_name
+            )
             self.undo_stack.push(command)
-            
+
             # Update the scene
             self.scene.update()
 
@@ -330,24 +365,28 @@ class PipelineDesignerApp(QMainWindow):
                 for connection in list(self.scene.connections):
                     if connection.start_block == item or connection.end_block == item:
                         connections_to_remove.append(connection)
-                
+
                 # Call disconnect() on each connection first
                 # This will ensure that transfer indicators are properly removed
                 for connection in connections_to_remove:
                     print(f"[DEBUG] About to disconnect connection: {connection}")
                     connection.disconnect()
                     print(f"[DEBUG] Disconnected connection: {connection}")
-                
+
                 # After disconnection, remove connections from the scene
                 for connection in connections_to_remove:
                     if connection in self.scene.connections:
                         self.scene.connections.remove(connection)
-                        print(f"[DEBUG] Removed connection from scene.connections: {connection}")
+                        print(
+                            f"[DEBUG] Removed connection from scene.connections: {connection}"
+                        )
                     self.scene.removeItem(connection)
                     print(f"[DEBUG] Removed connection from scene: {connection}")
-                
+
                 # Now create and push the remove component command
-                command = RemoveComponentCommand(self.scene, item, connections_to_remove)
+                command = RemoveComponentCommand(
+                    self.scene, item, connections_to_remove
+                )
                 self.undo_stack.push(command)
                 print(f"[DEBUG] Removed item: {item}")
             elif isinstance(item, ComputeBox) or isinstance(item, GPUBox):
@@ -358,7 +397,9 @@ class PipelineDesignerApp(QMainWindow):
                 print(f"[DEBUG] Removed container: {item}")
 
     def _get_default_compute_for_type(self, comp_type: ComponentType):
-        print(f"[DEBUG] PipelineDesignerApp._get_default_compute_for_type called with comp_type={comp_type}")
+        print(
+            f"[DEBUG] PipelineDesignerApp._get_default_compute_for_type called with comp_type={comp_type}"
+        )
         if comp_type in (ComponentType.CENTROIDER, ComponentType.RECONSTRUCTION):
             return nvidia_rtx_4090()
         else:
@@ -371,20 +412,23 @@ class PipelineDesignerApp(QMainWindow):
         if len(selected_items) == 1 and isinstance(selected_items[0], ComponentBlock):
             self.selected_component = selected_items[0]
             for item in self.scene.items():
-                if hasattr(item, 'set_highlight'):
+                if hasattr(item, "set_highlight"):
                     item.set_highlight(False)
-                if hasattr(item, 'highlight_connection'):
+                if hasattr(item, "highlight_connection"):
                     item.highlight_connection(False)
-            for conn in getattr(self.scene, 'connections', []):
-                if conn.start_block == self.selected_component or conn.end_block == self.selected_component:
-                    if hasattr(conn, 'highlight_connection'):
+            for conn in getattr(self.scene, "connections", []):
+                if (
+                    conn.start_block == self.selected_component
+                    or conn.end_block == self.selected_component
+                ):
+                    if hasattr(conn, "highlight_connection"):
                         conn.highlight_connection(True)
         else:
             self.selected_component = None
             for item in self.scene.items():
-                if hasattr(item, 'set_highlight'):
+                if hasattr(item, "set_highlight"):
                     item.set_highlight(False)
-                if hasattr(item, 'highlight_connection'):
+                if hasattr(item, "highlight_connection"):
                     item.highlight_connection(False)
 
     def _generate_code(self):
@@ -417,13 +461,14 @@ class PipelineDesignerApp(QMainWindow):
         self.update()
         for widget in self.findChildren(QWidget):
             set_app_style(widget, theme)
-        if hasattr(self, '_theme_actions'):
+        if hasattr(self, "_theme_actions"):
             for act in self._theme_actions:
                 act.setChecked(act.text().lower().startswith(theme))
 
     def _show_about(self):
         print("[DEBUG] PipelineDesignerApp._show_about called")
         from .dialogs import AboutDialog
+
         dlg = AboutDialog(self)
         dlg.exec_()
 
@@ -433,12 +478,18 @@ class PipelineDesignerApp(QMainWindow):
         dlg.exec_()
 
     def _add_component(self, comp_type: ComponentType):
-        print(f"[DEBUG] PipelineDesignerApp._add_component called with comp_type={comp_type}")
+        print(
+            f"[DEBUG] PipelineDesignerApp._add_component called with comp_type={comp_type}"
+        )
         # Use our enhanced component addition method that includes parameter inheritance
         component = self._on_component_added(comp_type)
-        
+
         # Set default compute resource if needed - safely check for compute attribute
-        if comp_type != ComponentType.NETWORK and not hasattr(component, 'compute') or not component.compute:
+        if (
+            comp_type != ComponentType.NETWORK
+            and not hasattr(component, "compute")
+            or not component.compute
+        ):
             component.compute = self._get_default_compute_for_type(comp_type)
 
     def _configure_compute(self):
@@ -459,10 +510,14 @@ class PipelineDesignerApp(QMainWindow):
                 self, "No Selection", "Please select a component to configure."
             )
             return
-        
+
         # Store the original parameters
-        old_params = self.selected_component.params.copy() if self.selected_component.params else {}
-        
+        old_params = (
+            self.selected_component.params.copy()
+            if self.selected_component.params
+            else {}
+        )
+
         # Show dialog
         dlg = ComponentParametersDialog(
             self.selected_component.component_type, self.selected_component.params, self
@@ -470,123 +525,154 @@ class PipelineDesignerApp(QMainWindow):
         if dlg.exec_():
             # Get new parameters
             new_params = dlg.get_parameters()
-            
+
             # Check which parameters were changed
             changed_params = {}
             for param_name, new_value in new_params.items():
                 old_value = old_params.get(param_name)
-                
+
                 # Special handling for numpy arrays to prevent ValueError
                 import numpy as np
-                if isinstance(old_value, np.ndarray) or isinstance(new_value, np.ndarray):
+
+                if isinstance(old_value, np.ndarray) or isinstance(
+                    new_value, np.ndarray
+                ):
                     # If one is array and other is not, they're different
-                    if not (isinstance(old_value, np.ndarray) and isinstance(new_value, np.ndarray)):
+                    if not (
+                        isinstance(old_value, np.ndarray)
+                        and isinstance(new_value, np.ndarray)
+                    ):
                         changed_params[param_name] = new_value
                     # If both are arrays, compare shapes first, then values if shapes match
-                    elif isinstance(old_value, np.ndarray) and isinstance(new_value, np.ndarray):
-                        if old_value.shape != new_value.shape or not np.array_equal(old_value, new_value):
+                    elif isinstance(old_value, np.ndarray) and isinstance(
+                        new_value, np.ndarray
+                    ):
+                        if old_value.shape != new_value.shape or not np.array_equal(
+                            old_value, new_value
+                        ):
                             changed_params[param_name] = new_value
                 # Normal comparison for non-array values
                 elif old_value != new_value:
                     changed_params[param_name] = new_value
-                    
+
             # If parameters were changed, check for propagation
             if changed_params:
-                self._check_parameter_propagation(self.selected_component, changed_params)
-                
+                self._check_parameter_propagation(
+                    self.selected_component, changed_params
+                )
+
             # Create and push command to update the current component
-            command = ChangeParameterCommand(self.selected_component, old_params, new_params)
+            command = ChangeParameterCommand(
+                self.selected_component, old_params, new_params
+            )
             self.undo_stack.push(command)
-            
+
             self.scene.update()
             print(f"[DEBUG] Updated params for component: {self.selected_component}")
-            
+
     def _check_parameter_propagation(self, source_component, changed_params):
         """
         Check if any of the changed parameters should be propagated to other components.
-        
+
         Args:
             source_component: The component whose parameters were changed
             changed_params: Dict of parameter name to new value for changed parameters
         """
         # Import locally to avoid circular imports
-        from .parameter_inheritance import find_components_for_parameter_propagation
         from .dialogs.parameter_propagation_dialog import ParameterPropagationDialog
-        
+        from .parameter_inheritance import find_components_for_parameter_propagation
+
         # Get all components that might be affected by each parameter change
         for param_name, new_value in changed_params.items():
-            print(f"[DEBUG] Checking propagation for parameter {param_name}={new_value}")
-            
+            print(
+                f"[DEBUG] Checking propagation for parameter {param_name}={new_value}"
+            )
+
             # Find components that can inherit this parameter
             other_components = self._get_all_components()
             if not other_components:
                 print("[DEBUG] No other components found in scene")
                 continue
-                
+
             # Exclude the source component
-            other_components = [comp for comp in other_components if comp != source_component]
+            other_components = [
+                comp for comp in other_components if comp != source_component
+            ]
             if not other_components:
                 print("[DEBUG] No components other than source component")
                 continue
-                
-            print(f"[DEBUG] Found {len(other_components)} other components to check for propagation")
-            
+
+            print(
+                f"[DEBUG] Found {len(other_components)} other components to check for propagation"
+            )
+
             # Find components that share this parameter
             affected_components = find_components_for_parameter_propagation(
                 source_component, param_name, other_components
             )
-            
+
             # If there are affected components, show propagation dialog
             if affected_components:
-                print(f"[DEBUG] Found {len(affected_components)} affected components for parameter {param_name}")
+                print(
+                    f"[DEBUG] Found {len(affected_components)} affected components for parameter {param_name}"
+                )
                 try:
                     dlg = ParameterPropagationDialog(
-                        param_name,
-                        new_value,
-                        affected_components,
-                        self
+                        param_name, new_value, affected_components, self
                     )
-                    
+
                     if dlg.exec_():
                         # Get selected components for propagation
                         components_to_update = dlg.get_selected_components()
-                        
+
                         # Update selected components
                         for component, param_names in components_to_update.items():
-                            old_comp_params = component.params.copy() if hasattr(component, 'params') and component.params else {}
+                            old_comp_params = (
+                                component.params.copy()
+                                if hasattr(component, "params") and component.params
+                                else {}
+                            )
                             new_comp_params = old_comp_params.copy()
-                            
+
                             for target_param in param_names:
                                 new_comp_params[target_param] = new_value
-                                
+
                             # Create and push command to update this component
-                            command = ChangeParameterCommand(component, old_comp_params, new_comp_params)
+                            command = ChangeParameterCommand(
+                                component, old_comp_params, new_comp_params
+                            )
                             self.undo_stack.push(command)
-                            print(f"[DEBUG] Propagated {param_name}={new_value} to {component.name}.{target_param}")
+                            print(
+                                f"[DEBUG] Propagated {param_name}={new_value} to {component.name}.{target_param}"
+                            )
                 except Exception as e:
                     print(f"[DEBUG] Error showing propagation dialog: {e}")
                     import traceback
+
                     traceback.print_exc()
             else:
-                print(f"[DEBUG] No affected components found for parameter {param_name}")
+                print(
+                    f"[DEBUG] No affected components found for parameter {param_name}"
+                )
 
     def _quick_save_pipeline(self):
         print("[DEBUG] PipelineDesignerApp._quick_save_pipeline called")
         import os
+
         default_path = os.path.expanduser("~/daolite_quicksave.json")
         from .file_io import save_pipeline_to_file
+
         save_pipeline_to_file(
-            self.scene,
-            self._get_all_components(),
-            self.scene.connections,
-            default_path
+            self.scene, self._get_all_components(), self.scene.connections, default_path
         )
         self.statusBar().showMessage(f"Pipeline quick-saved to {default_path}", 3000)
         print(f"[DEBUG] Pipeline quick-saved to {default_path}")
 
     def _get_compute_resource(self, item):
-        print(f"[DEBUG] PipelineDesignerApp._get_compute_resource called for item: {item}")
-        existing_resource = item.compute if hasattr(item, 'compute') else None
+        print(
+            f"[DEBUG] PipelineDesignerApp._get_compute_resource called for item: {item}"
+        )
+        existing_resource = item.compute if hasattr(item, "compute") else None
         dlg = ResourceSelectionDialog(self, existing_resource=existing_resource)
         if dlg.exec_():
             new_resource = dlg.get_selected_resource()
@@ -598,9 +684,12 @@ class PipelineDesignerApp(QMainWindow):
                         item.childItems().remove(child)
                         self.scene.removeItem(child)
                         print(f"[DEBUG] Removed GPUBox child: {child}")
-                if hasattr(new_resource, 'attached_gpus') and new_resource.attached_gpus:
+                if (
+                    hasattr(new_resource, "attached_gpus")
+                    and new_resource.attached_gpus
+                ):
                     for idx, gpu_resource in enumerate(new_resource.attached_gpus):
-                        gpu_name = getattr(gpu_resource, 'name', f"GPU{idx+1}")
+                        gpu_name = getattr(gpu_resource, "name", f"GPU{idx+1}")
                         gpu_box = GPUBox(gpu_name, gpu_resource=gpu_resource)
                         gpu_box.setPos(30, 60 + 40 * idx)
                         item.add_child(gpu_box)
@@ -623,15 +712,17 @@ class PipelineDesignerApp(QMainWindow):
                 else:
                     print("[DEBUG] No container for compute resource")
                     QMessageBox.warning(
-                        self, 
-                        "No Container", 
-                        "This component is not in a compute container. Please add it to a CPU or GPU container first."
+                        self,
+                        "No Container",
+                        "This component is not in a compute container. Please add it to a CPU or GPU container first.",
                     )
             self.scene.update()
             print(f"[DEBUG] Finished updating compute resource for item: {item}")
 
     def _get_all_components(self):
-        components = [item for item in self.scene.items() if isinstance(item, ComponentBlock)]
+        components = [
+            item for item in self.scene.items() if isinstance(item, ComponentBlock)
+        ]
         print(f"[DEBUG] _get_all_components found: {components}")
         return components
 
@@ -654,7 +745,7 @@ class PipelineDesignerApp(QMainWindow):
                     actuator_count = component.params["n_actuators"]
         if camera_component and camera_component.params:
             camera_params = camera_component.params
-            camera_config = CameraConfig(
+            CameraConfig(
                 n_pixels=camera_params.get("n_pixels", 1024 * 1024),
                 n_subapertures=camera_params.get("n_subapertures", 80 * 80),
                 pixels_per_subaperture=camera_params.get(
@@ -664,15 +755,12 @@ class PipelineDesignerApp(QMainWindow):
                 readout_time=camera_params.get("readout_time", 500.0),
             )
         else:
-            camera_config = CameraConfig(
+            CameraConfig(
                 n_pixels=1024 * 1024,
                 n_subapertures=80 * 80,
                 pixels_per_subaperture=16 * 16,
             )
-        optics_config = OpticsConfig(n_actuators=actuator_count)
-        use_square_diff = False
-        use_sorting = False
-        n_workers = 4
+        OpticsConfig(n_actuators=actuator_count)
         filename, _ = QFileDialog.getOpenFileName(
             self, "Load Pipeline Design", "", "JSON Files (*.json);;All Files (*)"
         )
@@ -681,11 +769,8 @@ class PipelineDesignerApp(QMainWindow):
             print("[DEBUG] Export config cancelled by user")
             return
         from .file_io import load_pipeline
-        success = load_pipeline(
-            self.scene,
-            filename,
-            self.component_counts
-        )
+
+        success = load_pipeline(self.scene, filename, self.component_counts)
         print(f"[DEBUG] Export config load_pipeline success: {success}")
         if success:
             QMessageBox.information(
@@ -699,6 +784,7 @@ class PipelineDesignerApp(QMainWindow):
     def _run_pipeline(self):
         print("[DEBUG] PipelineDesignerApp._run_pipeline called")
         from .pipeline_executor import run_pipeline
+
         components = self._get_all_components()
         execution_method = self.execution_method.currentText()
         print(f"[DEBUG] Running pipeline with execution_method={execution_method}")
@@ -706,104 +792,115 @@ class PipelineDesignerApp(QMainWindow):
 
     def _set_pipeline_title(self):
         print("[DEBUG] PipelineDesignerApp._set_pipeline_title called")
-        dlg = StyledTextInputDialog("Set Pipeline Title", "Enter pipeline title:", getattr(self, 'pipeline_title', "AO Pipeline"), self)
+        dlg = StyledTextInputDialog(
+            "Set Pipeline Title",
+            "Enter pipeline title:",
+            getattr(self, "pipeline_title", "AO Pipeline"),
+            self,
+        )
         if dlg.exec_():
             self.pipeline_title = dlg.getText()
-            self.statusBar().showMessage(f"Pipeline title set to: {self.pipeline_title}", 3000)
+            self.statusBar().showMessage(
+                f"Pipeline title set to: {self.pipeline_title}", 3000
+            )
 
     def _handle_clean_state_changed(self, is_clean):
         """Handle changes in the undo stack's clean state."""
-        print(f"[DEBUG] PipelineDesignerApp._handle_clean_state_changed called with is_clean={is_clean}")
+        print(
+            f"[DEBUG] PipelineDesignerApp._handle_clean_state_changed called with is_clean={is_clean}"
+        )
         # Update window title to indicate if there are unsaved changes
         title = "Pipeline Designer"
         if not is_clean:
             title += " *"
         self.setWindowTitle(title)
-        
+
     def toggle_history_view(self):
         """Toggle visibility of the undo history dock."""
         print("[DEBUG] PipelineDesignerApp.toggle_history_view called")
-        if hasattr(self, 'undo_history_dock'):
+        if hasattr(self, "undo_history_dock"):
             self.undo_history_dock.setVisible(not self.undo_history_dock.isVisible())
 
     def _on_component_added(self, component_type, pos=None):
         """
         Handle adding a new component to the scene.
-        
+
         Args:
             component_type: Type of component to add
             pos: Optional position to place the component
         """
         print(f"[DEBUG] Adding component type: {component_type}")
-        
+
         # Create component instance
         count = self.component_counts.get(component_type, 0) + 1
         self.component_counts[component_type] = count
-        
+
         component = ComponentBlock(component_type, instance_number=count)
-        
+
         # If position not specified, place at mouse position
         if pos is None:
             cursor_pos = self.mapFromGlobal(QCursor.pos())
             scene_pos = self.view.mapToScene(cursor_pos)
-            component.setPos(scene_pos.x() - component.size.width() / 2, scene_pos.y() - component.size.height() / 2)
+            component.setPos(
+                scene_pos.x() - component.size.width() / 2,
+                scene_pos.y() - component.size.height() / 2,
+            )
         else:
             component.setPos(pos)
-        
+
         # Add to scene
         self.scene.addItem(component)
-        
+
         # Set as selected component
         self.selected_component = component
-        
+
         # Check if there are parameters that can be inherited from existing components
         self._check_inheritable_parameters(component)
-        
+
         # Add to history - Fix parameter order (scene, component) and don't add command
         # for something we've already added to the scene
         # command = AddComponentCommand(self.scene, component)
         # self.undo_stack.push(command)
-        
+
         return component
-    
+
     def _check_inheritable_parameters(self, component):
         """
         Check if there are parameters that can be inherited from existing components.
-        
+
         Args:
             component: Component to check for inheritable parameters
         """
         # Import locally to avoid circular imports
-        from .parameter_inheritance import get_all_inheritable_parameters
         from .dialogs.parameter_inheritance_dialog import ParameterInheritanceDialog
-        
+        from .parameter_inheritance import get_all_inheritable_parameters
+
         # Get all existing components
         components = self._get_all_components()
         if not components:
             return
-        
+
         # Filter out the current component
         components = [comp for comp in components if comp != component]
         if not components:
             return
-        
+
         # Check for inheritable parameters
-        inheritable_params, source_names = get_all_inheritable_parameters(components, component)
-        
+        inheritable_params, source_names = get_all_inheritable_parameters(
+            components, component
+        )
+
         # If there are any inheritable parameters, show the dialog
         if inheritable_params:
             dlg = ParameterInheritanceDialog(
-                component.component_type,
-                inheritable_params,
-                source_names,
-                self
+                component.component_type, inheritable_params, source_names, self
             )
-            
+
             if dlg.exec_():
                 # Get selected parameters
                 selected_params = dlg.get_selected_parameters()
                 if selected_params:
                     # Update component parameters
-                    if not hasattr(component, 'params'):
+                    if not hasattr(component, "params"):
                         component.params = {}
                     component.params.update(selected_params)

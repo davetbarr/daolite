@@ -1,5 +1,15 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton, QLabel, QLineEdit, QDialogButtonBox
+from PyQt5.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+)
+
 from ..style_utils import set_app_style
+
 
 class ShortcutHelpDialog(QDialog):
     def __init__(self, parent=None):
@@ -26,14 +36,16 @@ class ShortcutHelpDialog(QDialog):
             ⌘+: Zoom In
             ⌘-: Zoom Out
             ⌘0: Reset Zoom
-            """)
+            """
+        )
         layout.addWidget(text)
         btn = QPushButton("Close")
         btn.clicked.connect(self.accept)
         layout.addWidget(btn)
-        
+
         # Apply styling after all UI elements are created
         set_app_style(self)
+
 
 class StyledTextInputDialog(QDialog):
     def __init__(self, title, label, default_text="", parent=None):
@@ -47,7 +59,7 @@ class StyledTextInputDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
-        
+
         # Apply styling after all UI elements are created
         set_app_style(self)
 

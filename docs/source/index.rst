@@ -66,6 +66,7 @@ daolite provides timing and latency modelling for AO components. The docs below 
 
    install
    quick_start
+   contributing
    latency_model
    compute_resources
    pipeline

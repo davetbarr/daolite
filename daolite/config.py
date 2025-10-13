@@ -7,7 +7,8 @@ latency estimation.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Any, Dict
+from typing import Any, Dict, Optional
+
 import yaml
 
 # Import the ComputeResources class and creation function directly
@@ -108,7 +109,7 @@ class Config:
         filepath : str
             Path to configuration file.
         """
-        with open(filepath, "r") as file:
+        with open(filepath) as file:
             self.config_data = yaml.safe_load(file)
 
     def save(self, filepath: str) -> None:
@@ -182,7 +183,7 @@ class SystemConfig:
         Returns:
             SystemConfig instance
         """
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             data = yaml.safe_load(f)
 
         # Parse camera configuration
@@ -285,4 +286,3 @@ class SystemConfig:
 
         with open(file_path, "w") as f:
             yaml.safe_dump(config, f, default_flow_style=False)
-            

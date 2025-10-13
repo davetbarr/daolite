@@ -1,16 +1,18 @@
 """Unit tests for network timing module."""
 
 import unittest
+
 import numpy as np
+
 from daolite.compute import create_compute_resources
 from daolite.utils.network import (
+    PCIE,
     TimeOnNetwork,
+    calculate_driver_delay,
     calculate_memory_bandwidth,
     calculate_switch_time,
-    calculate_driver_delay,
     estimate_transfer_time_us,
     pcie_bus,
-    PCIE,
 )
 
 
@@ -155,7 +157,7 @@ class TestNetwork(unittest.TestCase):
                 n_bits=self.data_size,
                 compute_resources=self.cr,
                 start_times=start_times,
-                **config
+                **config,
             )
             self.assertEqual(timings.shape, (50, 2))
             self.assertTrue(np.all(timings[:, 1] >= timings[:, 0]))

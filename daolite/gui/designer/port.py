@@ -2,17 +2,21 @@
 Port and PortType classes for the daolite pipeline designer.
 """
 
-from typing import List, Optional, Tuple, TYPE_CHECKING
 from enum import Enum
-from PyQt5.QtCore import QRectF, QPointF
+from typing import TYPE_CHECKING, List, Optional, Tuple
+
+from PyQt5.QtCore import QPointF, QRectF
 
 if TYPE_CHECKING:
     from .component_block import ComponentBlock
 
+
 class PortType(Enum):
     """Type of connection port."""
+
     INPUT = 0
     OUTPUT = 1
+
 
 class Port:
     """
@@ -25,6 +29,7 @@ class Port:
         label: Text label for the port
         parent: Reference to parent component
     """
+
     def __init__(self, port_type: PortType, position: QPointF, label: str = ""):
         self.port_type = port_type
         self.position = position  # Relative to parent component
@@ -48,5 +53,7 @@ class Port:
         debug_rect.adjust(-3, -3, 3, 3)
         hit = debug_rect.translated(scene_pos).contains(point)
         if hit:
-            print(f"[DEBUG] Port '{self.label}' clicked at {point}, rect center {scene_pos}, rect {debug_rect}")
+            print(
+                f"[DEBUG] Port '{self.label}' clicked at {point}, rect center {scene_pos}, rect {debug_rect}"
+            )
         return hit

@@ -1,7 +1,8 @@
 # Example: Model network/PCIe transfer timing
-from daolite.compute import create_compute_resources
-from daolite.utils.network import TimeOnNetwork, PCIE
 import numpy as np
+
+from daolite.compute import create_compute_resources
+from daolite.utils.network import PCIE, TimeOnNetwork
 
 compute = create_compute_resources(
     cores=8,
@@ -15,10 +16,12 @@ compute = create_compute_resources(
 )
 
 # Example: Ethernet/Network transfer timing
-network_time = TimeOnNetwork(n_bits=1024*1024*8, compute_resources=compute)
+network_time = TimeOnNetwork(n_bits=1024 * 1024 * 8, compute_resources=compute)
 print("Network transfer timing (1MB):", network_time)
 
 # Example: PCIe transfer timing
 start_times = np.zeros([1, 2])
-pcie_time = PCIE(n_bits=1024*1024*8, compute_resources=compute, start_times=start_times)
+pcie_time = PCIE(
+    n_bits=1024 * 1024 * 8, compute_resources=compute, start_times=start_times
+)
 print("PCIe transfer timing (1MB):", pcie_time)

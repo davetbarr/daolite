@@ -8,19 +8,17 @@ Control Systems, with a focus on Durham Adaptive Optics (DAO) RTC systems.
 # Import core modules
 from daolite.common import ComponentType
 from daolite.component import Component
-from daolite.config import Config, SystemConfig
-
 from daolite.compute import (
     ComputeResources,
     create_compute_resources,
-    create_gpu_resource,
     create_compute_resources_from_yaml,
-    hardware,
+    create_gpu_resource,
 )
+from daolite.config import Config, SystemConfig
 from daolite.pipeline import Pipeline, PipelineComponent
 
 # Version information
-__version__ = "0.2.0"
+__version__ = "0.1.0"
 __author__ = "David Barr"
 
 # Export public API

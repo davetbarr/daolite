@@ -1,6 +1,7 @@
 import unittest
+
+from daolite.common import ComponentId, ComponentType, ResourceId
 from daolite.component import Component
-from daolite.common import ComponentType, ResourceId, ComponentId
 
 
 class TestComponentBase(unittest.TestCase):
@@ -35,7 +36,7 @@ class TestComponentTypeEnum(unittest.TestCase):
         self.assertTrue(hasattr(ComponentType, "OTHER"))
 
     def test_enum_members_are_unique(self):
-        values = set(item.value for item in ComponentType)
+        values = {item.value for item in ComponentType}
         self.assertEqual(len(values), len(ComponentType))
 
 

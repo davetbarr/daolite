@@ -3,12 +3,15 @@ ComponentContainer, ComputeBox, and GPUBox classes for the daolite pipeline desi
 """
 
 from typing import List, Optional
-from PyQt5.QtCore import Qt, QRectF, QPointF
-from PyQt5.QtGui import QPen, QBrush, QColor, QPainter, QFont, QPainterPath
-from PyQt5.QtWidgets import QGraphicsItem, QMenu, QAction, QColorDialog
+
+from PyQt5.QtCore import QPointF, QRectF, Qt
+from PyQt5.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen
+from PyQt5.QtWidgets import QAction, QColorDialog, QGraphicsItem, QMenu
+
 from daolite.compute import ComputeResources
-from .style_utils import StyledTextInputDialog
+
 from .component_block import ComponentBlock
+
 
 class ComponentContainer(QGraphicsItem):
     """
@@ -16,7 +19,10 @@ class ComponentContainer(QGraphicsItem):
     This class provides common functionality for containers that can hold
     component blocks and manage their layout.
     """
-    def __init__(self, name: str, compute: Optional[ComputeResources] = None, z_value: int = -10):
+
+    def __init__(
+        self, name: str, compute: Optional[ComputeResources] = None, z_value: int = -10
+    ):
         super().__init__()
         self.name = name
         self.compute = compute
@@ -38,7 +44,7 @@ class ComponentContainer(QGraphicsItem):
         self.theme = theme
         self.update()
         for child in self.childItems():
-            if hasattr(child, 'set_theme'):
+            if hasattr(child, "set_theme"):
                 child.set_theme(theme)
 
     def set_highlight(self, value: bool):
@@ -48,11 +54,14 @@ class ComponentContainer(QGraphicsItem):
     def _update_all_transfer_indicators(self):
         if not self.scene():
             return
-        from .connection import Connection, ComponentBlock
-        blocks = [child for child in self.childItems() if isinstance(child, ComponentBlock)]
+        from .connection import ComponentBlock, Connection
+
+        blocks = [
+            child for child in self.childItems() if isinstance(child, ComponentBlock)
+        ]
         for item in self.scene().items():
             if isinstance(item, Connection):
-                if (item.start_block in blocks or item.end_block in blocks):
+                if item.start_block in blocks or item.end_block in blocks:
                     item.update_transfer_indicators()
 
     def contextMenuEvent(self, event):
@@ -77,7 +86,7 @@ class ComponentContainer(QGraphicsItem):
     def _on_configure(self):
         if self.scene() and self.scene().parent():
             app = self.scene().parent()
-            if hasattr(app, '_get_compute_resource'):
+            if hasattr(app, "_get_compute_resource"):
                 app._get_compute_resource(self)
 
     def _on_delete(self):
@@ -85,16 +94,18 @@ class ComponentContainer(QGraphicsItem):
             for child in list(self.childItems()):
                 self.scene().removeItem(child)
             parent = self.parentItem()
-            if parent and hasattr(parent, 'child_items') and self in parent.child_items:
+            if parent and hasattr(parent, "child_items") and self in parent.child_items:
                 parent.child_items.remove(self)
             self.scene().removeItem(self)
 
     def boundingRect(self) -> QRectF:
-        return self.size.adjusted(-self._edge_size, -self._edge_size, self._edge_size, self._edge_size)
+        return self.size.adjusted(
+            -self._edge_size, -self._edge_size, self._edge_size, self._edge_size
+        )
 
     def paint(self, painter: QPainter, option, widget):
-        theme = getattr(self, 'theme', getattr(self.scene(), 'theme', 'light'))
-        is_dark = theme == 'dark'
+        theme = getattr(self, "theme", getattr(self.scene(), "theme", "light"))
+        is_dark = theme == "dark"
         if is_dark:
             if isinstance(self, ComputeBox):
                 fill = QColor(60, 80, 120, 180)
@@ -116,21 +127,23 @@ class ComponentContainer(QGraphicsItem):
         painter.setPen(pen)
         painter.setBrush(QBrush(fill))
         painter.drawRoundedRect(self.size, 14, 14)
-        
+
         # Create the title rect at the top of the container
         title_height = 25
         title_rect = QRectF(0, 0, self.size.width(), title_height)
-        
+
         painter.setBrush(QBrush(box))
         painter.drawRoundedRect(title_rect, 12, 12)
-        painter.setPen(Qt.black if not is_dark else QColor('#e0e6ef'))
+        painter.setPen(Qt.black if not is_dark else QColor("#e0e6ef"))
         font = QFont("Arial", 9, QFont.Bold)
         painter.setFont(font)
         painter.drawText(title_rect, Qt.AlignCenter, self.name)
         if self.compute:
-            compute_name = getattr(self.compute, "name", str(type(self.compute).__name__))
+            compute_name = getattr(
+                self.compute, "name", str(type(self.compute).__name__)
+            )
             painter.setFont(QFont("Arial", 8))
-            painter.setPen(Qt.black if not is_dark else QColor('#b3e1ff'))
+            painter.setPen(Qt.black if not is_dark else QColor("#b3e1ff"))
             painter.drawText(10, 40, f"Resource: {compute_name}")
 
     def _get_edge_at_position(self, pos):
@@ -139,7 +152,7 @@ class ComponentContainer(QGraphicsItem):
         right = pos.x() >= self.size.width() - self._edge_size
         top = pos.y() <= self._edge_size
         bottom = pos.y() >= self.size.height() - self._edge_size
-        
+
         # Corners first
         if top and left:
             return "top-left"
@@ -153,7 +166,7 @@ class ComponentContainer(QGraphicsItem):
         elif left:
             return "left"
         elif right:
-            return "right" 
+            return "right"
         elif top:
             return "top"
         elif bottom:
@@ -165,9 +178,9 @@ class ComponentContainer(QGraphicsItem):
         """Change cursor shape when hovering near edges for resizing."""
         if self._resizing:
             return
-            
+
         edge = self._get_edge_at_position(event.pos())
-        
+
         # Set cursor based on which edge/corner we're hovering over
         if edge == "top-left" or edge == "bottom-right":
             self.setCursor(Qt.SizeFDiagCursor)
@@ -188,7 +201,7 @@ class ComponentContainer(QGraphicsItem):
 
     def mousePressEvent(self, event):
         edge = self._get_edge_at_position(event.pos())
-        
+
         # If clicking on an edge, start resizing
         if edge:
             self._resizing = True
@@ -198,10 +211,10 @@ class ComponentContainer(QGraphicsItem):
             self._orig_pos = self.pos()
             event.accept()
             return
-            
+
         # Store the initial position for undo tracking
         self._initial_pos = self.pos()
-        
+
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
@@ -209,7 +222,7 @@ class ComponentContainer(QGraphicsItem):
             # Calculate how much to resize based on the edge/corner being dragged
             dx = event.pos().x() - self._resize_start.x()
             dy = event.pos().y() - self._resize_start.y()
-            
+
             # We'll always work with width and height directly
             # rather than rectangle coordinates
             old_width = self._orig_size.width()
@@ -217,7 +230,7 @@ class ComponentContainer(QGraphicsItem):
             new_width = old_width
             new_height = old_height
             new_pos = QPointF(self._orig_pos)
-            
+
             # Handle horizontal resizing
             if "left" in self._resize_edge:
                 # When resizing from left edge, adjust both position and width
@@ -226,7 +239,7 @@ class ComponentContainer(QGraphicsItem):
                 new_pos.setX(self._orig_pos.x() - (new_width - old_width))
             elif "right" in self._resize_edge:
                 new_width = max(120, old_width + dx)  # Ensure minimum width
-            
+
             # Handle vertical resizing
             if "top" in self._resize_edge:
                 # When resizing from top edge, adjust both position and height
@@ -235,26 +248,26 @@ class ComponentContainer(QGraphicsItem):
                 new_pos.setY(self._orig_pos.y() - (new_height - old_height))
             elif "bottom" in self._resize_edge:
                 new_height = max(80, old_height + dy)  # Ensure minimum height
-            
+
             # Apply the resize boundaries
             new_width, new_height = self._check_resize_boundaries(new_width, new_height)
-            
+
             # Create a new rectangle with the origin at (0,0)
             new_rect = QRectF(0, 0, new_width, new_height)
-            
+
             # Update size and position
             self.prepareGeometryChange()
             self.size = new_rect
             self.setPos(new_pos)
             self.update()
-            
+
             # Make sure children fit within the new bounds
             self.auto_arrange_children()
             self._update_all_transfer_indicators()
-            
+
             event.accept()
             return
-        
+
         # Handle constrained movement for GPUBox inside ComputeBox
         if isinstance(self, GPUBox) and self.parentItem():
             new_pos = self.pos() + event.pos() - event.lastPos()
@@ -270,7 +283,7 @@ class ComponentContainer(QGraphicsItem):
                 self.setPos(constrained_x, constrained_y)
                 event.accept()
                 return
-                
+
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
@@ -280,16 +293,24 @@ class ComponentContainer(QGraphicsItem):
             self._update_all_transfer_indicators()
             event.accept()
             return
-            
+
         # Handle undo tracking for movement if position changed
-        if hasattr(self, '_initial_pos') and self.pos() != self._initial_pos and self.scene() and hasattr(self.scene(), 'parent'):
+        if (
+            hasattr(self, "_initial_pos")
+            and self.pos() != self._initial_pos
+            and self.scene()
+            and hasattr(self.scene(), "parent")
+        ):
             scene_parent = self.scene().parent()
-            if hasattr(scene_parent, 'undo_stack'):
+            if hasattr(scene_parent, "undo_stack"):
                 from .undo_stack import MoveComponentCommand
+
                 command = MoveComponentCommand(self, self._initial_pos, self.pos())
                 scene_parent.undo_stack.push(command)
-                print(f"[DEBUG] Created undo command for {type(self).__name__} movement")
-            
+                print(
+                    f"[DEBUG] Created undo command for {type(self).__name__} movement"
+                )
+
         super().mouseReleaseEvent(event)
 
     def add_child(self, item: QGraphicsItem):
@@ -306,29 +327,43 @@ class ComponentContainer(QGraphicsItem):
         changed = True
         max_iter = 30
         iter_count = 0
+
         def child_key(child):
             c_rect = child.mapToParent(child.boundingRect()).boundingRect()
             return (c_rect.top(), c_rect.left())
+
         while changed and iter_count < max_iter:
             changed = False
             sorted_children = sorted(self.child_items, key=child_key)
-            child_rects = [child.mapToParent(child.boundingRect()).boundingRect() for child in sorted_children]
+            child_rects = [
+                child.mapToParent(child.boundingRect()).boundingRect()
+                for child in sorted_children
+            ]
             for i, rect1 in enumerate(child_rects):
                 for j, rect2 in enumerate(child_rects):
                     if i == j:
                         continue
                     if rect1.intersects(rect2):
-                        if child_key(sorted_children[j]) > child_key(sorted_children[i]):
+                        if child_key(sorted_children[j]) > child_key(
+                            sorted_children[i]
+                        ):
                             dx = rect1.right() - rect2.left() + 10
                             dy = rect1.bottom() - rect2.top() + 10
                             move_right = rect2.left() + dx <= self.size.width() - margin
                             move_down = rect2.top() + dy <= self.size.height() - margin
                             if move_right and (not move_down or dx <= dy):
-                                sorted_children[j].setPos(sorted_children[j].x() + dx, sorted_children[j].y())
+                                sorted_children[j].setPos(
+                                    sorted_children[j].x() + dx, sorted_children[j].y()
+                                )
                             elif move_down:
-                                sorted_children[j].setPos(sorted_children[j].x(), sorted_children[j].y() + dy)
+                                sorted_children[j].setPos(
+                                    sorted_children[j].x(), sorted_children[j].y() + dy
+                                )
                             else:
-                                sorted_children[j].setPos(sorted_children[j].x() + dx, sorted_children[j].y() + dy)
+                                sorted_children[j].setPos(
+                                    sorted_children[j].x() + dx,
+                                    sorted_children[j].y() + dy,
+                                )
                             changed = True
                             break
                 if changed:
@@ -357,7 +392,9 @@ class ComponentContainer(QGraphicsItem):
             if expand_w > 0 or expand_h > 0:
                 new_width = max(self.size.width(), c_rect.right() + margin)
                 new_height = max(self.size.height(), c_rect.bottom() + margin)
-                new_width, new_height = self._check_resize_boundaries(new_width, new_height)
+                new_width, new_height = self._check_resize_boundaries(
+                    new_width, new_height
+                )
                 self.size = QRectF(0, 0, new_width, new_height)
                 self.prepareGeometryChange()
                 self.update()
@@ -372,7 +409,9 @@ class ComponentContainer(QGraphicsItem):
                 changed = True
             else:
                 new_width = c_rect.right() + margin
-                new_width, _ = self._check_resize_boundaries(new_width, self.size.height())
+                new_width, _ = self._check_resize_boundaries(
+                    new_width, self.size.height()
+                )
                 self.size.setWidth(new_width)
                 changed = True
         if c_rect.bottom() > self.size.height():
@@ -381,7 +420,9 @@ class ComponentContainer(QGraphicsItem):
                 changed = True
             else:
                 new_height = c_rect.bottom() + margin
-                _, new_height = self._check_resize_boundaries(self.size.width(), new_height)
+                _, new_height = self._check_resize_boundaries(
+                    self.size.width(), new_height
+                )
                 self.size.setHeight(new_height)
                 changed = True
         if c_rect.left() < 0:
@@ -393,14 +434,18 @@ class ComponentContainer(QGraphicsItem):
         overlaps = False
         for sibling in self.childItems():
             if sibling is not child and isinstance(sibling, ComponentBlock):
-                sibling_rect = sibling.mapToParent(sibling.boundingRect()).boundingRect()
+                sibling_rect = sibling.mapToParent(
+                    sibling.boundingRect()
+                ).boundingRect()
                 if c_rect.intersects(sibling_rect):
                     overlaps = True
                     break
         if overlaps:
             for sibling in self.childItems():
                 if sibling is not child and isinstance(sibling, ComponentBlock):
-                    sibling_rect = sibling.mapToParent(sibling.boundingRect()).boundingRect()
+                    sibling_rect = sibling.mapToParent(
+                        sibling.boundingRect()
+                    ).boundingRect()
                     if c_rect.intersects(sibling_rect):
                         dx = sibling_rect.right() - c_rect.left() + margin
                         dy = sibling_rect.bottom() - c_rect.top() + margin
@@ -424,7 +469,13 @@ class ComponentContainer(QGraphicsItem):
         if title_rect.contains(event.pos()):
             # If double-clicking on the title, show rename dialog
             from .dialogs.misc_dialogs import StyledTextInputDialog
-            dlg = StyledTextInputDialog(f"Rename {type(self).__name__}", "Enter new name:", self.name, self.scene().parent())
+
+            dlg = StyledTextInputDialog(
+                f"Rename {type(self).__name__}",
+                "Enter new name:",
+                self.name,
+                self.scene().parent(),
+            )
             if dlg.exec_():
                 name = dlg.getText()
                 self.name = name
@@ -436,12 +487,13 @@ class ComponentContainer(QGraphicsItem):
             # If double-clicking elsewhere on the container, show resource dialog
             if self.scene() and self.scene().parent():
                 app = self.scene().parent()
-                if hasattr(app, '_get_compute_resource'):
+                if hasattr(app, "_get_compute_resource"):
                     app._get_compute_resource(self)
                     event.accept()
                     return
-                
+
         super().mouseDoubleClickEvent(event)
+
 
 class ComputeBox(ComponentContainer):
     """
@@ -464,22 +516,22 @@ class ComputeBox(ComponentContainer):
     def _generate_detailed_tooltip(self) -> str:
         """Generate a detailed tooltip showing compute resource information."""
         tooltip = f"<b>{self.name}</b> (Compute Node)<br>"
-        
+
         # Add compute resource information if available
         if self.compute:
             tooltip += "<b>Compute Resource:</b><br>"
             # Hardware type
             hardware_type = getattr(self.compute, "hardware", "CPU")
             tooltip += f"• Type: {hardware_type}<br>"
-            
+
             # CPU-specific information
             if hasattr(self.compute, "cores"):
                 tooltip += f"• Cores: {self.compute.cores}<br>"
-            
+
             if hasattr(self.compute, "core_frequency"):
                 freq = self.compute.core_frequency
                 tooltip += f"• Core Frequency: {freq/1e9:.2f} GHz<br>"
-                
+
             if hasattr(self.compute, "flops_per_cycle"):
                 tooltip += f"• FLOPS per cycle: {self.compute.flops_per_cycle}<br>"
 
@@ -490,45 +542,59 @@ class ComputeBox(ComponentContainer):
                     tooltip += f"• Performance: {flops/1e12:.2f} TFLOPS<br>"
                 else:
                     tooltip += f"• Performance: {flops/1e9:.2f} GFLOPS<br>"
-            
+
             # Memory details
-            if hasattr(self.compute, "memory_channels") and hasattr(self.compute, "memory_width") and hasattr(self.compute, "memory_frequency"):
+            if (
+                hasattr(self.compute, "memory_channels")
+                and hasattr(self.compute, "memory_width")
+                and hasattr(self.compute, "memory_frequency")
+            ):
                 tooltip += f"• Memory channels: {self.compute.memory_channels}<br>"
                 tooltip += f"• Memory width: {self.compute.memory_width} bits<br>"
                 tooltip += f"• Memory frequency: {self.compute.memory_frequency/1e9:.2f} GHz<br>"
-            
+
             if hasattr(self.compute, "memory_bandwidth"):
-                mem_bw = self.compute.memory_bandwidth / 8  # Convert from bits/s to bytes/s
+                mem_bw = (
+                    self.compute.memory_bandwidth / 8
+                )  # Convert from bits/s to bytes/s
                 tooltip += f"• Memory Bandwidth: {mem_bw/1e9:.2f} GB/s<br>"
-            
+
             # Network information
             if hasattr(self.compute, "network_speed"):
                 net_speed = self.compute.network_speed
                 tooltip += f"• Network Speed: {net_speed/1e9:.2f} Gbps<br>"
-            
+
             # Driver overhead
             if hasattr(self.compute, "time_in_driver"):
                 tooltip += f"• Driver Overhead: {self.compute.time_in_driver} μs<br>"
-                
-            # Attached GPUs 
+
+            # Attached GPUs
             if hasattr(self.compute, "attached_gpus") and self.compute.attached_gpus:
                 tooltip += "<br><b>Attached GPUs:</b><br>"
                 for i, gpu in enumerate(self.compute.attached_gpus):
                     name = getattr(gpu, "name", f"GPU {i+1}")
                     tooltip += f"• {name}<br>"
-                    
+
                     # Add GPU metrics if available
                     if hasattr(gpu, "flops"):
                         gpu_flops = gpu.flops
                         if gpu_flops >= 1e12:
-                            tooltip += f"  - Performance: {gpu_flops/1e12:.2f} TFLOPS<br>"
+                            tooltip += (
+                                f"  - Performance: {gpu_flops/1e12:.2f} TFLOPS<br>"
+                            )
                         else:
-                            tooltip += f"  - Performance: {gpu_flops/1e9:.2f} GFLOPS<br>"
-                            
+                            tooltip += (
+                                f"  - Performance: {gpu_flops/1e9:.2f} GFLOPS<br>"
+                            )
+
                     if hasattr(gpu, "memory_bandwidth"):
-                        gpu_mem_bw = gpu.memory_bandwidth / 8  # Convert from bits/s to bytes/s
-                        tooltip += f"  - Memory Bandwidth: {gpu_mem_bw/1e9:.2f} GB/s<br>"
-        
+                        gpu_mem_bw = (
+                            gpu.memory_bandwidth / 8
+                        )  # Convert from bits/s to bytes/s
+                        tooltip += (
+                            f"  - Memory Bandwidth: {gpu_mem_bw/1e9:.2f} GB/s<br>"
+                        )
+
         return tooltip
 
     def hoverEnterEvent(self, event):
@@ -546,11 +612,13 @@ class ComputeBox(ComponentContainer):
     def _check_resize_boundaries(self, new_width, new_height):
         return new_width, new_height
 
+
 class GPUBox(ComponentContainer):
     """
     A visual container for grouping components that share the same GPU resource.
     Can only be placed inside a ComputeBox.
     """
+
     def __init__(self, name: str, gpu_resource: Optional[ComputeResources] = None):
         super().__init__(name, gpu_resource, z_value=-5)
         self.box_color = QColor(120, 180, 70)
@@ -565,24 +633,24 @@ class GPUBox(ComponentContainer):
     def _generate_detailed_tooltip(self) -> str:
         """Generate a detailed tooltip showing GPU resource information."""
         tooltip = f"<b>{self.name}</b> (GPU)<br>"
-        
+
         # Add GPU resource information if available
         if self.gpu_resource:
             tooltip += "<b>GPU Resource:</b><br>"
-            
+
             # Basic information
             gpu_name = getattr(self.gpu_resource, "name", "")
             if gpu_name:
                 tooltip += f"• Name: {gpu_name}<br>"
-                
+
             # Core information if available
             if hasattr(self.gpu_resource, "cores"):
                 tooltip += f"• Compute Units: {self.gpu_resource.cores}<br>"
-                
+
             if hasattr(self.gpu_resource, "core_frequency"):
                 freq = self.gpu_resource.core_frequency
                 tooltip += f"• Core Frequency: {freq/1e9:.2f} GHz<br>"
-                
+
             # Performance metrics
             if hasattr(self.gpu_resource, "flops"):
                 flops = self.gpu_resource.flops
@@ -590,41 +658,45 @@ class GPUBox(ComponentContainer):
                     tooltip += f"• Performance: {flops/1e12:.2f} TFLOPS<br>"
                 else:
                     tooltip += f"• Performance: {flops/1e9:.2f} GFLOPS<br>"
-                    
+
             # Memory information
             if hasattr(self.gpu_resource, "memory_bandwidth"):
-                mem_bw = self.gpu_resource.memory_bandwidth / 8  # Convert from bits/s to bytes/s
+                mem_bw = (
+                    self.gpu_resource.memory_bandwidth / 8
+                )  # Convert from bits/s to bytes/s
                 tooltip += f"• Memory Bandwidth: {mem_bw/1e9:.2f} GB/s<br>"
-                
+
             # Detailed memory specs if available
             if hasattr(self.gpu_resource, "memory_channels"):
                 tooltip += f"• Memory channels: {self.gpu_resource.memory_channels}<br>"
-                
+
             if hasattr(self.gpu_resource, "memory_width"):
                 tooltip += f"• Memory width: {self.gpu_resource.memory_width} bits<br>"
-                
+
             if hasattr(self.gpu_resource, "memory_frequency"):
                 mem_freq = self.gpu_resource.memory_frequency
                 tooltip += f"• Memory frequency: {mem_freq/1e9:.2f} GHz<br>"
-            
+
             # Connection information
             if hasattr(self.gpu_resource, "network_speed"):
                 net_speed = self.gpu_resource.network_speed
                 tooltip += f"• PCIe/NVLink Speed: {net_speed/1e9:.2f} Gbps<br>"
-            
+
             # Driver overhead
             if hasattr(self.gpu_resource, "time_in_driver"):
-                tooltip += f"• Driver Overhead: {self.gpu_resource.time_in_driver} μs<br>"
-                
+                tooltip += (
+                    f"• Driver Overhead: {self.gpu_resource.time_in_driver} μs<br>"
+                )
+
             # Host computer info if available
             parent = self.parentItem()
             if parent and hasattr(parent, "name") and hasattr(parent, "compute"):
                 tooltip += f"<br><b>Host Computer:</b> {parent.name}<br>"
-                
+
                 if hasattr(parent.compute, "network_speed"):
                     parent_net_speed = parent.compute.network_speed
                     tooltip += f"• Host Network: {parent_net_speed/1e9:.2f} Gbps<br>"
-        
+
         return tooltip
 
     def hoverEnterEvent(self, event):
@@ -634,17 +706,19 @@ class GPUBox(ComponentContainer):
 
     def paint(self, painter, option, widget):
         super().paint(painter, option, widget)
-        theme = getattr(self, 'theme', getattr(self.scene(), 'theme', 'light'))
-        is_dark = theme == 'dark'
+        theme = getattr(self, "theme", getattr(self.scene(), "theme", "light"))
+        is_dark = theme == "dark"
         if self.gpu_resource:
-            gpu_name = getattr(self.gpu_resource, "name", str(type(self.gpu_resource).__name__))
+            gpu_name = getattr(
+                self.gpu_resource, "name", str(type(self.gpu_resource).__name__)
+            )
             painter.setFont(QFont("Arial", 8))
-            painter.setPen(Qt.black if not is_dark else QColor('#b3e1ff'))
+            painter.setPen(Qt.black if not is_dark else QColor("#b3e1ff"))
             painter.drawText(10, 45, f"GPU: {gpu_name}")
 
     def _check_resize_boundaries(self, new_width, new_height):
         parent = self.parentItem()
-        if parent and hasattr(parent, 'size'):
+        if parent and hasattr(parent, "size"):
             parent_size = parent.size
             max_width = parent_size.width() - self.pos().x() - 10
             max_height = parent_size.height() - self.pos().y() - 10

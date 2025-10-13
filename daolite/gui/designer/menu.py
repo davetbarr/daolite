@@ -1,9 +1,8 @@
-from PyQt5.QtWidgets import QAction
 from PyQt5.QtGui import QKeySequence
-from .style_utils import save_theme, set_app_style
-from .dialogs.misc_dialogs import ShortcutHelpDialog, StyledTextInputDialog
-from .dialogs.resource_dialog import ResourceSelectionDialog
+from PyQt5.QtWidgets import QAction
+
 from daolite.gui.centroid_agenda_tool import show_centroid_agenda_tool
+
 
 def create_menu(main_window):
     menu_bar = main_window.menuBar()
@@ -38,7 +37,9 @@ def create_menu(main_window):
     file_menu.addAction(export_config_action)
 
     centroid_agenda_action = QAction("Centroid Agenda Tool", main_window)
-    centroid_agenda_action.triggered.connect(lambda: show_centroid_agenda_tool(main_window))
+    centroid_agenda_action.triggered.connect(
+        lambda: show_centroid_agenda_tool(main_window)
+    )
     file_menu.addAction(centroid_agenda_action)
 
     file_menu.addSeparator()
@@ -59,16 +60,16 @@ def create_menu(main_window):
     # Use the application's existing undo/redo actions with shortcuts already defined
     edit_menu.addAction(main_window.undo_action)
     edit_menu.addAction(main_window.redo_action)
-    
+
     edit_menu.addSeparator()
-    
+
     # Add history view toggle
     history_action = QAction("Show &History", main_window, checkable=True)
     history_action.triggered.connect(main_window.toggle_history_view)
     edit_menu.addAction(history_action)
-    
+
     edit_menu.addSeparator()
-    
+
     rename_action = QAction("&Rename Selected", main_window)
     rename_action.setShortcut("Ctrl+R")
     rename_action.triggered.connect(main_window._rename_selected)
@@ -97,7 +98,11 @@ def create_menu(main_window):
     view_menu.addSeparator()
     theme_menu = view_menu.addMenu("Theme")
     theme_group = []
-    for label, key in [("System Default", "system"), ("Light", "light"), ("Dark", "dark")]:
+    for label, key in [
+        ("System Default", "system"),
+        ("Light", "light"),
+        ("Dark", "dark"),
+    ]:
         act = QAction(label, main_window, checkable=True)
         act.setChecked(main_window.theme == key)
         act.triggered.connect(lambda checked, k=key: main_window._set_theme(k))

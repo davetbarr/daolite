@@ -1,18 +1,12 @@
 """Unit tests for centroider module."""
 
 import unittest
+
 import numpy as np
+
 from daolite.compute import create_compute_resources
-from daolite.pipeline.centroider import (
-    Centroid,
-    ReferenceSlopes,
-    Error,
-    Centroider,
-)
-from daolite.pipeline.extended_source_centroider import (
-    CrossCorrelate,
-    SquareDiff,
-)
+from daolite.pipeline.centroider import Centroid, Centroider, Error, ReferenceSlopes
+from daolite.pipeline.extended_source_centroider import CrossCorrelate, SquareDiff
 
 
 class TestCentroider(unittest.TestCase):
@@ -99,7 +93,7 @@ class TestCentroider(unittest.TestCase):
         """Test complete centroiding pipeline."""
         start_times = np.zeros([50, 2])
         centroid_agenda = np.ones(50, dtype=int) * self.n_subaps
-        
+
         timings = Centroider(
             compute_resources=self.cr,
             start_times=start_times,
@@ -125,7 +119,7 @@ class TestCentroider(unittest.TestCase):
                 start_times=start_times,
                 centroid_agenda=centroid_agenda,
                 n_pix_per_subap=self.n_pixels,
-                **config
+                **config,
             )
             self.assertEqual(timings.shape, (50, 2))
             self.assertTrue(np.all(timings[:, 1] >= timings[:, 0]))
@@ -134,7 +128,7 @@ class TestCentroider(unittest.TestCase):
         """Test centroiding with single subaperture."""
         start_times = np.zeros([1, 2])
         centroid_agenda = np.array([1], dtype=int)
-        
+
         timings = Centroider(
             compute_resources=self.cr,
             start_times=start_times,

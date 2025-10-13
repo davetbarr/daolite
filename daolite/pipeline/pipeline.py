@@ -5,9 +5,10 @@ This module provides classes and utilities for defining custom AO pipelines
 with components in any order and on different compute resources.
 """
 
-from typing import Dict, List, Optional, Tuple, Any
-import numpy as np
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
 
 from daolite.common import ComponentType
 from daolite.compute import ComputeResources
@@ -129,7 +130,7 @@ class Pipeline:
         self.timing_results = {}
 
         if debug:
-            print(f"\n===== Pipeline Execution Order =====")
+            print("\n===== Pipeline Execution Order =====")
             for i, name in enumerate(self.execution_order):
                 comp = self.components[name]
                 deps = ", ".join(comp.dependencies) if comp.dependencies else "none"
@@ -167,24 +168,28 @@ class Pipeline:
             if params.get("start_times") is not None:
                 start_times = params["start_times"]
                 n_iterations = len(start_times)
-                
+
                 # Centroider: create centroid_agenda from n_valid_subaps
-                if ("centroid_agenda" not in params and 
-                    "_n_valid_subaps_compat" in params):
+                if (
+                    "centroid_agenda" not in params
+                    and "_n_valid_subaps_compat" in params
+                ):
                     n_subaps = params.pop("_n_valid_subaps_compat")
-                    params["centroid_agenda"] = np.ones(n_iterations, dtype=int) * n_subaps
-                
+                    params["centroid_agenda"] = (
+                        np.ones(n_iterations, dtype=int) * n_subaps
+                    )
+
                 # Calibration: create pixel_agenda from n_pixels
-                if ("pixel_agenda" not in params and 
-                    "_n_pixels_compat" in params):
+                if "pixel_agenda" not in params and "_n_pixels_compat" in params:
                     n_pixels = params.pop("_n_pixels_compat")
                     params["pixel_agenda"] = np.ones(n_iterations, dtype=int) * n_pixels
-                
+
                 # Reconstruction: create centroid_agenda from n_slopes
-                if ("centroid_agenda" not in params and 
-                    "_n_slopes_compat" in params):
+                if "centroid_agenda" not in params and "_n_slopes_compat" in params:
                     n_slopes = params.pop("_n_slopes_compat")
-                    params["centroid_agenda"] = np.ones(n_iterations, dtype=int) * n_slopes
+                    params["centroid_agenda"] = (
+                        np.ones(n_iterations, dtype=int) * n_slopes
+                    )
 
             # Add compute_resources if needed
             if (

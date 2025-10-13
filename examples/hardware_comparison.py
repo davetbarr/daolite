@@ -6,14 +6,10 @@ This script loads custom hardware configurations from YAML files and compares
 their performance characteristics for typical adaptive optics workloads.
 """
 
-import sys
-import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-
-from daolite.compute import create_compute_resources_from_yaml
-from daolite.compute import hardware
+from daolite.compute import create_compute_resources_from_yaml, hardware
 
 # Load custom resources from YAML files
 custom_cpu = create_compute_resources_from_yaml("examples/custom_cpu.yaml")

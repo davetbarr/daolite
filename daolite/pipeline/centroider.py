@@ -7,6 +7,7 @@ cross-correlation or square difference algorithms (used for extended sources).
 """
 
 import numpy as np
+
 from daolite.compute import ComputeResources
 from daolite.utils.algorithm_ops import _merge_sort_flops, _merge_sort_mem
 
@@ -21,11 +22,11 @@ def Centroider(
     sort: bool = False,
     flop_scale: float = 1.0,
     mem_scale: float = 1.0,
-    debug: bool = False
+    debug: bool = False,
 ) -> np.ndarray:
     """
     Point source centroiding pipeline for timing estimation.
-    
+
     Computes centroids directly from pixel intensities using a standard centre of gravity method.
 
     Args:
@@ -39,15 +40,14 @@ def Centroider(
         flop_scale (float): Scaling factor for FLOPS
         mem_scale (float): Scaling factor for memory operations
         debug (bool): Enable debug output
-        
+
     Returns:
         np.ndarray: Array of shape (rows, 2) with processing start/end times
     """
-    
+
     if np.sum(centroid_agenda) == 1:
         total_time = (
-            Centroid(1, n_pix_per_subap, compute_resources, sort, debug)
-            / n_workers
+            Centroid(1, n_pix_per_subap, compute_resources, sort, debug) / n_workers
         )
         return np.array([[start_times[-1, 1], start_times[-1, 1] + total_time]])
 
@@ -60,8 +60,13 @@ def Centroider(
         total_time = 0
     else:
         total_time = _process_group(
-            n_subs, n_pix_per_subap, compute_resources, sort, 
-            flop_scale, mem_scale, debug
+            n_subs,
+            n_pix_per_subap,
+            compute_resources,
+            sort,
+            flop_scale,
+            mem_scale,
+            debug,
         )
 
     timings[0, 0] = start_times[delay_start, 1]
@@ -70,7 +75,7 @@ def Centroider(
     # Process remaining groups
     for i in range(1, iterations):
         n_subs = centroid_agenda[i]
-        
+
         if n_subs == 0:
             total_time = 0
         else:
@@ -87,7 +92,7 @@ def Centroider(
         start = max(timings[i - 1, 1], start_times[i, 1])
         timings[i, 0] = start
         timings[i, 1] = timings[i, 0] + total_time
-        
+
     if debug:
         print("*************Centroider************")
         print(f"Timings: {timings}")
@@ -108,7 +113,7 @@ def _process_group(
 ) -> float:
     """
     Helper to process a group of subapertures with separate scaling factors.
-    
+
     Args:
         n_subs: Number of subapertures to process
         n_pix_per_subap: Number of pixels per subaperture
@@ -117,7 +122,7 @@ def _process_group(
         flop_scale: Computational scaling factor for FLOPS
         mem_scale: Memory scaling factor for bandwidth
         debug: Enable debug output
-        
+
     Returns:
         float: Total processing time with scaling applied
     """
@@ -139,7 +144,7 @@ def _process_group(
         memory_width=compute_resources.memory_width,
         memory_channels=compute_resources.memory_channels,
     )
-    
+
     cent_time = Centroid(n_subs, n_pix_per_subap, modified_resources, sort, debug)
     ref_time = ReferenceSlopes(n_subs, n_pix_per_subap, modified_resources, debug)
     err_time = Error(n_subs, n_pix_per_subap, modified_resources, debug)
@@ -194,6 +199,7 @@ def Centroid(
         print(f"Total time: {total_time}")
 
     return total_time
+
 
 def ReferenceSlopes(
     n_valid_subaps: int,
@@ -265,4 +271,3 @@ def Error(
         print(f"Total time: {total_time}")
 
     return total_time
-

@@ -1,15 +1,17 @@
 """Unit tests for chronograph visualization module."""
 
 import unittest
-import numpy as np
+
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
+import numpy as np
 from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+
 from daolite.utils.chronograph import (
-    generate_chrono_plot,
-    generate_chrono_plot_packetize,
     _plot_data_set,
     _plot_data_set_packetize,
+    generate_chrono_plot,
+    generate_chrono_plot_packetize,
 )
 
 

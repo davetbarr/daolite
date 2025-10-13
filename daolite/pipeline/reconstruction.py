@@ -7,6 +7,7 @@ agenda-based API for consistent pipeline integration.
 """
 
 import numpy as np
+
 from daolite.compute import ComputeResources
 from daolite.utils.algorithm_ops import _mvm_flops, _mvm_mem
 
@@ -23,7 +24,7 @@ def Reconstruction(
 ) -> np.ndarray:
     """
     Calculate timing for wavefront reconstruction operations using agenda-based API.
-    
+
     For full-frame reconstruction (equivalent to old FullFrameReconstruction),
     simply pass a centroid_agenda with a single element containing all slopes.
 
@@ -39,7 +40,7 @@ def Reconstruction(
 
     Returns:
         np.ndarray: Array of shape (rows, 2) with processing start/end times
-        
+
     Raises:
         ValueError: If input validation fails
     """
@@ -51,38 +52,43 @@ def Reconstruction(
     if start_times.shape[1] != 2:
         raise ValueError("start_times must have shape (rows, 2)")
     if start_times.shape[0] != centroid_agenda.shape[0]:
-        raise ValueError("start_times and centroid_agenda must have the same number of rows")
+        raise ValueError(
+            "start_times and centroid_agenda must have the same number of rows"
+        )
     if n_acts <= 0:
         raise ValueError("n_acts must be greater than 0")
-    
+
     timings = np.zeros([start_times.shape[0], 2])
 
     # Process first group
     total_time = _process_reconstruction_group(
-        centroid_agenda[0], n_acts, compute_resources, 
-        flop_scale, mem_scale, debug
+        centroid_agenda[0], n_acts, compute_resources, flop_scale, mem_scale, debug
     )
-    
+
     timings[0, 0] = start_times[0, 1]
     timings[0, 1] = timings[0, 0] + total_time
-    
+
     if debug:
         summed_times = total_time
-    
+
     # Process remaining groups
     for i in range(1, start_times.shape[0]):
         total_time = _process_reconstruction_group(
-            centroid_agenda[i], n_acts, compute_resources,
-            flop_scale, mem_scale, False  # Debug only first iteration
+            centroid_agenda[i],
+            n_acts,
+            compute_resources,
+            flop_scale,
+            mem_scale,
+            False,  # Debug only first iteration
         )
 
         start = max(timings[i - 1, 1], start_times[i, 1])
         timings[i, 0] = start
         timings[i, 1] = timings[i, 0] + total_time
-        
+
         if debug:
             summed_times += total_time
-            
+
     if debug:
         print("*************Reconstruction************")
         print(f"Centroid agenda: {centroid_agenda}")
@@ -102,11 +108,11 @@ def _process_reconstruction_group(
     compute_resources: ComputeResources,
     flop_scale: float = 1.0,
     mem_scale: float = 1.0,
-    debug: bool = False
+    debug: bool = False,
 ) -> float:
     """
     Helper to process a reconstruction group with separate scaling factors.
-    
+
     Args:
         n_slopes: Number of slopes to process
         n_acts: Number of actuators
@@ -114,7 +120,7 @@ def _process_reconstruction_group(
         flop_scale: Computational scaling factor for FLOPS
         mem_scale: Memory scaling factor for bandwidth
         debug: Enable debug output
-        
+
     Returns:
         float: Total processing time with scaling applied
     """
@@ -139,4 +145,3 @@ def _process_reconstruction_group(
         print(f"Memory scaling factor: {mem_scale}")
 
     return load_time + calc_time
-

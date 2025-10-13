@@ -1,0 +1,58 @@
+# Ruff configuration for daolite
+line-length = 88
+target-version = "py38"  # Match your setup.py minimum version
+
+# Exclude directories that don't need strict linting
+exclude = [
+    ".git",
+    ".ruff_cache",
+    ".pytest_cache",
+    ".mypy_cache",
+    "__pycache__",
+    "build",
+    "dist",
+    "docs",
+    "daolite.egg-info",
+    # Temporarily exclude GUI and examples for gradual adoption
+    "daolite/gui/**",
+    "examples/**",
+]
+
+[lint]
+# Enable useful rule categories for scientific Python code
+select = [
+    "E",   # pycodestyle errors
+    "F",   # Pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort (import sorting)
+    "N",   # pep8-naming
+    "UP",  # pyupgrade (modernize Python code)
+    "B",   # flake8-bugbear (detect common bugs)
+    "C4",  # flake8-comprehensions
+    "NPY", # NumPy-specific rules
+]
+
+# Ignore specific rules that may be too strict for scientific code
+ignore = [
+    "E501",   # Line too long (Black handles this)
+    "E741",   # Ambiguous variable name (l, O, I) - common in scientific code
+    "N803",   # Argument name should be lowercase - scientific conventions
+    "N806",   # Variable in function should be lowercase - scientific conventions
+    "NPY002", # Replace legacy np.random call - may want to keep for compatibility
+]
+
+[lint.per-file-ignores]
+# Tests can have more flexible naming
+"tests/**" = ["N802", "N803"]
+# Init files can import without using
+"__init__.py" = ["F401"]
+# Pipeline and simulation modules use PascalCase for factory functions (API design choice)
+"daolite/pipeline/*.py" = ["N802"]
+"daolite/simulation/*.py" = ["N802"]
+"daolite/utils/network.py" = ["N802"]
+"daolite/utils/sh_utility.py" = ["N802"]
+
+[lint.isort]
+known-first-party = ["daolite"]
+# Common scientific Python packages
+known-third-party = ["numpy", "matplotlib", "yaml"]

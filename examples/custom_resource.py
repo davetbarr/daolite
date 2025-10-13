@@ -1,6 +1,6 @@
 # Example: Create and use a custom compute resource
 from daolite.compute import create_compute_resources
-from daolite.pipeline.pipeline import Pipeline, PipelineComponent, ComponentType
+from daolite.pipeline.pipeline import ComponentType, Pipeline, PipelineComponent
 from daolite.simulation.camera import PCOCamLink
 
 custom_cpu = create_compute_resources(

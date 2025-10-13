@@ -1,14 +1,14 @@
 """Unit tests for control module."""
 
 import unittest
-import numpy as np
+
 from daolite.compute import create_compute_resources
 from daolite.pipeline.control import (
+    DMPower,
+    FullFrameControl,
     Integrator,
     Offset,
     Saturation,
-    DMPower,
-    FullFrameControl,
 )
 
 

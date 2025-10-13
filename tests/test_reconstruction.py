@@ -1,7 +1,9 @@
 """Unit tests for reconstruction module."""
 
 import unittest
+
 import numpy as np
+
 from daolite.compute import create_compute_resources
 from daolite.pipeline.reconstruction import (
     Reconstruction,
@@ -32,7 +34,7 @@ class TestReconstruction(unittest.TestCase):
         # Full-frame reconstruction is now done by passing a single-element agenda
         start_times = np.zeros([1, 2])
         centroid_agenda = np.array([self.n_slopes])
-        
+
         timings = Reconstruction(
             compute_resources=self.cr,
             start_times=start_times,
@@ -72,7 +74,7 @@ class TestReconstruction(unittest.TestCase):
         start_times = np.zeros([50, 2])
         # Create agenda with varying slope counts per iteration
         centroid_agenda = np.ones(50, dtype=int) * (self.n_slopes // 50)
-        
+
         timings = Reconstruction(
             compute_resources=self.cr,
             start_times=start_times,
@@ -96,7 +98,7 @@ class TestReconstruction(unittest.TestCase):
                 start_times=start_times,
                 centroid_agenda=centroid_agenda,
                 n_acts=self.n_acts,
-                **config
+                **config,
             )
             self.assertEqual(timings.shape, (50, 2))
             self.assertTrue(np.all(timings[:, 1] >= timings[:, 0]))
@@ -105,26 +107,27 @@ class TestReconstruction(unittest.TestCase):
         """Test reconstruction group processing helper."""
         n_slopes = 100
         time = _process_reconstruction_group(
-            n_slopes=n_slopes, 
-            n_acts=self.n_acts, 
-            compute_resources=self.cr, 
-            flop_scale=1.0, 
+            n_slopes=n_slopes,
+            n_acts=self.n_acts,
+            compute_resources=self.cr,
+            flop_scale=1.0,
             mem_scale=1.0,
-            debug=False
+            debug=False,
         )
         self.assertGreater(time, 0)
 
         # Test scaling
         time_scaled = _process_reconstruction_group(
-            n_slopes=n_slopes, 
-            n_acts=self.n_acts, 
-            compute_resources=self.cr, 
-            flop_scale=2.0, 
+            n_slopes=n_slopes,
+            n_acts=self.n_acts,
+            compute_resources=self.cr,
+            flop_scale=2.0,
             mem_scale=2.0,
-            debug=False
+            debug=False,
         )
         # With scale=2.0, the time should be approximately half of the original time
         self.assertAlmostEqual(time_scaled * 2, time, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

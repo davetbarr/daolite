@@ -46,6 +46,47 @@ For development purposes, you can install daolite in development mode:
 
 This will install the package in development mode, allowing you to modify the source code without reinstalling.
 
+Setting Up Pre-commit Hooks
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+daolite uses pre-commit hooks to maintain code quality. These hooks automatically run linting, formatting, and import sorting before each commit.
+
+**Install and setup pre-commit:**
+
+.. code-block:: bash
+
+    # Install pre-commit
+    pip install pre-commit
+
+    # Install the git hooks
+    pre-commit install
+
+**Run pre-commit manually:**
+
+.. code-block:: bash
+
+    # Run all hooks on all files
+    pre-commit run --all-files
+
+    # Or run individual tools
+    ruff check --fix .     # Linting with auto-fix
+    black .                # Code formatting
+    isort .                # Import sorting
+
+The pre-commit hooks will automatically run when you commit changes. If any issues are found:
+
+1. Auto-fixable issues (formatting, import order) will be fixed automatically
+2. The commit will be blocked if there are remaining issues
+3. Fix the issues and commit again
+
+**Pre-commit configuration:**
+
+The project uses the following tools (configured in ``.pre-commit-config.yaml``):
+
+- **Ruff**: Fast Python linter (replaces flake8, pylint, etc.)
+- **Black**: Code formatter for consistent style
+- **isort**: Import statement organizer
+
 Verifying Installation
 ----------------------
 

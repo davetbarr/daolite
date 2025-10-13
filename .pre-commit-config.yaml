@@ -1,0 +1,22 @@
+repos:
+  # Ruff linter and formatter - fast all-in-one tool
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+
+  # Black for consistent code formatting (kept for compatibility)
+  # Note: ruff-format above can replace this, but keeping both during transition
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+
+  # Import sorting - Ruff handles this too, but isort is kept for compatibility
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]

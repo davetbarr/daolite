@@ -1,8 +1,7 @@
 # Example: Generate and save a pipeline timing plot
-from daolite.pipeline.pipeline import Pipeline, PipelineComponent, ComponentType
-from daolite.simulation.camera import PCOCamLink
 from daolite.compute import hardware
-
+from daolite.pipeline.pipeline import ComponentType, Pipeline, PipelineComponent
+from daolite.simulation.camera import PCOCamLink
 
 pipeline = Pipeline()
 pipeline.add_component(

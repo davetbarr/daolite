@@ -8,20 +8,23 @@ offset calculation, saturation handling, and DM power estimation.
 
 from daolite.compute import ComputeResources
 from daolite.utils.algorithm_ops import (
-    _integration_flops, _integration_mem,
-    _pid_flops, _pid_mem,
-    _offset_flops, _offset_mem,
-    _saturation_flops, _saturation_mem,
-    _dm_power_flops, _dm_power_mem
+    _dm_power_flops,
+    _dm_power_mem,
+    _integration_flops,
+    _integration_mem,
+    _offset_flops,
+    _offset_mem,
+    _saturation_flops,
+    _saturation_mem,
 )
 
 
 def Integrator(
-    n_acts: int, 
-    compute_resources: ComputeResources, 
+    n_acts: int,
+    compute_resources: ComputeResources,
     flop_scale: float = 1.0,
     mem_scale: float = 1.0,
-    debug: bool = False
+    debug: bool = False,
 ) -> float:
     """
     Calculate timing for integrator operation.
@@ -57,11 +60,11 @@ def Integrator(
 
 
 def Offset(
-    n_acts: int, 
-    compute_resources: ComputeResources, 
+    n_acts: int,
+    compute_resources: ComputeResources,
     flop_scale: float = 1.0,
     mem_scale: float = 1.0,
-    debug: bool = False
+    debug: bool = False,
 ) -> float:
     """
     Calculate timing for offset computation.
@@ -97,11 +100,11 @@ def Offset(
 
 
 def Saturation(
-    n_acts: int, 
-    compute_resources: ComputeResources, 
+    n_acts: int,
+    compute_resources: ComputeResources,
     flop_scale: float = 1.0,
     mem_scale: float = 1.0,
-    debug: bool = False
+    debug: bool = False,
 ) -> float:
     """
     Calculate timing for saturation handling.
@@ -137,11 +140,11 @@ def Saturation(
 
 
 def DMPower(
-    n_acts: int, 
-    compute_resources: ComputeResources, 
+    n_acts: int,
+    compute_resources: ComputeResources,
     flop_scale: float = 1.0,
     mem_scale: float = 1.0,
-    debug: bool = False
+    debug: bool = False,
 ) -> float:
     """
     Calculate timing for DM power estimation.
@@ -203,14 +206,20 @@ def FullFrameControl(
         float: Total processing time in microseconds
     """
     # For backward compatibility - check for legacy scale parameter
-    if 'scale' in kwargs and kwargs['scale'] != 1.0:
+    if "scale" in kwargs and kwargs["scale"] != 1.0:
         if flop_scale == 1.0 and mem_scale == 1.0:
-            flop_scale = kwargs['scale']
-            mem_scale = kwargs['scale']
+            flop_scale = kwargs["scale"]
+            mem_scale = kwargs["scale"]
             if debug:
-                print(f"Warning: Using legacy 'scale' parameter ({kwargs['scale']}). Consider using flop_scale and mem_scale instead.")
-    
-    int_time = Integrator(n_acts, compute_resources, flop_scale, mem_scale, debug) * combine * 2
+                print(
+                    f"Warning: Using legacy 'scale' parameter ({kwargs['scale']}). Consider using flop_scale and mem_scale instead."
+                )
+
+    int_time = (
+        Integrator(n_acts, compute_resources, flop_scale, mem_scale, debug)
+        * combine
+        * 2
+    )
     off_time = Offset(n_acts, compute_resources, flop_scale, mem_scale, debug)
     sat_time = Saturation(n_acts, compute_resources, flop_scale, mem_scale, debug)
     dmp_time = DMPower(n_acts, compute_resources, flop_scale, mem_scale, debug)

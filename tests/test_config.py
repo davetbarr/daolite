@@ -1,10 +1,11 @@
 """Unit tests for configuration module."""
 
-import unittest
 import os
 import tempfile
-from daolite.config import CameraConfig, OpticsConfig, PipelineConfig, SystemConfig
+import unittest
+
 from daolite.compute import create_compute_resources
+from daolite.config import CameraConfig, OpticsConfig, PipelineConfig, SystemConfig
 
 
 class TestConfiguration(unittest.TestCase):

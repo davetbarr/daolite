@@ -5,13 +5,14 @@ This module provides tools for creating chronological visualizations of processi
 pipeline timing data, including latency calculations and multi-stage timing plots.
 """
 
-import numpy as np
 from typing import List, Tuple
+
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
-from matplotlib.figure import Figure
-from matplotlib.axes import Axes
+import numpy as np
 from cycler import cycler
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+from matplotlib.patches import Rectangle
 
 
 def _plot_data_set(
@@ -67,6 +68,9 @@ def generate_chrono_plot(
     colors = plt.cm.viridis(np.linspace(0, 1, plots))
     color_cycle = cycler("color", colors)
     plot_colors = [c["color"] for c in color_cycle]
+
+    if not data_list:
+        raise ValueError("data_list cannot be empty")
 
     fig, ax = plt.subplots()
     plot_height = 0

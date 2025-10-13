@@ -5,22 +5,23 @@ This example demonstrates how to migrate the Performance Estimation GPU-based
 packtisePipelineGPU to the new daolite framework.
 """
 
+import sys
+
+import matplotlib.pyplot as plt
 import numpy as np
 import yaml
-import sys
-import re
-import matplotlib.pyplot as plt
 
 # daolite imports - replaces the old imports
-from daolite import Pipeline, PipelineComponent, ComponentType
+from daolite import ComponentType, Pipeline, PipelineComponent
 from daolite.compute import create_compute_resources
-from daolite.simulation.camera import PCOCamLink
+from daolite.compute.base_resources import ComputeResources
 from daolite.pipeline.calibration import PixelCalibration
 from daolite.pipeline.centroider import Centroider
-from daolite.pipeline.reconstruction import Reconstruction
 from daolite.pipeline.control import FullFrameControl
-from daolite.utils.network import TimeOnNetwork, PCIE
+from daolite.pipeline.reconstruction import Reconstruction
+from daolite.simulation.camera import PCOCamLink
 from daolite.utils.chronograph import generate_chrono_plot_packetize
+from daolite.utils.network import PCIE, TimeOnNetwork
 from daolite.utils.sh_utility import genSHSubApMap
 
 
@@ -55,9 +56,9 @@ def run_old_style_migration(config_file=None):
     except KeyError:
         square_diff = False
     try:
-        sort = data["defines"]["sort"]
+        data["defines"]["sort"]
     except KeyError:
-        sort = False
+        pass
 
     # Generate subaperture map
     if nSubs <= 1:
@@ -70,7 +71,7 @@ def run_old_style_migration(config_file=None):
         centroid_agenda = np.sum(subApMap, axis=1) * nLinesOfSight
 
     # Print configuration details
-    print(f"****************************************************************")
+    print("****************************************************************")
     print(f"Configuration: {config_file}")
     print(f"Name: {name}")
     print(f"nPix: {nPixels}")
@@ -390,10 +391,10 @@ def run_modern_pipeline(config_file=None):
     )
 
     # Run the pipeline simulation
-    results = pipeline.run(debug=True)
+    pipeline.run(debug=True)
 
     # Visualize the pipeline
-    fig = pipeline.visualize(
+    pipeline.visualize(
         title=name,
         xlabel=r"time ($\mu$s)",
         save_path=f"Images/{name}_modern.png",

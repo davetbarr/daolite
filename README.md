@@ -1,5 +1,5 @@
 # daolite
-
+![Logo]()
 **D**urham **A**daptive **O**ptics **L**atency **I**nspection and **T**iming **E**stimator
 
 A Python package for estimating latency in Adaptive Optics Real-time Control Systems, with a focus on Durham Adaptive Optics (DAO) RTC systems.
@@ -27,6 +27,37 @@ Or for development:
 ```bash
 pip install -e .
 ```
+
+## Development Setup
+
+### Pre-commit Hooks
+
+This project uses pre-commit hooks to ensure code quality. The hooks will automatically run linting (Ruff), code formatting (Black), and import sorting (isort) before each commit.
+
+**Install pre-commit hooks:**
+
+```bash
+# Install pre-commit (if not already installed)
+pip install pre-commit
+
+# Install the git hooks
+pre-commit install
+```
+
+**Run pre-commit manually on all files:**
+
+```bash
+# Run all hooks on all files
+pre-commit run --all-files
+
+# Or just run Ruff linter
+ruff check --fix .
+
+# Format code with Black
+black .
+```
+
+The pre-commit hooks will automatically run on `git commit`. If any issues are found, the commit will be blocked until you fix them or the auto-fixes are applied.
 
 ## Running Tests
 
@@ -276,14 +307,17 @@ python examples/ao_pipeline.py examples/ao_config.yaml
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit pull requests.
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting pull requests.
 
-### Development Guidelines
+### Quick Development Setup
 
-1. Follow PEP 8 coding standards
-2. Write unit tests for new features
-3. Update documentation for API changes
-4. Run the test suite before submitting PRs
+1. Fork and clone the repository
+2. Install in development mode: `pip install -e .`
+3. Install pre-commit hooks: `pip install pre-commit && pre-commit install`
+4. Make your changes and ensure tests pass: `pytest`
+5. Pre-commit hooks will run automatically on commit
+
+For detailed guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

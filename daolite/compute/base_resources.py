@@ -1,6 +1,8 @@
 from dataclasses import dataclass
-import yaml
+
 import regex as re
+import yaml
+
 
 @dataclass
 class ComputeResources:
@@ -58,6 +60,7 @@ class ComputeResources:
         """Deserialize compute resource from a dictionary."""
         return ComputeResources(**data)
 
+
 def create_compute_resources(
     cores,
     core_frequency,
@@ -89,6 +92,7 @@ def create_compute_resources(
         **kwargs,
     )
 
+
 def create_gpu_resource(
     flops, memory_bandwidth, network_speed=100e9, time_in_driver=8.0, **kwargs
 ):
@@ -103,20 +107,25 @@ def create_gpu_resource(
         **kwargs,
     )
 
+
 def create_compute_resources_from_yaml(yaml_file):
     loader = yaml.SafeLoader
     loader.add_implicit_resolver(
-    u'tag:yaml.org,2002:float',
-    re.compile(u'''^(?:
+        "tag:yaml.org,2002:float",
+        re.compile(
+            """^(?:
      [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
     |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
     |\\.[0-9_]+(?:[eE][-+][0-9]+)?
     |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
     |[-+]?\\.(?:inf|Inf|INF)
-    |\\.(?:nan|NaN|NAN))$''', re.X),
-    list(u'-+0123456789.'))
+    |\\.(?:nan|NaN|NAN))$""",
+            re.X,
+        ),
+        list("-+0123456789."),
+    )
 
-    with open(yaml_file, "r") as file:
+    with open(yaml_file) as file:
         data = yaml.safe_load(file)
     hardware_type = data.get("hardware", "CPU")
     if hardware_type == "CPU":
@@ -148,6 +157,7 @@ def create_compute_resources_from_yaml(yaml_file):
         # For invalid hardware types, return None (do not raise)
         return None
 
+
 def create_compute_resources_from_system():
     """
     Create a ComputeResources instance by scanning the current system hardware.
@@ -156,12 +166,13 @@ def create_compute_resources_from_system():
     Returns:
         ComputeResources: Configured compute resource object based on current hardware
     """
-    import platform
-    import subprocess
-    import shutil
-    import re
-    import psutil
     import os
+    import platform
+    import re
+    import shutil
+    import subprocess
+
+    import psutil
 
     system = platform.system()
 
@@ -204,7 +215,7 @@ def create_compute_resources_from_system():
     # Get memory information (cross-platform)
     try:
         # Get total RAM
-        psutil.virtual_memory().total
+        # psutil.virtual_memory().total
 
         # Estimate memory specs based on platform
         if system == "Windows":
@@ -230,8 +241,8 @@ def create_compute_resources_from_system():
                 )
                 if channels > 0:
                     memory_channels = channels
-            except:
-                pass
+            except Exception as e:
+                print(f"Error getting Windows memory info: {e}")
 
         elif system == "Darwin":  # macOS
             try:
@@ -247,14 +258,14 @@ def create_compute_resources_from_system():
                 channels = output.count("BANK")
                 if channels > 0:
                     memory_channels = channels
-            except:
-                pass
+            except Exception as e:
+                print(f"Error getting macOS memory info: {e}")
 
         elif system == "Linux":
             try:
                 # Try to get memory frequency from Linux
                 if os.path.exists("/proc/cpuinfo"):
-                    with open("/proc/cpuinfo", "r") as f:
+                    with open("/proc/cpuinfo") as f:
                         f.read()
 
                 # Try to get memory info from dmidecode
@@ -272,8 +283,8 @@ def create_compute_resources_from_system():
                     channels = len(re.findall("Size:.+?MB|Size:.+?GB", output))
                     if channels > 0:
                         memory_channels = channels
-            except:
-                pass
+            except Exception as e:
+                print(f"Error getting Linux memory info: {e}")
 
     except Exception as e:
         print(f"Error getting memory info: {e}")
@@ -284,7 +295,7 @@ def create_compute_resources_from_system():
         network_stats = psutil.net_if_stats()
         max_speed = 0
 
-        for interface, stats in network_stats.items():
+        for stats in network_stats.items():
             if stats.isup and hasattr(stats, "speed") and stats.speed > 0:
                 speed = stats.speed * 1e6  # Convert Mbps to bps
                 max_speed = max(max_speed, speed)
@@ -325,7 +336,8 @@ def create_compute_resources_from_system():
                         mem_width = float(parts[3].strip())
                         # Memory bandwidth = clock * width * 2 (DDR) / 8 (bits to bytes)
                         gpu_memory_bandwidth = mem_clock * mem_width * 2 / 8
-                    except:
+                    except Exception as e:
+                        print(f"Error calculating GPU memory bandwidth: {e}")
                         # Default value for modern GPUs
                         gpu_memory_bandwidth = 300e9  # 300 GB/s
 

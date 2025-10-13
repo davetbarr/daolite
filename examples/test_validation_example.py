@@ -1,7 +1,8 @@
 # Example: Validate/test pipeline component output
-from daolite.simulation.camera import PCOCamLink
-from daolite.compute import create_compute_resources_from_system
 import numpy as np
+
+from daolite.compute import create_compute_resources_from_system
+from daolite.simulation.camera import PCOCamLink
 
 comp = create_compute_resources_from_system()
 output = PCOCamLink(n_pixels=128 * 128, group=4, compute_resources=comp)

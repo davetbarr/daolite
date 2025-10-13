@@ -1,6 +1,7 @@
 import unittest
-import numpy as np
+
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")  # Use non-interactive backend for tests
 from daolite.utils import chronograph
@@ -57,7 +58,7 @@ class TestChronographUtils(unittest.TestCase):
 
     def test_empty_data(self):
         # Should handle empty data gracefully
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValueError):
             chronograph.generate_chrono_plot([], title="Empty", xlabel="Time")
 
 

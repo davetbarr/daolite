@@ -5,17 +5,18 @@ This script shows how to use daolite to model a complete AO pipeline,
 from camera readout to deformable mirror control, with timing visualization.
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
-from daolite.config import CameraConfig, OpticsConfig, PipelineConfig, SystemConfig
+import numpy as np
+
 from daolite.compute import create_compute_resources
-from daolite.simulation.camera import PCOCamLink
+from daolite.config import CameraConfig, OpticsConfig, PipelineConfig, SystemConfig
 from daolite.pipeline.calibration import PixelCalibration
 from daolite.pipeline.centroider import Centroider
-from daolite.pipeline.reconstruction import Reconstruction
 from daolite.pipeline.control import FullFrameControl
-from daolite.utils.network import TimeOnNetwork
+from daolite.pipeline.reconstruction import Reconstruction
+from daolite.simulation.camera import PCOCamLink
 from daolite.utils.chronograph import generate_chrono_plot_packetize
+from daolite.utils.network import TimeOnNetwork
 
 
 def run_single_pipeline(config_file=None):

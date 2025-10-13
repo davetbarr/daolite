@@ -7,11 +7,16 @@ pipeline termination works with DM devices.
 """
 
 import numpy as np
-from daolite import Pipeline, PipelineComponent, ComponentType
+
+from daolite import ComponentType, Pipeline, PipelineComponent
 from daolite.compute import create_compute_resources
-from daolite.simulation.camera import PCOCamLink
-from daolite.simulation.deformable_mirror import StandardDM, DMController, WavefrontCorrector
 from daolite.pipeline.reconstruction import Reconstruction
+from daolite.simulation.camera import PCOCamLink
+from daolite.simulation.deformable_mirror import (
+    DMController,
+    StandardDM,
+    WavefrontCorrector,
+)
 from daolite.utils.network import network_transfer
 
 # Create compute resources for our pipeline components
@@ -35,7 +40,7 @@ dm_resources = create_compute_resources(
     memory_width=64,
     memory_channels=4,
     network_speed=10e9,  # Lower network speed for the DM
-    time_in_driver=10,   # Higher driver overhead for external device
+    time_in_driver=10,  # Higher driver overhead for external device
 )
 
 
@@ -56,7 +61,9 @@ def run_standard_dm_example():
     )
 
     # Add a reconstruction component that depends on the camera
-    centroid_agenda = np.array([640] * 10, dtype=int)  # 6400 centroids split into 10 groups
+    centroid_agenda = np.array(
+        [640] * 10, dtype=int
+    )  # 6400 centroids split into 10 groups
     pipeline.add_component(
         PipelineComponent(
             component_type=ComponentType.RECONSTRUCTION,
@@ -93,7 +100,7 @@ def run_standard_dm_example():
     )
 
     # Run the pipeline
-    results = pipeline.run(debug=True)
+    pipeline.run(debug=True)
 
     # Visualize the pipeline
     fig, ax, latency = pipeline.visualize(
@@ -121,7 +128,9 @@ def run_dm_controller_example():
     )
 
     # Add a reconstruction component that depends on the camera
-    centroid_agenda = np.array([640] * 10, dtype=int)  # 6400 centroids split into 10 groups
+    centroid_agenda = np.array(
+        [640] * 10, dtype=int
+    )  # 6400 centroids split into 10 groups
     pipeline.add_component(
         PipelineComponent(
             component_type=ComponentType.RECONSTRUCTION,
@@ -162,7 +171,7 @@ def run_dm_controller_example():
     )
 
     # Run the pipeline
-    results = pipeline.run(debug=True)
+    pipeline.run(debug=True)
 
     # Visualize the pipeline
     fig, ax, latency = pipeline.visualize(
@@ -229,7 +238,7 @@ def run_wavefront_corrector_example():
     )
 
     # Run the pipeline
-    results = pipeline.run(debug=True)
+    pipeline.run(debug=True)
 
     # Visualize the pipeline
     fig, ax, latency = pipeline.visualize(

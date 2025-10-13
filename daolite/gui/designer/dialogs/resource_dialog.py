@@ -1,8 +1,23 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QDialogButtonBox, QWidget, QHBoxLayout
 import inspect
+
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+
 import daolite.compute.hardware as hardware
-from ..style_utils import set_app_style
 from daolite.compute import create_compute_resources
+
+from ..style_utils import set_app_style
+
 
 class ResourceSelectionDialog(QDialog):
     """
@@ -11,21 +26,26 @@ class ResourceSelectionDialog(QDialog):
     and only shows custom fields when needed.
     Now supports editing: pass existing_resource to pre-populate fields.
     """
+
     def __init__(self, parent=None, existing_resource=None):
         super().__init__(parent)
         self.setWindowTitle("Configure Computer Resource")
         self.resize(440, 420)
         self.cpu_name_string = None
         layout = QVBoxLayout()
-        
+
         # Name field
         name_layout = QFormLayout()
         self.name_edit = QLineEdit("Computer")
         name_layout.addRow("Computer Name:", self.name_edit)
         layout.addLayout(name_layout)
-        
+
         # --- Dynamic CPU list ---
-        cpu_factories = [(name, func) for name, func in inspect.getmembers(hardware, inspect.isfunction) if name.startswith("amd_") or name.startswith("intel_")]
+        cpu_factories = [
+            (name, func)
+            for name, func in inspect.getmembers(hardware, inspect.isfunction)
+            if name.startswith("amd_") or name.startswith("intel_")
+        ]
         self.cpu_names = []
         self.cpu_funcs = []
         for name, func in cpu_factories:
@@ -41,7 +61,7 @@ class ResourceSelectionDialog(QDialog):
         self.cpu_combo = QComboBox()
         self.cpu_combo.addItems(self.cpu_names)
         layout.addWidget(self.cpu_combo)
-        
+
         # Custom CPU fields (hidden by default)
         self.cpu_custom_fields = QFormLayout()
         self.cores_edit = QLineEdit("16")
@@ -63,13 +83,17 @@ class ResourceSelectionDialog(QDialog):
         self.cpu_custom_fields_widget.setVisible(False)
         layout.addWidget(self.cpu_custom_fields_widget)
         self.cpu_name_string = self.cpu_combo.currentText()
-        
+
         # --- Add GPU checkbox ---
         self.add_gpu_checkbox = QCheckBox("Add GPU")
         layout.addWidget(self.add_gpu_checkbox)
-        
+
         # --- GPU dropdown (hidden by default) ---
-        gpu_factories = [(name, func) for name, func in inspect.getmembers(hardware, inspect.isfunction) if name.startswith("nvidia_") or name.startswith("amd_mi")]
+        gpu_factories = [
+            (name, func)
+            for name, func in inspect.getmembers(hardware, inspect.isfunction)
+            if name.startswith("nvidia_") or name.startswith("amd_mi")
+        ]
         self.gpu_names = []
         self.gpu_funcs = []
         for name, func in gpu_factories:
@@ -85,7 +109,7 @@ class ResourceSelectionDialog(QDialog):
         self.gpu_combo.addItems(self.gpu_names)
         self.gpu_combo.setVisible(False)
         layout.addWidget(self.gpu_combo)
-        
+
         # Custom GPU fields (hidden by default)
         self.gpu_custom_fields = QFormLayout()
         self.gpu_flops_edit = QLineEdit("1e12")
@@ -95,12 +119,14 @@ class ResourceSelectionDialog(QDialog):
         self.gpu_network_edit = QLineEdit("100e9")
         self.gpu_custom_fields.addRow("Network Speed (bps):", self.gpu_network_edit)
         self.gpu_time_in_driver_edit = QLineEdit("8")
-        self.gpu_custom_fields.addRow("Time in Driver (us):", self.gpu_time_in_driver_edit)
+        self.gpu_custom_fields.addRow(
+            "Time in Driver (us):", self.gpu_time_in_driver_edit
+        )
         self.gpu_custom_fields_widget = QWidget()
         self.gpu_custom_fields_widget.setLayout(self.gpu_custom_fields)
         self.gpu_custom_fields_widget.setVisible(False)
         layout.addWidget(self.gpu_custom_fields_widget)
-        
+
         # --- Button row ---
         button_layout = QHBoxLayout()
         self.add_btn = QPushButton("Add")
@@ -110,24 +136,24 @@ class ResourceSelectionDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
-        
+
         self.setLayout(layout)
-        
+
         # --- Signals ---
         self.cpu_combo.currentIndexChanged.connect(self._on_cpu_changed)
         self.add_gpu_checkbox.toggled.connect(self._on_add_gpu_toggled)
         self.gpu_combo.currentIndexChanged.connect(self._on_gpu_changed)
-        
+
         # State
         self.result_type = None
         self.result_index = None
-        
+
         # After all widgets are created, pre-populate if editing
         if existing_resource is not None:
             # Set name
-            self.name_edit.setText(getattr(existing_resource, 'name', 'Computer'))
+            self.name_edit.setText(getattr(existing_resource, "name", "Computer"))
             # Try to match CPU in dropdown
-            cpu_name = getattr(existing_resource, 'name', None)
+            cpu_name = getattr(existing_resource, "name", None)
             cpu_idx = None
             for i, label in enumerate(self.cpu_names):
                 if label == cpu_name:
@@ -140,20 +166,32 @@ class ResourceSelectionDialog(QDialog):
                 self.cpu_combo.setCurrentIndex(len(self.cpu_names) - 1)
                 self.cpu_custom_fields_widget.setVisible(True)
                 # Fill custom fields if present
-                self.cores_edit.setText(str(getattr(existing_resource, 'cores', '16')))
-                self.freq_edit.setText(str(getattr(existing_resource, 'core_frequency', '2.6e9')))
-                self.flops_edit.setText(str(getattr(existing_resource, 'flops_per_cycle', '32')))
-                self.mem_channels_edit.setText(str(getattr(existing_resource, 'memory_channels', '4')))
-                self.mem_width_edit.setText(str(getattr(existing_resource, 'memory_width', '64')))
-                self.mem_freq_edit.setText(str(getattr(existing_resource, 'memory_frequency', '3200e6')))
-                self.network_edit.setText(str(getattr(existing_resource, 'network_speed', '100e9')))
+                self.cores_edit.setText(str(getattr(existing_resource, "cores", "16")))
+                self.freq_edit.setText(
+                    str(getattr(existing_resource, "core_frequency", "2.6e9"))
+                )
+                self.flops_edit.setText(
+                    str(getattr(existing_resource, "flops_per_cycle", "32"))
+                )
+                self.mem_channels_edit.setText(
+                    str(getattr(existing_resource, "memory_channels", "4"))
+                )
+                self.mem_width_edit.setText(
+                    str(getattr(existing_resource, "memory_width", "64"))
+                )
+                self.mem_freq_edit.setText(
+                    str(getattr(existing_resource, "memory_frequency", "3200e6"))
+                )
+                self.network_edit.setText(
+                    str(getattr(existing_resource, "network_speed", "100e9"))
+                )
             # GPU
-            attached_gpus = getattr(existing_resource, 'attached_gpus', [])
+            attached_gpus = getattr(existing_resource, "attached_gpus", [])
             if attached_gpus:
                 self.add_gpu_checkbox.setChecked(True)
                 self.gpu_combo.setVisible(True)
                 gpu = attached_gpus[0]
-                gpu_name = getattr(gpu, 'name', None)
+                gpu_name = getattr(gpu, "name", None)
                 gpu_idx = None
                 for i, label in enumerate(self.gpu_names):
                     if label == gpu_name:
@@ -165,11 +203,17 @@ class ResourceSelectionDialog(QDialog):
                     # Custom GPU
                     self.gpu_combo.setCurrentIndex(len(self.gpu_names) - 1)
                     self.gpu_custom_fields_widget.setVisible(True)
-                    self.gpu_flops_edit.setText(str(getattr(gpu, 'flops', '1e12')))
-                    self.gpu_mem_bw_edit.setText(str(getattr(gpu, 'memory_bandwidth', '300e9')))
-                    self.gpu_network_edit.setText(str(getattr(gpu, 'network_speed', '100e9')))
-                    self.gpu_time_in_driver_edit.setText(str(getattr(gpu, 'time_in_driver', '8')))
-                    
+                    self.gpu_flops_edit.setText(str(getattr(gpu, "flops", "1e12")))
+                    self.gpu_mem_bw_edit.setText(
+                        str(getattr(gpu, "memory_bandwidth", "300e9"))
+                    )
+                    self.gpu_network_edit.setText(
+                        str(getattr(gpu, "network_speed", "100e9"))
+                    )
+                    self.gpu_time_in_driver_edit.setText(
+                        str(getattr(gpu, "time_in_driver", "8"))
+                    )
+
         # Apply styling after all UI elements and connections are created
         set_app_style(self)
 
@@ -179,10 +223,14 @@ class ResourceSelectionDialog(QDialog):
 
     def _on_add_gpu_toggled(self, checked):
         self.gpu_combo.setVisible(checked)
-        self.gpu_custom_fields_widget.setVisible(checked and self.gpu_combo.currentIndex() == len(self.gpu_names) - 1)
+        self.gpu_custom_fields_widget.setVisible(
+            checked and self.gpu_combo.currentIndex() == len(self.gpu_names) - 1
+        )
 
     def _on_gpu_changed(self, idx):
-        self.gpu_custom_fields_widget.setVisible(idx == len(self.gpu_names) - 1 and self.add_gpu_checkbox.isChecked())
+        self.gpu_custom_fields_widget.setVisible(
+            idx == len(self.gpu_names) - 1 and self.add_gpu_checkbox.isChecked()
+        )
 
     def get_selected_resource(self):
         # CPU
@@ -210,6 +258,7 @@ class ResourceSelectionDialog(QDialog):
             if gpu_idx == len(self.gpu_names) - 1:
                 # Custom GPU
                 from daolite.compute.base_resources import create_gpu_resource
+
                 gpu_resource = create_gpu_resource(
                     flops=float(self.gpu_flops_edit.text()),
                     memory_bandwidth=float(self.gpu_mem_bw_edit.text()),

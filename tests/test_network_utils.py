@@ -1,5 +1,7 @@
 import unittest
+
 import numpy as np
+
 from daolite.compute import create_compute_resources
 from daolite.utils import network
 

@@ -4,17 +4,31 @@ Centroid Agenda Generator GUI Tool
 This tool allows users to load a readout order and sub-aperture map, set sub-aperture size and readout groups, and generate a centroid agenda.
 """
 
-import sys
-import numpy as np
 import logging
 import tempfile
-from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFileDialog, QMessageBox, QSpinBox, QComboBox, QStatusBar, QDialog
-)
-from daolite.utils.sh_utility import getAvailableSubAps, genSHSubApMap
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from PyQt5.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QStatusBar,
+    QVBoxLayout,
+    QWidget,
+)
+
+from daolite.utils.sh_utility import genSHSubApMap, getAvailableSubAps
+
 from .designer.style_utils import set_app_style
+
 
 class CentroidAgendaTool(QWidget):
     def __init__(self):
@@ -132,7 +146,9 @@ class CentroidAgendaTool(QWidget):
         layout.addWidget(self.output_label)
 
         # Matplotlib figure for images
-        self.fig, (self.ax_img, self.ax_1d) = plt.subplots(2, 1, figsize=(6, 8), gridspec_kw={'height_ratios': [3, 1]})
+        self.fig, (self.ax_img, self.ax_1d) = plt.subplots(
+            2, 1, figsize=(6, 8), gridspec_kw={"height_ratios": [3, 1]}
+        )
         self.canvas = FigureCanvas(self.fig)
         layout.addWidget(self.canvas)
 
@@ -148,16 +164,20 @@ class CentroidAgendaTool(QWidget):
     def load_readout(self, readout_map=None):
         self.set_status("Loading readout order...")
         if readout_map is None:
-            path, _ = QFileDialog.getOpenFileName(self, "Load Readout Order", "", "Numpy/CSV Files (*.npy *.csv)")
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Load Readout Order", "", "Numpy/CSV Files (*.npy *.csv)"
+            )
             if path:
                 try:
-                    if path.endswith('.npy'):
+                    if path.endswith(".npy"):
                         self.readout_map = np.load(path)
                     else:
-                        self.readout_map = np.loadtxt(path, delimiter=',')
+                        self.readout_map = np.loadtxt(path, delimiter=",")
                     self.readout_label.setText(f"Readout Order: {path}")
                 except Exception as e:
-                    QMessageBox.critical(self, "Error", f"Failed to load readout order: {e}")
+                    QMessageBox.critical(
+                        self, "Error", f"Failed to load readout order: {e}"
+                    )
         else:
             self.readout_map = readout_map
 
@@ -180,11 +200,18 @@ class CentroidAgendaTool(QWidget):
             needed_x = xoff + nSubs * subSize
             needed_y = yoff + nSubs * subSize
             if needed_x > img_shape[1] or needed_y > img_shape[0]:
-                QMessageBox.warning(self, "Sub-aperture Map Out of Bounds",
+                QMessageBox.warning(
+                    self,
+                    "Sub-aperture Map Out of Bounds",
                     f"Sub-aperture map (offset + nSubs*subSize) exceeds image size.\n"
                     f"Image size: {img_shape}, Needed: ({needed_y}, {needed_x})\n"
-                    f"Please adjust nSubs, sub size, or offsets.")
-        QMessageBox.information(self, "Readout Order Generated", f"Linear readout order {size}x{size} generated.")
+                    f"Please adjust nSubs, sub size, or offsets.",
+                )
+        QMessageBox.information(
+            self,
+            "Readout Order Generated",
+            f"Linear readout order {size}x{size} generated.",
+        )
 
         # now call load_readout to update plots
         self.load_readout(readout_map=self.readout_map)
@@ -192,17 +219,21 @@ class CentroidAgendaTool(QWidget):
 
     def load_subap(self):
         self.set_status("Loading sub-aperture map...")
-        path, _ = QFileDialog.getOpenFileName(self, "Load Sub-aperture Map", "", "Numpy/CSV Files (*.npy *.csv)")
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Load Sub-aperture Map", "", "Numpy/CSV Files (*.npy *.csv)"
+        )
         if path:
             try:
-                if path.endswith('.npy'):
+                if path.endswith(".npy"):
                     self.subap_map = np.load(path)
                 else:
-                    self.subap_map = np.loadtxt(path, delimiter=',')
+                    self.subap_map = np.loadtxt(path, delimiter=",")
                 self.subap_label.setText(f"Sub-aperture Map: {path}")
                 self.update_plots(self.agenda)
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to load sub-aperture map: {e}")
+                QMessageBox.critical(
+                    self, "Error", f"Failed to load sub-aperture map: {e}"
+                )
         self.set_status("Sub-aperture map loaded.")
 
     def generate_subap_map(self):
@@ -223,34 +254,48 @@ class CentroidAgendaTool(QWidget):
                     centers.append([y, x])
         if centers:
             self.subap_map = np.array(centers)
-            self.subap_label.setText(f"Sub-aperture Map: Generated ({len(centers)} sub-aps)")
+            self.subap_label.setText(
+                f"Sub-aperture Map: Generated ({len(centers)} sub-aps)"
+            )
             self.size_spin.setValue(sub_size)
             self.update_plots(self.agenda)
             self.set_status(f"Sub-aperture map generated with {len(centers)} sub-aps.")
         else:
-            QMessageBox.warning(self, "No sub-apertures", "No valid sub-apertures found with these parameters.")
+            QMessageBox.warning(
+                self,
+                "No sub-apertures",
+                "No valid sub-apertures found with these parameters.",
+            )
             self.set_status("No valid sub-apertures found.", logging.WARNING)
 
     def generate_agenda(self):
         self.set_status("Generating centroid agenda...")
         if self.readout_map is None or self.subap_map is None:
-            QMessageBox.warning(self, "Missing Input", "Please load or generate both readout order and sub-aperture map before generating the centroid agenda.")
+            QMessageBox.warning(
+                self,
+                "Missing Input",
+                "Please load or generate both readout order and sub-aperture map before generating the centroid agenda.",
+            )
             return
         nPixPerSubAp = self.size_spin.value()
         nGroups = self.groups_spin.value()
         nPixels = self.readout_map.shape[0]
         total_pixels = self.readout_map.size
         pixelAgenda = np.full(nGroups, total_pixels // nGroups, dtype=int)
-        pixelAgenda[:total_pixels % nGroups] += 1  # Distribute remainder
+        pixelAgenda[: total_pixels % nGroups] += 1  # Distribute remainder
         print(f"Pixel agenda: {pixelAgenda}")
         try:
             available = getAvailableSubAps(
-                self.readout_map.flatten(), nPixels, nPixPerSubAp, pixelAgenda, getattr(self, 'subap_map_full', None)
+                self.readout_map.flatten(),
+                nPixels,
+                nPixPerSubAp,
+                pixelAgenda,
+                getattr(self, "subap_map_full", None),
             )
             self.agenda = available
             print(f"Available sub-apertures: {available}")
             self.btn_save.setEnabled(True)
-            self.output_label.setText(f"Agenda generated. See plots below.")
+            self.output_label.setText("Agenda generated. See plots below.")
             self.update_plots(available)
             self.set_status("Centroid agenda generated.")
         except Exception as e:
@@ -265,46 +310,64 @@ class CentroidAgendaTool(QWidget):
         if has_readout and has_subap:
             ax_img = self.fig.add_subplot(2, 1, 1)
             ax_1d = self.fig.add_subplot(2, 1, 2)
-            im = ax_img.imshow(self.readout_map, cmap='viridis')
-            self.fig.colorbar(im, ax=ax_img, orientation='vertical', label='Readout Index')
+            im = ax_img.imshow(self.readout_map, cmap="viridis")
+            self.fig.colorbar(
+                im, ax=ax_img, orientation="vertical", label="Readout Index"
+            )
             for center in self.subap_map:
                 y, x = center
-                rect = plt.Rectangle((x - nPixPerSubAp // 2, y - nPixPerSubAp // 2), nPixPerSubAp, nPixPerSubAp,
-                                     linewidth=1, edgecolor='r', facecolor='none')
+                rect = plt.Rectangle(
+                    (x - nPixPerSubAp // 2, y - nPixPerSubAp // 2),
+                    nPixPerSubAp,
+                    nPixPerSubAp,
+                    linewidth=1,
+                    edgecolor="r",
+                    facecolor="none",
+                )
                 ax_img.add_patch(rect)
-            ax_img.set_title('Readout Order with Sub-aperture Boxes')
-            ax_img.set_xlabel('X')
-            ax_img.set_ylabel('Y')
+            ax_img.set_title("Readout Order with Sub-aperture Boxes")
+            ax_img.set_xlabel("X")
+            ax_img.set_ylabel("Y")
             # 1D plot: plot agenda directly
             if available is not None:
-                ax_1d.plot(np.arange(len(available)), available, marker='o')
-                ax_1d.set_title('Available Sub-apertures per Readout Group')
-                ax_1d.set_xlabel('Readout Group')
-                ax_1d.set_ylabel('Available Sub-apertures')
+                ax_1d.plot(np.arange(len(available)), available, marker="o")
+                ax_1d.set_title("Available Sub-apertures per Readout Group")
+                ax_1d.set_xlabel("Readout Group")
+                ax_1d.set_ylabel("Available Sub-apertures")
                 ax_1d.grid(True)
             else:
-                ax_1d.axis('off')
+                ax_1d.axis("off")
         elif has_readout:
             ax_img = self.fig.add_subplot(1, 1, 1)
-            im = ax_img.imshow(self.readout_map, cmap='viridis')
-            self.fig.colorbar(im, ax=ax_img, orientation='vertical', label='Readout Index')
-            ax_img.set_title('Readout Order')
-            ax_img.set_xlabel('X')
-            ax_img.set_ylabel('Y')
+            im = ax_img.imshow(self.readout_map, cmap="viridis")
+            self.fig.colorbar(
+                im, ax=ax_img, orientation="vertical", label="Readout Index"
+            )
+            ax_img.set_title("Readout Order")
+            ax_img.set_xlabel("X")
+            ax_img.set_ylabel("Y")
         elif has_subap:
             ax_img = self.fig.add_subplot(1, 1, 1)
             for center in self.subap_map:
                 y, x = center
-                rect = plt.Rectangle((x - nPixPerSubAp // 2, y - nPixPerSubAp // 2), nPixPerSubAp, nPixPerSubAp,
-                                     linewidth=1, edgecolor='r', facecolor='none')
+                rect = plt.Rectangle(
+                    (x - nPixPerSubAp // 2, y - nPixPerSubAp // 2),
+                    nPixPerSubAp,
+                    nPixPerSubAp,
+                    linewidth=1,
+                    edgecolor="r",
+                    facecolor="none",
+                )
                 ax_img.add_patch(rect)
-            ax_img.set_title('Sub-aperture Boxes (no readout order)')
-            ax_img.set_xlabel('X')
-            ax_img.set_ylabel('Y')
-            ax_img.set_xlim(0, max(self.subap_map[:,1]) + nPixPerSubAp)
-            ax_img.set_ylim(0, max(self.subap_map[:,0]) + nPixPerSubAp)
+            ax_img.set_title("Sub-aperture Boxes (no readout order)")
+            ax_img.set_xlabel("X")
+            ax_img.set_ylabel("Y")
+            ax_img.set_xlim(0, max(self.subap_map[:, 1]) + nPixPerSubAp)
+            ax_img.set_ylim(0, max(self.subap_map[:, 0]) + nPixPerSubAp)
         else:
-            self.fig.text(0.5, 0.5, 'No data loaded', ha='center', va='center', fontsize=16)
+            self.fig.text(
+                0.5, 0.5, "No data loaded", ha="center", va="center", fontsize=16
+            )
         self.fig.tight_layout()
         self.canvas.draw()
 
@@ -312,18 +375,21 @@ class CentroidAgendaTool(QWidget):
         self.set_status("Saving agenda...")
         if self.agenda is None:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Save Agenda", "", "Numpy File (*.npy);;CSV File (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Agenda", "", "Numpy File (*.npy);;CSV File (*.csv)"
+        )
         if path:
             try:
-                if path.endswith('.npy'):
+                if path.endswith(".npy"):
                     np.save(path, self.agenda)
                 else:
-                    np.savetxt(path, self.agenda, delimiter=',')
+                    np.savetxt(path, self.agenda, delimiter=",")
                 QMessageBox.information(self, "Saved", f"Agenda saved to {path}")
                 self.set_status(f"Agenda saved to {path}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save agenda: {e}")
                 self.set_status(f"Failed to save agenda: {e}", logging.ERROR)
+
 
 class CentroidAgendaDialog(QDialog):
     def __init__(self, parent=None):
@@ -336,21 +402,27 @@ class CentroidAgendaDialog(QDialog):
         self.setLayout(layout)
         self.resize(700, 900)
 
+
 def show_centroid_agenda_tool(parent=None):
     dlg = CentroidAgendaDialog(parent)
     dlg.exec_()
 
+
 def main():
     import logging
-    logfile = tempfile.NamedTemporaryFile(prefix="daolite_", suffix=".log", delete=False)
-    logging.basicConfig(filename=logfile.name, level=logging.INFO, filemode='w')
+
+    logfile = tempfile.NamedTemporaryFile(
+        prefix="daolite_", suffix=".log", delete=False
+    )
+    logging.basicConfig(filename=logfile.name, level=logging.INFO, filemode="w")
     print(f"Logging to {logfile.name}")
-    from PyQt5.QtWidgets import QApplication
     import sys
+
     app = QApplication(sys.argv)
     win = CentroidAgendaTool()
     win.show()
     sys.exit(app.exec_())
+
 
 if __name__ == "__main__":
     main()

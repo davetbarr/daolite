@@ -1,7 +1,7 @@
 """Unit tests for compute resources module."""
 
 import unittest
-import numpy as np
+
 from daolite.compute import ComputeResources, create_compute_resources
 
 
@@ -33,7 +33,9 @@ class TestComputeResources(unittest.TestCase):
     def test_memory_bandwidth_calculation(self):
         """Test memory bandwidth calculation."""
         # Implementation returns bytes/second, so divide by 8
-        expected_bandwidth_bytes = (4 * 64 * 3200e6) / 8  # channels * width * frequency / 8
+        expected_bandwidth_bytes = (
+            4 * 64 * 3200e6
+        ) / 8  # channels * width * frequency / 8
         expected_bandwidth_bits = expected_bandwidth_bytes * 8
         self.assertAlmostEqual(
             self.cr.get_memory_bandwidth(), expected_bandwidth_bits * self.cr.mem_fudge
@@ -87,6 +89,7 @@ class TestComputeResources(unittest.TestCase):
     def test_create_gpu_resource(self):
         """Test creation of GPU compute resources."""
         from daolite.compute import create_gpu_resource
+
         gpu = create_gpu_resource(
             flops=10e12,
             memory_bandwidth=300e9,  # Input in Bytes/sec
@@ -103,9 +106,23 @@ class TestComputeResources(unittest.TestCase):
 
     def test_create_compute_resources_from_yaml_invalid(self):
         """Test error handling for invalid hardware type in YAML."""
-        import tempfile, yaml
+        import tempfile
+
+        import yaml
+
         from daolite.compute import create_compute_resources_from_yaml
-        data = {"hardware": "INVALID", "cores": 4, "core_frequency": 1e9, "flops_per_cycle": 8, "memory_frequency": 1e9, "memory_width": 64, "memory_channels": 2, "network_speed": 1e9, "time_in_driver": 5}
+
+        data = {
+            "hardware": "INVALID",
+            "cores": 4,
+            "core_frequency": 1e9,
+            "flops_per_cycle": 8,
+            "memory_frequency": 1e9,
+            "memory_width": 64,
+            "memory_channels": 2,
+            "network_speed": 1e9,
+            "time_in_driver": 5,
+        }
         with tempfile.NamedTemporaryFile(mode="w+", suffix=".yaml", delete=False) as f:
             yaml.safe_dump(data, f)
             f.flush()
@@ -114,9 +131,23 @@ class TestComputeResources(unittest.TestCase):
 
     def test_create_compute_resources_from_yaml_cpu(self):
         """Test creating CPU resource from YAML."""
-        import tempfile, yaml
+        import tempfile
+
+        import yaml
+
         from daolite.compute import create_compute_resources_from_yaml
-        data = {"hardware": "CPU", "cores": 4, "core_frequency": 1e9, "flops_per_cycle": 8, "memory_frequency": 1e9, "memory_width": 64, "memory_channels": 2, "network_speed": 1e9, "time_in_driver": 5}
+
+        data = {
+            "hardware": "CPU",
+            "cores": 4,
+            "core_frequency": 1e9,
+            "flops_per_cycle": 8,
+            "memory_frequency": 1e9,
+            "memory_width": 64,
+            "memory_channels": 2,
+            "network_speed": 1e9,
+            "time_in_driver": 5,
+        }
         with tempfile.NamedTemporaryFile(mode="w+", suffix=".yaml", delete=False) as f:
             yaml.safe_dump(data, f)
             f.flush()
@@ -126,9 +157,19 @@ class TestComputeResources(unittest.TestCase):
 
     def test_create_compute_resources_from_yaml_gpu(self):
         """Test creating GPU resource from YAML."""
-        import tempfile, yaml
+        import tempfile
+
+        import yaml
+
         from daolite.compute import create_compute_resources_from_yaml
-        data = {"hardware": "GPU", "flops": 10e12, "memory_bandwidth": 300e9, "network_speed": 200e9, "time_in_driver": 10.0}
+
+        data = {
+            "hardware": "GPU",
+            "flops": 10e12,
+            "memory_bandwidth": 300e9,
+            "network_speed": 200e9,
+            "time_in_driver": 10.0,
+        }
         with tempfile.NamedTemporaryFile(mode="w+", suffix=".yaml", delete=False) as f:
             yaml.safe_dump(data, f)
             f.flush()
@@ -136,7 +177,7 @@ class TestComputeResources(unittest.TestCase):
         self.assertIsInstance(result, ComputeResources)
         self.assertEqual(result.hardware, "GPU")
 
-    # TODO: add in later. 
+    # TODO: add in later.
     # def test_create_compute_resources_from_system(self):
     #     """Test system-based resource creation (smoke test)."""
     #     from daolite.compute import create_compute_resources_from_system

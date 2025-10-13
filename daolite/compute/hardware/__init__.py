@@ -6,12 +6,13 @@ CPUs and GPUs, which can be used in latency estimation.
 """
 
 import os
+
 import yaml
+
 from daolite.compute.base_resources import (
     ComputeResources,
-    create_compute_resources_from_yaml,
     create_compute_resources,
-    create_gpu_resource,
+    create_compute_resources_from_yaml,
 )
 
 # Directory containing hardware YAML files
@@ -36,7 +37,7 @@ def _load_hardware(filename: str) -> ComputeResources:
 
         # Set name attribute for better display if not set
         if not hasattr(resource, "name") or not resource.name:
-            with open(filepath, "r") as f:
+            with open(filepath) as f:
                 data = yaml.safe_load(f)
                 resource.name = data.get("name", os.path.splitext(filename)[0])
 
@@ -75,17 +76,19 @@ def _load_hardware(filename: str) -> ComputeResources:
 
 
 # --- Auto-discover YAML hardware files and create factory functions ---
-import types
+
 
 def _make_factory(yaml_filename):
     def factory():
         return _load_hardware(yaml_filename)
+
     factory.__name__ = os.path.splitext(yaml_filename)[0]
     factory.__doc__ = f"Create compute resource from {yaml_filename}"
     return factory
 
+
 for fname in os.listdir(HARDWARE_DIR):
-    if fname.endswith('.yaml') and not fname.startswith('_'):
+    if fname.endswith(".yaml") and not fname.startswith("_"):
         func_name = os.path.splitext(fname)[0]
         # Only add if not already defined (manual overrides allowed)
         if func_name not in globals():

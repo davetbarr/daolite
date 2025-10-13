@@ -1,7 +1,9 @@
 """Unit tests for descramble module."""
 
 import unittest
+
 import numpy as np
+
 from daolite.compute import create_compute_resources
 from daolite.pipeline.descramble import Descramble
 from daolite.utils.algorithm_ops import _calibration_flops, _calibration_mem
@@ -31,7 +33,7 @@ class TestDescramble(unittest.TestCase):
     def test_descramble_basic(self):
         """Test basic descramble timing calculation."""
         pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
-        
+
         timings = Descramble(
             compute_resources=self.cr,
             start_times=self.start_times,
@@ -45,7 +47,7 @@ class TestDescramble(unittest.TestCase):
     def test_descramble_timing_dependencies(self):
         """Test that descramble timing follows dependencies."""
         pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
-        
+
         timings = Descramble(
             compute_resources=self.cr,
             start_times=self.start_times,
@@ -62,10 +64,10 @@ class TestDescramble(unittest.TestCase):
     def test_descramble_bit_depth(self):
         """Test descramble with different bit depths."""
         pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
-        
+
         bit_depths = [8, 12, 14, 16]
         timings_list = []
-        
+
         for bit_depth in bit_depths:
             timings = Descramble(
                 compute_resources=self.cr,
@@ -76,7 +78,7 @@ class TestDescramble(unittest.TestCase):
             timings_list.append(timings)
             self.assertEqual(timings.shape, (50, 2))
             self.assertTrue(np.all(timings[:, 1] >= timings[:, 0]))
-        
+
         # All should produce valid results
         for timings in timings_list:
             self.assertGreater(timings[0, 1], timings[0, 0])
@@ -84,9 +86,9 @@ class TestDescramble(unittest.TestCase):
     def test_descramble_with_workers(self):
         """Test descramble with multiple workers."""
         pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
-        
+
         n_workers_list = [1, 2, 4, 8]
-        
+
         for n_workers in n_workers_list:
             timings = Descramble(
                 compute_resources=self.cr,
@@ -100,13 +102,13 @@ class TestDescramble(unittest.TestCase):
     def test_descramble_scaling_factors(self):
         """Test descramble with computation scaling factors."""
         pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
-        
+
         timings_base = Descramble(
             compute_resources=self.cr,
             start_times=self.start_times,
             pixel_agenda=pixel_agenda,
         )
-        
+
         timings_fast = Descramble(
             compute_resources=self.cr,
             start_times=self.start_times,
@@ -126,13 +128,13 @@ class TestDescramble(unittest.TestCase):
         """Test that timing scales with pixel count."""
         small_agenda = np.ones(50, dtype=int) * (self.n_pixels // 2)
         large_agenda = np.ones(50, dtype=int) * (self.n_pixels * 2)
-        
+
         timings_small = Descramble(
             compute_resources=self.cr,
             start_times=self.start_times,
             pixel_agenda=small_agenda,
         )
-        
+
         timings_large = Descramble(
             compute_resources=self.cr,
             start_times=self.start_times,
@@ -148,7 +150,7 @@ class TestDescramble(unittest.TestCase):
         """Test descramble with variable pixel agenda."""
         # Variable number of pixels per iteration
         pixel_agenda = np.random.randint(100000, 2000000, size=50)
-        
+
         timings = Descramble(
             compute_resources=self.cr,
             start_times=self.start_times,
@@ -157,7 +159,7 @@ class TestDescramble(unittest.TestCase):
 
         self.assertEqual(timings.shape, (50, 2))
         self.assertTrue(np.all(timings[:, 1] >= timings[:, 0]))
-        
+
         # Each iteration should process correctly
         for i in range(50):
             self.assertGreater(timings[i, 1], timings[i, 0])
@@ -168,9 +170,9 @@ class TestDescramble(unittest.TestCase):
         for i in range(50):
             irregular_times[i, 0] = i * 20 + np.random.randint(0, 5)
             irregular_times[i, 1] = irregular_times[i, 0] + 5 + np.random.randint(0, 3)
-        
+
         pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
-        
+
         timings = Descramble(
             compute_resources=self.cr,
             start_times=irregular_times,
@@ -188,7 +190,7 @@ class TestDescramble(unittest.TestCase):
         for i in range(10):
             start_times[i, 0] = i * 10
             start_times[i, 1] = i * 10 + 5
-        
+
         # Should not raise any errors with debug=True
         timings = Descramble(
             compute_resources=self.cr,
@@ -196,7 +198,7 @@ class TestDescramble(unittest.TestCase):
             pixel_agenda=pixel_agenda,
             debug=True,
         )
-        
+
         self.assertEqual(timings.shape, (10, 2))
         self.assertTrue(np.all(timings[:, 1] >= timings[:, 0]))
 
@@ -206,13 +208,13 @@ class TestDescramble(unittest.TestCase):
         start_times[0, 0] = 0
         start_times[0, 1] = 5
         pixel_agenda = np.array([self.n_pixels], dtype=int)
-        
+
         timings = Descramble(
             compute_resources=self.cr,
             start_times=start_times,
             pixel_agenda=pixel_agenda,
         )
-        
+
         self.assertEqual(timings.shape, (1, 2))
         self.assertGreater(timings[0, 1], timings[0, 0])
         self.assertEqual(timings[0, 0], start_times[0, 1])
@@ -220,14 +222,14 @@ class TestDescramble(unittest.TestCase):
     def test_descramble_consistency(self):
         """Test that descramble produces consistent results."""
         pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
-        
+
         # Run twice with same parameters
         timings1 = Descramble(
             compute_resources=self.cr,
             start_times=self.start_times,
             pixel_agenda=pixel_agenda,
         )
-        
+
         timings2 = Descramble(
             compute_resources=self.cr,
             start_times=self.start_times,
@@ -240,26 +242,26 @@ class TestDescramble(unittest.TestCase):
     def test_descramble_small_pixels(self):
         """Test descramble with small pixel count."""
         pixel_agenda = np.ones(50, dtype=int) * 1000  # Just 1000 pixels
-        
+
         timings = Descramble(
             compute_resources=self.cr,
             start_times=self.start_times,
             pixel_agenda=pixel_agenda,
         )
-        
+
         self.assertEqual(timings.shape, (50, 2))
         self.assertTrue(np.all(timings[:, 1] >= timings[:, 0]))
 
     def test_descramble_large_pixels(self):
         """Test descramble with large pixel count."""
         pixel_agenda = np.ones(50, dtype=int) * (4096 * 4096)  # 16MP sensor
-        
+
         timings = Descramble(
             compute_resources=self.cr,
             start_times=self.start_times,
             pixel_agenda=pixel_agenda,
         )
-        
+
         self.assertEqual(timings.shape, (50, 2))
         self.assertTrue(np.all(timings[:, 1] >= timings[:, 0]))
 
@@ -285,7 +287,7 @@ class TestDescramble(unittest.TestCase):
         for i in range(20):
             start_times[i, 0] = i * 10
             start_times[i, 1] = i * 10 + 5
-        
+
         # Test various combinations
         configs = [
             {"bitDepth": 8, "nWorkers": 2},
@@ -293,13 +295,13 @@ class TestDescramble(unittest.TestCase):
             {"bitDepth": 16, "mem_scale": 2.0},
             {"nWorkers": 8, "flop_scale": 2.0, "mem_scale": 2.0},
         ]
-        
+
         for config in configs:
             timings = Descramble(
                 compute_resources=self.cr,
                 start_times=start_times,
                 pixel_agenda=pixel_agenda,
-                **config
+                **config,
             )
             self.assertEqual(timings.shape, (20, 2))
             self.assertTrue(np.all(timings[:, 1] >= timings[:, 0]))
@@ -311,7 +313,7 @@ class TestDescramble(unittest.TestCase):
         for i in range(10):
             start_times[i, 0] = i * 10
             start_times[i, 1] = i * 10 + 5
-        
+
         timings = Descramble(
             compute_resources=self.cr,
             start_times=start_times,
@@ -328,7 +330,7 @@ class TestDescramble(unittest.TestCase):
     def test_descramble_total_time_calculation(self):
         """Test total descramble time calculation."""
         pixel_agenda = np.ones(50, dtype=int) * self.n_pixels
-        
+
         timings = Descramble(
             compute_resources=self.cr,
             start_times=self.start_times,
@@ -338,7 +340,7 @@ class TestDescramble(unittest.TestCase):
         # Calculate total time
         total_time = timings[-1, 1] - timings[0, 0]
         self.assertGreater(total_time, 0)
-        
+
         # Total time should be reasonable (not negative or zero)
         self.assertTrue(np.isfinite(total_time))
 

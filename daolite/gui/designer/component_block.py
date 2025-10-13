@@ -2,14 +2,24 @@
 ComponentBlock class for the daolite pipeline designer.
 """
 
-from typing import Dict, List, Optional, Any
-from PyQt5.QtCore import Qt, QRectF, QPointF
-from PyQt5.QtGui import QPen, QBrush, QColor, QPainter, QFont, QLinearGradient
-from PyQt5.QtWidgets import QGraphicsItem, QGraphicsSceneContextMenuEvent, QMenu, QAction, QStyle
+from typing import Any, Dict, List, Optional
+
+from PyQt5.QtCore import QPointF, QRectF, Qt
+from PyQt5.QtGui import QBrush, QColor, QFont, QLinearGradient, QPainter, QPen
+from PyQt5.QtWidgets import (
+    QAction,
+    QGraphicsItem,
+    QGraphicsSceneContextMenuEvent,
+    QMenu,
+    QStyle,
+)
+
 from daolite.common import ComponentType
 from daolite.compute import ComputeResources
+
 from .dialogs.misc_dialogs import StyledTextInputDialog
 from .port import Port, PortType
+
 
 class ComponentBlock(QGraphicsItem):
     """
@@ -17,12 +27,18 @@ class ComponentBlock(QGraphicsItem):
     Represents one pipeline component (camera, centroider, etc.) with
     input/output ports and configurable properties.
     """
-    def __init__(self, component_type: ComponentType, name: str = None, instance_number: int = None):
+
+    def __init__(
+        self,
+        component_type: ComponentType,
+        name: str = None,
+        instance_number: int = None,
+    ):
         super().__init__()
         self.component_type = component_type
         # Assign a default name if not provided
         if name is None:
-            base = component_type.name.capitalize().replace('_', ' ')
+            base = component_type.name.capitalize().replace("_", " ")
             if instance_number is not None:
                 self.name = f"{base}({instance_number})"
             else:
@@ -62,11 +78,12 @@ class ComponentBlock(QGraphicsItem):
             tooltip += "<b>Parameters:</b><br>"
             for key, value in self.params.items():
                 # Skip large arrays
-                if hasattr(value, 'shape') and len(getattr(value, 'shape', [])) > 0:
+                if hasattr(value, "shape") and len(getattr(value, "shape", [])) > 0:
                     tooltip += f"• {key}: Array {getattr(value, 'shape', '')}<br>"
                 elif key == "centroid_agenda_path" and value:
                     # Show just the filename for agenda path
                     import os
+
                     filename = os.path.basename(value)
                     tooltip += f"• {key}: {filename}<br>"
                 else:
@@ -83,7 +100,7 @@ class ComponentBlock(QGraphicsItem):
                             tooltip += f"• {key}: {value} bits<br>"
                     else:
                         tooltip += f"• {key}: {value}<br>"
-        
+
         # Add compute resource information if available
         compute = self.get_compute_resource()
         if compute:
@@ -91,10 +108,10 @@ class ComponentBlock(QGraphicsItem):
             compute_name = getattr(compute, "name", "")
             if compute_name:
                 tooltip += f"• Name: {compute_name}<br>"
-            
+
             hardware_type = getattr(compute, "hardware", "CPU")
             tooltip += f"• Type: {hardware_type}<br>"
-            
+
             # Add hardware-specific details
             if hardware_type == "GPU":
                 # GPU-specific information
@@ -104,28 +121,30 @@ class ComponentBlock(QGraphicsItem):
                         tooltip += f"• Performance: {flops/1e12:.2f} TFLOPS<br>"
                     else:
                         tooltip += f"• Performance: {flops/1e9:.2f} GFLOPS<br>"
-                
+
                 if hasattr(compute, "memory_bandwidth"):
-                    mem_bw = compute.memory_bandwidth / 8  # Convert from bits/s to bytes/s
+                    mem_bw = (
+                        compute.memory_bandwidth / 8
+                    )  # Convert from bits/s to bytes/s
                     tooltip += f"• Memory Bandwidth: {mem_bw/1e9:.2f} GB/s<br>"
             else:
                 # CPU-specific information
                 if hasattr(compute, "cores"):
                     tooltip += f"• Cores: {compute.cores}<br>"
-                
+
                 if hasattr(compute, "core_frequency"):
                     freq = compute.core_frequency
                     tooltip += f"• Core Frequency: {freq/1e9:.2f} GHz<br>"
-            
+
             # Network information common to both
             if hasattr(compute, "network_speed"):
                 net_speed = compute.network_speed
                 tooltip += f"• Network Speed: {net_speed/1e9:.2f} Gbps<br>"
-            
+
             # Driver overhead
             if hasattr(compute, "time_in_driver"):
                 tooltip += f"• Driver Overhead: {compute.time_in_driver} μs<br>"
-        
+
         return tooltip
 
     def hoverEnterEvent(self, event):
@@ -170,8 +189,8 @@ class ComponentBlock(QGraphicsItem):
         return self.size
 
     def paint(self, painter: QPainter, option, widget):
-        theme = getattr(self, 'theme', getattr(self.scene(), 'theme', 'light'))
-        is_dark = theme == 'dark'
+        theme = getattr(self, "theme", getattr(self.scene(), "theme", "light"))
+        is_dark = theme == "dark"
         shadow_color = QColor(0, 0, 0, 100 if is_dark else 60)
         shadow_rect = self.size.adjusted(3, 3, 3, 3)
         painter.setPen(Qt.NoPen)
@@ -186,7 +205,7 @@ class ComponentBlock(QGraphicsItem):
             grad.setColorAt(0, base_color.lighter(110))
             grad.setColorAt(1, base_color.darker(105))
         painter.setBrush(QBrush(grad))
-        pen = QPen(QColor('#8ecfff') if is_dark else Qt.black, 2)
+        pen = QPen(QColor("#8ecfff") if is_dark else Qt.black, 2)
         if self.isSelected():
             pen.setColor(QColor(0, 180, 255) if is_dark else QColor(0, 120, 255))
             pen.setWidth(4)
@@ -206,20 +225,20 @@ class ComponentBlock(QGraphicsItem):
         painter.setBrush(QBrush(title_grad))
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(title_rect, 12, 12)
-        painter.setPen(Qt.black if not is_dark else QColor('#e0e6ef'))
+        painter.setPen(Qt.black if not is_dark else QColor("#e0e6ef"))
         font = QFont("Segoe UI", 11, QFont.Bold)
         painter.setFont(font)
         painter.drawText(title_rect, Qt.AlignCenter, self.name)
         type_rect = QRectF(0, 30, self.size.width(), 18)
         font = QFont("Segoe UI", 9, QFont.Normal)
         painter.setFont(font)
-        painter.setPen(QColor(60, 60, 120) if not is_dark else QColor('#b3e1ff'))
+        painter.setPen(QColor(60, 60, 120) if not is_dark else QColor("#b3e1ff"))
         painter.drawText(type_rect, Qt.AlignCenter, self.component_type.name.title())
         desc = self._get_description()
         desc_rect = QRectF(0, 48, self.size.width(), 16)
         font = QFont("Segoe UI", 8, QFont.StyleItalic)
         painter.setFont(font)
-        painter.setPen(QColor(90, 90, 90) if not is_dark else QColor('#e0e6ef'))
+        painter.setPen(QColor(90, 90, 90) if not is_dark else QColor("#e0e6ef"))
         painter.drawText(desc_rect, Qt.AlignCenter, desc)
         compute = self.get_compute_resource()
         if compute:
@@ -228,20 +247,24 @@ class ComponentBlock(QGraphicsItem):
             resource_type = ""
             parent = self.parentItem()
             if parent:
-                if hasattr(parent, 'gpu_resource'):
+                if hasattr(parent, "gpu_resource"):
                     resource_type = "GPU: "
-                elif hasattr(parent, 'cpu_resource'):
+                elif hasattr(parent, "cpu_resource"):
                     resource_type = "CPU: "
             if resource_type:
                 font = QFont("Segoe UI", 7)
                 painter.setFont(font)
-                painter.setPen(QColor(60, 120, 60) if not is_dark else QColor('#b3e1ff'))
-                painter.drawText(compute_rect, Qt.AlignCenter, f"{resource_type}{compute_name}")
+                painter.setPen(
+                    QColor(60, 120, 60) if not is_dark else QColor("#b3e1ff")
+                )
+                painter.drawText(
+                    compute_rect, Qt.AlignCenter, f"{resource_type}{compute_name}"
+                )
         self._draw_ports(painter)
 
     def _draw_ports(self, painter: QPainter):
-        theme = getattr(self, 'theme', getattr(self.scene(), 'theme', 'light'))
-        is_dark = theme == 'dark'
+        theme = getattr(self, "theme", getattr(self.scene(), "theme", "light"))
+        is_dark = theme == "dark"
         for port in self.input_ports:
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(0, 0, 0, 100 if is_dark else 60))
@@ -253,7 +276,9 @@ class ComponentBlock(QGraphicsItem):
             painter.drawEllipse(port_rect)
             painter.setFont(QFont("Segoe UI", 7))
             painter.setPen(QColor(30, 120, 220))
-            painter.drawText(int(port.position.x()) + 7, int(port.position.y()) + 2, port.label)
+            painter.drawText(
+                int(port.position.x()) + 7, int(port.position.y()) + 2, port.label
+            )
             # Remove tooltip override - it conflicts with detailed tooltip
             # if hasattr(port, 'label'):
             #    self.setToolTip(f"{self.name} - {port.label}")
@@ -261,7 +286,11 @@ class ComponentBlock(QGraphicsItem):
                 connected_comp = port.connected_to[0][0]
                 painter.setFont(QFont("Segoe UI", 7, QFont.StyleItalic))
                 painter.setPen(QColor(80, 80, 180))
-                painter.drawText(int(port.position.x()) + 7, int(port.position.y()) + 12, f"← {connected_comp.name}")
+                painter.drawText(
+                    int(port.position.x()) + 7,
+                    int(port.position.y()) + 12,
+                    f"← {connected_comp.name}",
+                )
         for port in self.output_ports:
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(0, 0, 0, 100 if is_dark else 60))
@@ -273,11 +302,15 @@ class ComponentBlock(QGraphicsItem):
             painter.drawEllipse(port_rect)
             painter.setFont(QFont("Segoe UI", 7))
             painter.setPen(QColor(40, 180, 60))
-            
+
             # Use a proper text rectangle for right alignment of port labels
             label_width = painter.fontMetrics().horizontalAdvance(port.label)
-            painter.drawText(int(port.position.x()) - label_width - 7, int(port.position.y()) + 2, port.label)
-            
+            painter.drawText(
+                int(port.position.x()) - label_width - 7,
+                int(port.position.y()) + 2,
+                port.label,
+            )
+
             # Remove tooltip override - it conflicts with detailed tooltip
             # if hasattr(port, 'label'):
             #    self.setToolTip(f"{self.name} - {port.label}")
@@ -287,12 +320,18 @@ class ComponentBlock(QGraphicsItem):
                     painter.setFont(QFont("Segoe UI", 7, QFont.StyleItalic))
                     painter.setPen(QColor(80, 150, 80))
                     if len(connected_comps) > 1:
-                        display_text = f"{connected_comps[0]} +{len(connected_comps)-1} →"
+                        display_text = (
+                            f"{connected_comps[0]} +{len(connected_comps)-1} →"
+                        )
                     else:
                         display_text = f"{connected_comps[0]} →"
                     # Right align the connected component text as well
                     text_width = painter.fontMetrics().horizontalAdvance(display_text)
-                    painter.drawText(int(port.position.x()) - text_width - 7, int(port.position.y()) + 12, display_text)
+                    painter.drawText(
+                        int(port.position.x()) - text_width - 7,
+                        int(port.position.y()) + 12,
+                        display_text,
+                    )
 
     def _get_color_for_component(self) -> QColor:
         colors = {
@@ -326,6 +365,7 @@ class ComponentBlock(QGraphicsItem):
         if not self.scene():
             return
         from .connection import Connection
+
         for item in self.scene().items():
             if isinstance(item, Connection):
                 if item.start_block == self or item.end_block == self:
@@ -337,9 +377,11 @@ class ComponentBlock(QGraphicsItem):
                 for comp, port2 in port.connected_to:
                     for item in self.scene().items():
                         from .connection import Connection
+
                         if isinstance(item, Connection):
-                            if ((item.start_block == self or item.end_block == self) and
-                                (item.start_port == port or item.end_port == port)):
+                            if (
+                                item.start_block == self or item.end_block == self
+                            ) and (item.start_port == port or item.end_port == port):
                                 item.update_path()
             self.scene().update()
             self._update_all_transfer_indicators()
@@ -348,14 +390,17 @@ class ComponentBlock(QGraphicsItem):
                 for comp, port2 in port.connected_to:
                     for item in self.scene().items():
                         from .connection import Connection
+
                         if isinstance(item, Connection):
-                            if ((item.start_block == self or item.end_block == self) and
-                                (item.start_port == port or item.end_port == port)):
+                            if (
+                                item.start_block == self or item.end_block == self
+                            ) and (item.start_port == port or item.end_port == port):
                                 item.update_path()
             self.scene().update()
             self._update_all_transfer_indicators()
         elif change == QGraphicsItem.ItemParentChange and self.scene():
             from .connection import Connection
+
             self.scene().update()
             self._update_all_transfer_indicators()
         elif change == QGraphicsItem.ItemParentHasChanged and self.scene():
@@ -363,15 +408,17 @@ class ComponentBlock(QGraphicsItem):
                 for comp, port2 in port.connected_to:
                     for item in self.scene().items():
                         from .connection import Connection
+
                         if isinstance(item, Connection):
-                            if ((item.start_block == self or item.end_block == self) and
-                                (item.start_port == port or item.end_port == port)):
+                            if (
+                                item.start_block == self or item.end_block == self
+                            ) and (item.start_port == port or item.end_port == port):
                                 item.update_path()
             self.scene().update()
             self._update_all_transfer_indicators()
         elif change == QGraphicsItem.ItemSelectedChange and self.scene():
             for item in self.scene().items():
-                if hasattr(item, 'set_highlight'):
+                if hasattr(item, "set_highlight"):
                     item.set_highlight(False)
         return super().itemChange(change, value)
 
@@ -394,7 +441,9 @@ class ComponentBlock(QGraphicsItem):
 
     def _on_rename(self):
         print("[DEBUG] _on_rename called")
-        dlg = StyledTextInputDialog("Rename Component", "Enter new name:", self.name, None)
+        dlg = StyledTextInputDialog(
+            "Rename Component", "Enter new name:", self.name, None
+        )
         print(f"[DEBUG] Created StyledTextInputDialog: {dlg}")
         if dlg.exec_():
             name = dlg.getText()
@@ -409,11 +458,13 @@ class ComponentBlock(QGraphicsItem):
             app = self.scene().parent()
             print(f"[DEBUG] App (scene parent): {app}")
             if hasattr(app, "_get_compute_resource"):
-                print(f"[DEBUG] App has _get_compute_resource method")
+                print("[DEBUG] App has _get_compute_resource method")
                 app._get_compute_resource(self)
             else:
-                print(f"[DEBUG] App does NOT have _get_compute_resource method")
-                print(f"[DEBUG] Available methods: {[m for m in dir(app) if not m.startswith('__')]}")
+                print("[DEBUG] App does NOT have _get_compute_resource method")
+                print(
+                    f"[DEBUG] Available methods: {[m for m in dir(app) if not m.startswith('__')]}"
+                )
 
     def _on_params(self):
         print("[DEBUG] _on_params called")
@@ -427,13 +478,15 @@ class ComponentBlock(QGraphicsItem):
                 prev_selected = app.selected_component
                 app.selected_component = self
             else:
-                print(f"[DEBUG] App does NOT have selected_component attribute")
+                print("[DEBUG] App does NOT have selected_component attribute")
             if hasattr(app, "_configure_params"):
-                print(f"[DEBUG] App has _configure_params method")
+                print("[DEBUG] App has _configure_params method")
                 app._configure_params()
             else:
-                print(f"[DEBUG] App does NOT have _configure_params method")
-                print(f"[DEBUG] Available methods: {[m for m in dir(app) if not m.startswith('__')]}")
+                print("[DEBUG] App does NOT have _configure_params method")
+                print(
+                    f"[DEBUG] Available methods: {[m for m in dir(app) if not m.startswith('__')]}"
+                )
             if hasattr(app, "selected_component"):
                 app.selected_component = prev_selected
 
@@ -469,7 +522,7 @@ class ComponentBlock(QGraphicsItem):
             self._on_rename()
             event.accept()
             return
-        
+
         # For clicks elsewhere on the component, show parameter configuration
         if self.scene() and self.scene().parent():
             app = self.scene().parent()
