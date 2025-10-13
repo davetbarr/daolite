@@ -224,6 +224,8 @@ class Pipeline:
         title: str = "AO Pipeline Timing",
         xlabel: str = "Time (μs)",
         save_path: Optional[str] = None,
+        latency_start: Optional[str] = None,
+        latency_end: Optional[str] = None,
     ) -> Tuple:
         """
         Visualize pipeline timing using chronograph.
@@ -232,15 +234,36 @@ class Pipeline:
             title: Plot title
             xlabel: X-axis label
             save_path: Path to save visualization (optional)
+            latency_start: Component name to start latency measurement from (optional, defaults to first component)
+            latency_end: Component name to end latency measurement at (optional, defaults to last component)
 
         Returns:
             Tuple of (fig, ax, latency) from chronograph
 
         Raises:
             ValueError: If pipeline has not been run yet
+            ValueError: If specified latency_start or latency_end component not found
         """
         if not self.timing_results:
             raise ValueError("Pipeline must be run before visualization")
+
+        # Validate latency measurement components if specified
+        if latency_start and latency_start not in self.execution_order:
+            raise ValueError(
+                f"Latency start component '{latency_start}' not found in pipeline"
+            )
+        if latency_end and latency_end not in self.execution_order:
+            raise ValueError(
+                f"Latency end component '{latency_end}' not found in pipeline"
+            )
+
+        # Get indices for latency measurement
+        latency_start_idx = None
+        latency_end_idx = None
+        if latency_start:
+            latency_start_idx = self.execution_order.index(latency_start)
+        if latency_end:
+            latency_end_idx = self.execution_order.index(latency_end)
 
         # Create dataset for chronograph
         data_set = []
@@ -271,7 +294,12 @@ class Pipeline:
 
         # Generate chronograph visualization
         fig, ax, latency = generate_chrono_plot_packetize(
-            data_list=data_set, title=title, xlabel=xlabel, multiplot=False
+            data_list=data_set,
+            title=title,
+            xlabel=xlabel,
+            multiplot=False,
+            latency_start_idx=latency_start_idx,
+            latency_end_idx=latency_end_idx,
         )
 
         # Save if requested

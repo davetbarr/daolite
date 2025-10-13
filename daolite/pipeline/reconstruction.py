@@ -124,18 +124,24 @@ def _process_reconstruction_group(
     Returns:
         float: Total processing time with scaling applied
     """
+    # Each slope has X and Y components, so total slope values = 2 * n_slopes
+    total_slope_values = 2 * n_slopes
+
     # Memory for slopes + actuators + reconstruction matrix
-    memory_to_load = _mvm_mem(n_slopes, n_acts)
+    # Matrix is (n_acts x total_slope_values), vector is total_slope_values, output is n_acts
+    memory_to_load = _mvm_mem(n_acts, total_slope_values)
     load_time = compute_resources.load_time(memory_to_load) / mem_scale
 
-    # Matrix-vector multiplication operations
-    num_operations = _mvm_flops(n_slopes, n_acts)
+    # Matrix-vector multiplication operations: (n_acts x total_slope_values) * (total_slope_values x 1)
+    num_operations = _mvm_flops(n_acts, total_slope_values)
     calc_time = compute_resources.calc_time(num_operations) / flop_scale
 
     if debug:
         print("*************Reconstruction Group************")
-        print(f"Number of slopes: {n_slopes}")
+        print(f"Number of slopes (subapertures): {n_slopes}")
+        print(f"Total slope values (X+Y): {total_slope_values}")
         print(f"Number of actuators: {n_acts}")
+        print(f"Matrix shape: ({n_acts} x {total_slope_values})")
         print(f"Memory to load: {memory_to_load} bits")
         print(f"Number of operations: {num_operations}")
         print(f"Load time: {load_time:.2f} μs")

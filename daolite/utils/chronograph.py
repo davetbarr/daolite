@@ -5,7 +5,7 @@ This module provides tools for creating chronological visualizations of processi
 pipeline timing data, including latency calculations and multi-stage timing plots.
 """
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -119,6 +119,8 @@ def generate_chrono_plot_packetize(
     title: str = "",
     xlabel: str = "",
     multiplot: bool = False,
+    latency_start_idx: Optional[int] = None,
+    latency_end_idx: Optional[int] = None,
 ) -> Tuple[Figure, Axes, float]:
     """
     Generate a chronological plot for packetized timing data.
@@ -129,6 +131,8 @@ def generate_chrono_plot_packetize(
         title: Plot title
         xlabel: X-axis label
         multiplot: Whether to show multiple frames (past/future)
+        latency_start_idx: Index of component to start latency measurement (None = first component)
+        latency_end_idx: Index of component to end latency measurement (None = last component)
 
     Returns:
         tuple: (matplotlib figure, axes, latency in microseconds)
@@ -185,9 +189,12 @@ def generate_chrono_plot_packetize(
     ]  # Changed to align with plot heights
     ax.set_yticks(heights, labels=labels)
 
-    # Calculate and display latency
-    end_of_readout = data_list[0][0][-1, 1]
-    end_of_rtc = data_list[-1][0][-1, 1]
+    # Calculate and display latency using specified indices or defaults
+    start_idx = latency_start_idx if latency_start_idx is not None else 0
+    end_idx = latency_end_idx if latency_end_idx is not None else len(data_list) - 1
+
+    end_of_readout = data_list[start_idx][0][-1, 1]
+    end_of_rtc = data_list[end_idx][0][-1, 1]
     latency = end_of_rtc - end_of_readout
 
     # Draw latency indicators
