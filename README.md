@@ -10,6 +10,10 @@
 
 A Python package for estimating latency in Adaptive Optics Real-time Control Systems, with a focus on Durham Adaptive Optics (DAO) RTC systems.
 
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17342890.svg)](https://doi.org/10.5281/zenodo.17342890)
+
+
 ## Overview
 
 daolite provides tools to estimate the computational latency of various components in an adaptive optics (AO) real-time control system. This helps in system design and benchmarking by modeling:
