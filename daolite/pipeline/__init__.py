@@ -1,13 +1,17 @@
 """Pipeline components for AO system timing estimation."""
 
 from daolite.pipeline.centroider import (
-    CrossCorrelate,
     Centroid,
     ReferenceSlopes,
     Error,
-    SquareDiff,
     Centroider,
 )
+from daolite.pipeline.extended_source_centroider import (
+    CrossCorrelate,
+    SquareDiff,
+    ExtendedSourceCentroider,
+)
+from daolite.pipeline.descramble import Descramble
 from daolite.pipeline.reconstruction import FullFrameReconstruction, Reconstruction
 from daolite.pipeline.control import (
     Integrator,
@@ -19,19 +23,27 @@ from daolite.pipeline.control import (
 from daolite.pipeline.pipeline import Pipeline, PipelineComponent
 
 __all__ = [
-    "CrossCorrelate",
+    # Point source centroiding
     "Centroid",
     "ReferenceSlopes",
     "Error",
-    "SquareDiff",
     "Centroider",
+    # Extended source centroiding
+    "CrossCorrelate",
+    "SquareDiff",
+    "ExtendedSourceCentroider",
+    # Pixel descrambling
+    "Descramble",
+    # Reconstruction
     "FullFrameReconstruction",
     "Reconstruction",
+    # Control
     "Integrator",
     "Offset",
     "Saturation",
     "DMPower",
     "FullFrameControl",
+    # Pipeline
     "Pipeline",
     "PipelineComponent",
 ]
