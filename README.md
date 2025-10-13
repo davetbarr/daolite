@@ -8,11 +8,15 @@
     <strong>D</strong>urham <strong>A</strong>daptive <strong>O</strong>ptics <strong>L</strong>atency <strong>I</strong>nspection and <strong>T</strong>iming <strong>E</strong>stimator
 </p>
 
+<p align="center">
+    <a href="https://doi.org/10.5281/zenodo.17342890"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.17342890.svg" alt="DOI"></a>
+    <a href="https://daolite.readthedocs.io/en/latest/?badge=latest"><img src="https://readthedocs.org/projects/daolite/badge/?version=latest" alt="Documentation Status"></a>
+    <a href="https://pypi.org/project/daolite/"><img src="https://img.shields.io/pypi/v/daolite.svg" alt="PyPI version"></a>
+    <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="License: GPL v3"></a>
+</p>
+
 A Python package for estimating latency in Adaptive Optics Real-time Control Systems, with a focus on Durham Adaptive Optics (DAO) RTC systems.
-
-
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17342890.svg)](https://doi.org/10.5281/zenodo.17342890)
-
 
 ## Overview
 
@@ -27,16 +31,28 @@ daolite provides tools to estimate the computational latency of various componen
 
 ## Installation
 
+Install from PyPI:
+
 ```bash
-pip install -r requirements.txt
-python setup.py install
+pip install daolite
 ```
 
 Or for development:
 
 ```bash
+git clone https://github.com/davetbarr/daolite.git
+cd daolite
 pip install -e .
 ```
+
+## Documentation
+
+Full documentation is available at **[daolite.readthedocs.io](https://daolite.readthedocs.io/)**
+
+- [Quick Start Guide](https://daolite.readthedocs.io/en/latest/quick_start.html)
+- [API Reference](https://daolite.readthedocs.io/en/latest/api/pipeline_api.html)
+- [Examples](https://daolite.readthedocs.io/en/latest/examples.html)
+- [Component Documentation](https://daolite.readthedocs.io/en/latest/pipeline.html)
 
 ## Development Setup
 
@@ -349,6 +365,15 @@ If you use daolite in your research, please cite:
 
 **APA:**
 > David, B. (2025). davetbarr/daolite: v0.1.0 - First Public Alpha (v0.1.0). Zenodo. https://doi.org/10.5281/zenodo.17342890
+
+## Links
+
+- **Documentation**: https://daolite.readthedocs.io/
+- **PyPI Package**: https://pypi.org/project/daolite/
+- **GitHub Repository**: https://github.com/davetbarr/daolite
+- **Issue Tracker**: https://github.com/davetbarr/daolite/issues
+- **Zenodo Archive**: https://doi.org/10.5281/zenodo.17342890
+- **Durham AO**: https://github.com/Durham-Adaptive-Optics
 
 ## License
 
