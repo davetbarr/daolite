@@ -84,10 +84,11 @@ Here's a simple example to estimate the latency of an AO system using the new fl
 import numpy as np
 from daolite import Pipeline, PipelineComponent, ComponentType
 from daolite.compute import hardware
-from daolite.simulation.camera import simulate_camera_readout
-from daolite.pipeline.centroider import cross_correlation_centroider
-from daolite.pipeline.reconstruction import mvr_reconstruction
-from daolite.pipeline.control import dm_control
+from daolite.simulation.camera import PCOCamLink
+from daolite.pipeline.calibration import PixelCalibration
+from daolite.pipeline.centroider import Centroider
+from daolite.pipeline.reconstruction import Reconstruction
+from daolite.pipeline.control import FullFrameControl
 
 # Create a pipeline
 pipeline = Pipeline()
@@ -95,10 +96,13 @@ pipeline = Pipeline()
 # Define AO system parameters
 n_pixels = 1024 * 1024  # 1MP camera
 n_subaps = 80 * 80      # 80x80 subaperture grid
-pix_per_subap = 16 * 16 # 16x16 pixels per subaperture
-n_valid_subaps = int(n_subaps * 0.8)  # Valid subapertures
+n_valid_subaps = int(n_subaps * 0.8)  # Valid subapertures (80% of grid)
 n_actuators = 5000      # Number of DM actuators
-n_groups = 50           # Packet groups
+n_groups = 50           # Number of processing groups
+
+# Create agendas for the new agenda-based API
+pixel_agenda = np.ones(n_groups, dtype=int) * (n_pixels // n_groups)
+centroid_agenda = np.ones(n_groups, dtype=int) * (n_valid_subaps // n_groups)
 
 # Add components to the pipeline in any order with different compute resources
 # The pipeline will automatically handle dependencies
@@ -108,11 +112,23 @@ pipeline.add_component(PipelineComponent(
     component_type=ComponentType.CAMERA,
     name="Camera",
     compute=hardware.amd_epyc_7763(),  # CPU resource
-    function=simulate_camera_readout,
+    function=PCOCamLink,
     params={
         "n_pixels": n_pixels,
-        "group_size": n_groups
+        "group": n_groups
     }
+))
+
+# Pixel calibration
+pipeline.add_component(PipelineComponent(
+    component_type=ComponentType.CALIBRATION,
+    name="Calibration",
+    compute=hardware.amd_epyc_7763(),
+    function=PixelCalibration,
+    params={
+        "pixel_agenda": pixel_agenda
+    },
+    dependencies=["Camera"]
 ))
 
 # Centroiding on a GPU
@@ -120,12 +136,12 @@ pipeline.add_component(PipelineComponent(
     component_type=ComponentType.CENTROIDER,
     name="Centroider",
     compute=hardware.nvidia_rtx_4090(),  # GPU resource
-    function=cross_correlation_centroider,
+    function=Centroider,
     params={
-        "n_subaps": n_valid_subaps,
-        "pixels_per_subap": pix_per_subap
+        "n_pix_per_subap": 16 * 16,
+        "centroid_agenda": centroid_agenda
     },
-    dependencies=["Camera"]  # Depends on camera data
+    dependencies=["Calibration"]  # Depends on calibration
 ))
 
 # Reconstruction on the same GPU
@@ -133,10 +149,10 @@ pipeline.add_component(PipelineComponent(
     component_type=ComponentType.RECONSTRUCTION,
     name="Reconstructor",
     compute=hardware.nvidia_rtx_4090(),  # Same GPU resource
-    function=mvr_reconstruction,
+    function=Reconstruction,
     params={
-        "n_slopes": n_valid_subaps*2,
-        "n_actuators": n_actuators
+        "centroid_agenda": centroid_agenda,
+        "n_acts": n_actuators
     },
     dependencies=["Centroider"]  # Depends on centroider output
 ))
@@ -146,9 +162,9 @@ pipeline.add_component(PipelineComponent(
     component_type=ComponentType.CONTROL,
     name="DM Controller",
     compute=hardware.amd_epyc_7763(),  # CPU resource
-    function=dm_control,
+    function=FullFrameControl,
     params={
-        "n_actuators": n_actuators
+        "n_acts": n_actuators
     },
     dependencies=["Reconstructor"]  # Depends on reconstruction output
 ))
