@@ -1,11 +1,7 @@
 # daolite
 
-<p align="left">
-    <img src="docs/source/_static/images/daoliteLogoSmall.png" alt="daolite small logo" width="80"/>
-</p>
-
 <p align="center">
-    <img src="docs/source/_static/images/daoliteLogo.png" alt="daolite Logo" width="400"/>
+    <img src="docs/source/_static/images/daoliteLogoCrop.png" alt="daolite Logo" width="400"/>
 </p>
 
 <p align="center">
