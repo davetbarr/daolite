@@ -1,91 +1,49 @@
 .. _latency_model:
 
-Latency Model
-=============
+Latency Model Technical Details
+================================
 
 Overview
 --------
 
-daolite models the computational latency of Adaptive Optics (AO) real-time control systems by breaking down the process into distinct components and estimating the processing time for each. The model takes into account hardware specifications, data transfers, and algorithm complexity.
+This page provides technical details on **how** daolite calculates computational latency. For a high-level overview of what daolite does and how to use it, see :ref:`about`.
 
-Core Concepts
--------------
+daolite estimates the processing time for each AO pipeline component by modeling both computational throughput (FLOPs) and memory bandwidth limitations. The model is based on hardware specifications, algorithm complexity, and realistic bottleneck analysis.
 
-The latency modeling in daolite is based on several key concepts:
+Core Methodology
+----------------
 
-Pipeline Components
+Bottleneck Analysis
 ~~~~~~~~~~~~~~~~~~~
-
-An AO pipeline typically consists of:
-
-1. **Camera Readout**: Time taken for the detector to read out pixel values
-2. **Pixel Transfer**: Time required to transfer pixel data from camera to processing hardware
-3. **Pixel Calibration**: Processing to remove bias, flat field, etc.
-4. **Centroiding**: Calculation of wavefront slopes from subaperture images
-5. **Wavefront Reconstruction**: Converting slopes to phase or actuator commands
-6. **Network Transfer**: Time to transfer commands across networks
-7. **DM Control**: Time for the deformable mirror controller to process commands
-
-Packetization
-~~~~~~~~~~~~~
-
-daolite supports modeling of "packetized" processing, where data is processed in chunks as it becomes available:
-
-- Camera readout is often performed in rows or regions
-- Each packet can begin processing as soon as it's available
-- Processing of packets can overlap, creating a pipelined effect
-- This approach can significantly reduce overall latency
-
-Compute Resources
-~~~~~~~~~~~~~~~~~
-
-The performance of each component depends on the available compute resources:
-
-- **CPU-based processing**: Modeled using cores, frequency, FLOPS, and memory bandwidth
-- **GPU-based processing**: Modeled using compute units, memory bandwidth, and driver overhead
-- **Mixed hardware**: Different pipeline stages can run on different hardware
-
-Hardware/Software Co-Design
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-daolite enables users to explore different hardware and software configurations:
-
-- Test different algorithms (e.g., square difference vs. cross-correlation for centroiding)
-- Evaluate hardware options (CPU vs. GPU, memory bandwidth effects)
-- Optimize pipeline configurations (e.g., packet size, number of workers)
-
-Latency Determination Methodology
----------------------------------
-
-daolite uses a detailed latency determination model based on both computational throughput (FLOPS) and memory bandwidth limitations. This section explains the core methodology and the theoretical foundations behind the latency calculations.
-
-Basic Principles
-~~~~~~~~~~~~~~~~
 
 The fundamental principle behind daolite's latency model is that processing time is limited by either:
 
-1. **Computational throughput** - How quickly can the processor execute the required arithmetic operations
-2. **Memory bandwidth** - How quickly can data be moved between memory and the processor
+1. **Computational throughput** - How quickly the processor executes arithmetic operations
+2. **Memory bandwidth** - How quickly data moves between memory and processor
 
-For any given operation, the overall latency is determined by the more restrictive of these two factors:
+For any operation, the actual latency is determined by whichever is more restrictive:
 
-.. code-block:: python
+.. math::
 
-    latency = max(compute_time, memory_time)
+   t_{total} = \max(t_{compute}, t_{memory})
 
-Calculating Computational Throughput Time
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+This "roofline" model ensures realistic timing estimates for both compute-bound and memory-bound operations.
 
-The computational time is calculated based on:
+This "roofline" model ensures realistic timing estimates for both compute-bound and memory-bound operations.
 
-.. code-block:: python
+Computational Throughput
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-    compute_time = (operations_required) / (available_computational_throughput)
+The computational time is calculated as:
+
+.. math::
+
+   t_{compute} = \frac{N_{ops}}{F_{available}}
 
 Where:
 
-- **Operations required**: Total floating-point operations needed for the calculation
-- **Available computational throughput**: Maximum FLOPS (Floating Point Operations Per Second) the hardware can deliver
+- :math:`N_{ops}` = Total floating-point operations required
+- :math:`F_{available}` = Available computational throughput (FLOPS)
 
 Determining Available FLOPS
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -137,19 +95,21 @@ Therefore, daolite applies an algorithm-specific scaling factor:
 
 The efficiency factor typically ranges from 0.1 to 0.8 depending on the algorithm and implementation.
 
-Calculating Memory Bandwidth Time
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- Random access: 10-30%
 
-Memory bandwidth time is calculated based on:
+Memory Bandwidth Time
+~~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: python
+Memory bandwidth time is calculated as:
 
-    memory_time = (data_accessed) / (effective_memory_bandwidth)
+.. math::
+
+   t_{memory} = \frac{B_{accessed}}{BW_{effective}}
 
 Where:
 
-- **Data accessed**: Total bytes that must be read from and written to memory
-- **Effective memory bandwidth**: Actual achievable memory bandwidth
+- :math:`B_{accessed}` = Total bytes read from and written to memory
+- :math:`BW_{effective}` = Effective memory bandwidth (accounts for access patterns)
 
 Determining Theoretical Memory Bandwidth
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -411,64 +371,40 @@ The daolite latency model is most accurate when:
 
 The model provides relative performance estimates that are typically within 10-30% of real-world performance, which is sufficient for most system design and comparison tasks in AO system development.
 
-Timing Model
-------------
+Example: Centroiding Latency Calculation
+-----------------------------------------
 
-The latency estimation follows these principles:
-
-1. **Memory-bound vs. Compute-bound**:
-   - For each operation, determine if it's limited by memory bandwidth or computational throughput
-   - Use the more limiting factor to estimate processing time
-
-2. **Bandwidth Calculation**:
-   - Memory bandwidth: Amount of data * Access pattern efficiency / Hardware bandwidth
-   - Network bandwidth: Data size / Transfer rate + Driver overhead
-
-3. **Computation Time**:
-   - FLOPS required / Available FLOPS
-   - Scaled by algorithmic efficiency factors
-
-4. **Dependency Handling**:
-   - Track dependencies between components
-   - Component timing starts when its dependencies complete
-   - Support for partial dependencies (e.g., start processing when first packet is ready)
-
-5. **Scheduling**:
-   - Optional: model task scheduling overhead
-   - Optional: include thread synchronization costs
-
-Example: Centroiding Latency
-----------------------------
-
-As an example, here's how centroiding latency is modeled:
+Here's a detailed example of how daolite calculates centroiding latency:
 
 .. code-block:: python
 
-    # Determine if memory or compute bound
-    memory_time = (pixels_per_subap * 4) / compute_resource.memory_bandwidth
-    compute_time = (pixels_per_subap * ops_per_pixel) / compute_resource.flops
+    # For each subaperture group
+    pixels = centroid_agenda[i] * n_pix_per_subap
     
-    # Scale by implementation efficiency
-    compute_time *= scale_factor
+    # Memory time: read pixel data + write slope data
+    bytes_read = pixels * 4  # 4 bytes per float32 pixel
+    bytes_write = centroid_agenda[i] * 2 * 4  # 2 slopes per subap, 4 bytes each
+    memory_ops = bytes_read + bytes_write
+    memory_time = memory_ops / compute_resources.memory_bandwidth
     
-    # Use the limiting factor (max of the two)
+    # Compute time: operations per pixel
+    flops_per_pixel = 50  # Typical for CoG centroiding
+    total_flops = pixels * flops_per_pixel
+    compute_time = total_flops / compute_resources.flops
+    
+    # Apply scaling factors
+    memory_time /= mem_scale
+    compute_time /= flop_scale
+    
+    # Actual time is the bottleneck
     processing_time = max(memory_time, compute_time)
-    
-    # Multiply by number of subapertures to process
-    # (or divide by number of parallel workers)
-    total_time = processing_time * n_subaps / n_workers
 
+This demonstrates the fundamental roofline model approach used throughout daolite.
 
-Advanced Features
------------------
-
-- **Multiple Lines of Sight**: Model processing for Solar Adaptive optics
-- **Different Centroiding Methods**: Compare correlation, CoG, and other methods
-- **Sorting Effects**: Evaluate impact of prioritizing certain slopes
-- **Control Algorithms**: Model different control approaches (integrator, Kalman filter)
-- **Wavefront Reconstruction**: Compare MVM, CuReD, and other methods
-
-Usage Examples
+Related Topics
 --------------
 
-See the :ref:`examples` section for complete examples of how to use the latency model.
+- :ref:`about` - High-level overview of daolite capabilities
+- :ref:`_hardware_compute_resources` - Hardware modeling and specifications
+- :ref:`pipeline` - Pipeline architecture and component timing
+- :ref:`examples` - Complete examples using the latency model

@@ -6,7 +6,7 @@ daolite — Adaptive Optics Latency Analysis
 .. raw:: html
 
    <div class="hero-section">
-      <img src="_static/images/daoliteLogoSmall.png" alt="daolite" class="hero-logo"/>
+      <img src="_static/images/daoliteLogoCrop.png" alt="daolite" class="hero-logo"/>
       <div class="hero-text">
         <h1>daolite</h1>
         <p class="tagline">Model and optimize computational latency in Adaptive Optics real-time control systems.</p>
@@ -73,12 +73,10 @@ Key Features
 **Python and JSON APIs**
    Build pipelines programmatically with Python or define them declaratively in JSON for easy sharing and reproducibility.
 
-Documentation
-=============
-
 .. toctree::
    :maxdepth: 2
    :caption: Getting Started:
+   :hidden:
 
    about
    install
@@ -94,6 +92,7 @@ Documentation
 .. toctree::
    :maxdepth: 2
    :caption: Components:
+   :hidden:
 
    camera
    calibration
@@ -107,12 +106,15 @@ Documentation
 .. toctree::
    :maxdepth: 2
    :caption: Community:
+   :hidden:
 
+   dao
    projects
 
 .. toctree::
    :maxdepth: 2
    :caption: API Reference:
+   :hidden:
 
    api/camera_api
    api/calibration_api
@@ -122,6 +124,27 @@ Documentation
    api/network_api
    api/pipeline_api
    api/compute_resources_api
+
+Built with DAO
+==============
+
+.. raw:: html
+
+   <div style="text-align: center; margin: 3em 0; padding: 2em; background: linear-gradient(135deg, #68246D 0%, #00AEEF 100%); border-radius: 10px;">
+      <a href="dao.html" style="text-decoration: none;">
+         <img src="_static/DaoLogo.png" alt="DAO - Durham Adaptive Optics" style="max-width: 300px; height: auto; margin-bottom: 1em; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));"/>
+         <h3 style="color: white; margin: 0.5em 0;">DAO — Durham Adaptive Optics</h3>
+         <p style="color: #FFD53A; font-size: 1.1em; margin: 0.5em 0;">High-Performance Real-Time Control Framework</p>
+         <p style="color: white; margin: 1em auto; max-width: 600px; line-height: 1.6;">
+            daolite was developed alongside DAO, a real-time software framework for adaptive optics systems. 
+            Use daolite to design your system, then implement it with DAO.
+         </p>
+         <div style="margin-top: 1.5em;">
+            <a href="dao.html" style="display: inline-block; padding: 0.75em 2em; background: #FFD53A; color: #68246D; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 0.5em;">Learn More about DAO</a>
+            <a href="https://github.com/Durham-Adaptive-Optics" target="_blank" style="display: inline-block; padding: 0.75em 2em; background: white; color: #68246D; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 0.5em;">View on GitHub</a>
+         </div>
+      </a>
+   </div>
 
 Indices and tables
 ==================

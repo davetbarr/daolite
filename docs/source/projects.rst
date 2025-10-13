@@ -1,23 +1,3 @@
-Projects using daolite
-======================
-
-This page lists projects, papers, and software that use or cite daolite. If you use daolite in a project, please open a pull request adding your project here with a short description and a link.
-
-How to cite
------------
-
-If you use daolite in published work, please cite the project by linking to the repository and including any DOI or reference you have for your work.
-
-Example entry (please replace with real links and citations):
-
-* Project Name — Short description of how daolite was used. Link: https://example.org (Citation: Author, Year)
-
-Add your project
-----------------
-
-To add a project, create a pull request against this repository and add a short, one-line entry above with a link and a citation if available. We reserve the right to curate entries to keep the list relevant.
-
-If you'd like, send an email to the maintainer (see the `README <../README.html>`_ for contact details) with the details and we'll add it for you.
 .. _projects:
 
 Projects Using daolite

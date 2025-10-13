@@ -309,6 +309,13 @@ body {
 	border-radius: 0 0 10px 10px;
 }
 
+.hero-logo {
+	max-width: 200px;
+	height: auto;
+	margin-bottom: 1.5em;
+	filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+}
+
 .hero-section h1 {
 	color: white !important;
 	border-bottom: none !important;
