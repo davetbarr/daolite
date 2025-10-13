@@ -5,6 +5,13 @@ Quick Start Guide
 
 This guide will help you quickly get started with daolite by walking through the basic steps of setting up and running an AO pipeline simulation.
 
+.. raw:: html
+
+    <div class="hero-section placeholder-hero" style="background:#444;color:white;padding:1.5em;border-radius:8px;margin-bottom:1em;text-align:center;">
+        <h2>Placeholder Quick Start Hero</h2>
+        <p>Edit this block in `docs/source/quick_start.rst` to customize the quick start splash.</p>
+    </div>
+
 Installation
 ------------
 

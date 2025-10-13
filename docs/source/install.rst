@@ -5,6 +5,13 @@ Installation
 
 daolite (Durham Adaptive Optics Latency Inspection Tool Environment) provides tools to estimate computational latency in Adaptive Optics (AO) real-time control systems.
 
+.. raw:: html
+
+    <div class="hero-section placeholder-hero" style="background:#333;color:white;padding:1.5em;border-radius:8px;margin-bottom:1em;text-align:center;">
+        <h2>Placeholder Install Hero</h2>
+        <p>Edit this block in `docs/source/install.rst` to customize the installation splash.</p>
+    </div>
+
 Requirements
 ------------
 

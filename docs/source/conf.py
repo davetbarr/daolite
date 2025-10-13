@@ -56,6 +56,21 @@ exclude_patterns = []
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
+# Branding: specify logo and favicon (place files in _static/) and add theme options
+html_logo = '_static/images/daoliteLogo.png'
+html_favicon = '_static/images/daoliteLogoSmall.png'
+
+# Add Durham/daoBase CSS to mimic their landing page style
+html_css_files = ['durham_style.css']
+
+# ReadTheDocs theme options (keeps layout compatible with many Sphinx themes)
+html_theme_options = {
+    'collapse_navigation': True,
+    'navigation_depth': 4,
+    'logo_only': False,
+    'style_nav_header_background': '#68246D',
+}
+
 # Intersphinx mapping to other documentation
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
@@ -81,7 +96,7 @@ def setup(app):
     """Set up event handlers for Sphinx build."""
     app.connect('autodoc-skip-member', skip_member)
     
-    # Add special CSS for better rendering
+    # Add special CSS for better rendering and Durham styling
     app.add_css_file('custom.css')
 
 def skip_member(app, what, name, obj, skip, options):
