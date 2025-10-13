@@ -72,7 +72,10 @@ daolite-centroid-agenda = "daolite.gui.centroid_agenda_tool:main"
 packages = {find = {}}
 
 [tool.setuptools.package-data]
-daolite = ["py.typed"]
+daolite = [
+    "py.typed",
+    "compute/hardware/*.yaml",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

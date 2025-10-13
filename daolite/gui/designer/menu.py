@@ -1,8 +1,6 @@
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QAction
 
-from daolite.gui.centroid_agenda_tool import show_centroid_agenda_tool
-
 
 def create_menu(main_window):
     menu_bar = main_window.menuBar()
@@ -36,10 +34,14 @@ def create_menu(main_window):
     export_config_action.triggered.connect(main_window._export_config)
     file_menu.addAction(export_config_action)
 
+    def _open_centroid_agenda_tool():
+        # Import here to avoid circular import
+        from daolite.gui.centroid_agenda_tool import show_centroid_agenda_tool
+
+        show_centroid_agenda_tool(main_window)
+
     centroid_agenda_action = QAction("Centroid Agenda Tool", main_window)
-    centroid_agenda_action.triggered.connect(
-        lambda: show_centroid_agenda_tool(main_window)
-    )
+    centroid_agenda_action.triggered.connect(_open_centroid_agenda_tool)
     file_menu.addAction(centroid_agenda_action)
 
     file_menu.addSeparator()
