@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "daolite: Durham Adaptive Optics Latency Inspection and Timing Estimator"
+version: 0.1.0
+doi: 10.5281/zenodo.17342890
+date-released: 2025-10-13
+url: "https://github.com/davetbarr/daolite"
+repository-code: "https://github.com/davetbarr/daolite"
+license: GPL-3.0-or-later
+authors:
+  - family-names: "Barr"
+    given-names: "David"
+    email: "dave@davetbarr.com"
+    affiliation: "Durham University"
+keywords:
+  - adaptive optics
+  - latency estimation
+  - real-time control
+  - astronomy
+  - Durham AO
+abstract: >-
+  daolite is a Python package for estimating latency in Adaptive Optics 
+  Real-time Control Systems, with a focus on Durham Adaptive Optics (DAO) 
+  RTC systems. It provides tools to estimate the computational latency of 
+  various components in an adaptive optics system, including camera readout, 
+  pixel calibration, wavefront sensing, reconstruction, and deformable mirror 
+  control. The package helps in system design and benchmarking by modeling 
+  different hardware configurations and identifying performance bottlenecks.
+references:
+  - type: software
+    title: "davetbarr/daolite: v0.1.0 - First Public Alpha"
+    authors:
+      - family-names: "Barr"
+        given-names: "David"
+    version: v0.1.0
+    doi: 10.5281/zenodo.17342890
+    date-released: 2025-10-13
+    publisher:
+      name: "Zenodo"
+    url: "https://doi.org/10.5281/zenodo.17342890"
