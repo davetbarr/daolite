@@ -172,7 +172,7 @@ When using GPU acceleration, consider:
 * **Memory Pattern**: Coalesced memory access patterns are crucial for performance
 
 Example: Performance Analysis
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 

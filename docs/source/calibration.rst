@@ -147,7 +147,8 @@ Complete Example: Full Pipeline with Calibration
     # Run pipeline
     results = pipeline.run()
     print(f"Calibration time: {results['Pixel Calibration'].duration:.2f} µs")
-        GPU Acceleration
+
+GPU Acceleration
 ~~~~~~~~~~~~~~~~
 
 You can model GPU-accelerated pixel calibration by using a GPU compute resource:

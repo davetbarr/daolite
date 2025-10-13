@@ -1,6 +1,16 @@
 # daolite
-![Logo]()
-**D**urham **A**daptive **O**ptics **L**atency **I**nspection and **T**iming **E**stimator
+
+<p align="left">
+    <img src="docs/source/_static/images/daoliteLogoSmall.png" alt="daolite small logo" width="80"/>
+</p>
+
+<p align="center">
+    <img src="docs/source/_static/images/daoliteLogo.png" alt="daolite Logo" width="400"/>
+</p>
+
+<p align="center">
+    <strong>D</strong>urham <strong>A</strong>daptive <strong>O</strong>ptics <strong>L</strong>atency <strong>I</strong>nspection and <strong>T</strong>iming <strong>E</strong>stimator
+</p>
 
 A Python package for estimating latency in Adaptive Optics Real-time Control Systems, with a focus on Durham Adaptive Optics (DAO) RTC systems.
 

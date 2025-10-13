@@ -58,7 +58,7 @@ html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 
 # Branding: specify logo and favicon (place files in _static/) and add theme options
-html_logo = "_static/images/daoliteLogo.png"
+html_logo = "_static/images/daoliteLogoSmall.png"
 html_favicon = "_static/images/daoliteLogoSmall.png"
 
 # Add Durham/daoBase CSS to mimic their landing page style
@@ -68,7 +68,8 @@ html_css_files = ["durham_style.css"]
 html_theme_options = {
     "collapse_navigation": True,
     "navigation_depth": 4,
-    "logo_only": False,
+    # Show the small logo in the top-left instead of the project title
+    "logo_only": True,
     "style_nav_header_background": "#68246D",
 }
 
