@@ -26,121 +26,179 @@ Key Control Features
 Using Control Components
 ------------------------
 
-Adding a controller to your AO pipeline:
+Adding control operations to your AO pipeline:
 
 .. code-block:: python
 
     from daolite import Pipeline, PipelineComponent, ComponentType
-    from daolite.pipeline.control import dm_control
-    from daolite import intel_xeon_gold_6342
+    from daolite.pipeline.control import FullFrameControl
+    from daolite.compute import hardware
     
     # Create a pipeline
     pipeline = Pipeline()
     
     # Define a CPU resource for control
-    cpu = intel_xeon_gold_6342()
+    cpu = hardware.intel_xeon_gold_6342()
     
     # Add controller component
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CONTROL,
         name="DM Controller",
         compute=cpu,
-        function=dm_control,
+        function=FullFrameControl,
         params={
-            "n_actuators": 41*41,  # 41×41 actuator grid
-            "gain": 0.3  # Controller gain
+            "n_acts": 81*81,  # 81×81 actuator grid
+            "operations": ["integration", "offset", "saturation", "dm_power"],
+            "flop_scale": 1.0,
+            "mem_scale": 1.0
         },
-        dependencies=["MVM Reconstructor"]
+        dependencies=["Reconstructor"]
     ))
 
-.. _control_algorithms:
-
-Control Algorithms
+Control Operations
 ------------------
 
-daolite provides timing models for several control algorithms, each with different performance characteristics and stability properties.
+daolite provides timing models for several control operations:
 
-.. _dm_control:
+Integration
+~~~~~~~~~~~
 
-DM Control
-~~~~~~~~~~
-
-The primary control approach for AO systems:
+Models the timing for integrator control operations:
 
 .. code-block:: python
 
-    from daolite.pipeline.control import dm_control
+    from daolite.pipeline.control import Integrator
     
-    # Add DM controller to pipeline
+    # Add integrator to pipeline
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CONTROL,
-        name="DM Controller",
+        name="Integrator",
         compute=cpu,
-        function=dm_control,
+        function=Integrator,
         params={
-            "n_actuators": 41*41,
-            "gain": 0.3  # Controller gain
-        }
+            "n_acts": 81*81,
+            "flop_scale": 1.0,
+            "mem_scale": 1.0
+        },
+        dependencies=["Reconstructor"]
     ))
 
-.. _planned_control_algorithms:
+Full-Frame Control
+~~~~~~~~~~~~~~~~~~
 
-Planned Control Algorithms
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+For convenience, daolite provides a combined control function that performs multiple operations:
 
-The following control algorithms are planned for future implementation:
+.. code-block:: python
 
-* **Leaky Integrator**: Integrator with a leak term to prevent wind-up
-* **Modal Control**: Control with mode-dependent gains
-* **Linear Quadratic Gaussian (LQG) Control**: Advanced control method using state-space modeling
-* **Predictive Control**: Control system that predicts future wavefront errors
-* **Anti-Windup Control**: Controller with anti-windup protection for saturating actuators
+    from daolite.pipeline.control import FullFrameControl
+    
+    # Add full-frame control
+    pipeline.add_component(PipelineComponent(
+        component_type=ComponentType.CONTROL,
+        name="Full Control",
+        compute=cpu,
+        function=FullFrameControl,
+        params={
+            "n_acts": 81*81,
+            "operations": ["integration", "offset", "saturation", "dm_power"],
+            "flop_scale": 1.0,
+            "mem_scale": 1.0,
+            "debug": False
+        },
+        dependencies=["Reconstructor"]
+    ))
 
 .. _practical_examples:
 
 Practical Examples
 ------------------
 
-Example 1: SCAO System with DM Control
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Controller configuration for a high-order SCAO system:
+Example: Complete Pipeline with Control
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
-    # Add DM controller to pipeline
+    from daolite import Pipeline, PipelineComponent, ComponentType
+    from daolite.pipeline.camera import PCOCamLink
+    from daolite.pipeline.calibration import PixelCalibration
+    from daolite.pipeline.centroider import Centroider
+    from daolite.pipeline.reconstruction import Reconstruction
+    from daolite.pipeline.control import FullFrameControl
+    from daolite.compute import hardware
+    import numpy as np
+    
+    # Create pipeline
+    pipeline = Pipeline()
+    
+    # Define compute resources
+    cpu = hardware.intel_xeon_gold_6342()
+    gpu = hardware.nvidia_rtx_4090()
+    
+    # System parameters
+    n_subaps = 80 * 80
+    n_acts = 81 * 81
+    n_pixels = 1024 * 1024
+    n_groups = 50
+    
+    # Define agendas
+    centroid_agenda = np.ones(n_groups, dtype=int) * (n_subaps // n_groups)
+    pixel_agenda = np.ones(n_groups, dtype=int) * (n_pixels // n_groups)
+    
+    # Add camera
+    pipeline.add_component(PipelineComponent(
+        component_type=ComponentType.CAMERA,
+        name="Camera",
+        compute=cpu,
+        function=PCOCamLink,
+        params={"n_pixels": n_pixels, "group": n_groups, "readout": "rolling"}
+    ))
+    
+    # Add calibration
+    pipeline.add_component(PipelineComponent(
+        component_type=ComponentType.CALIBRATION,
+        name="Pixel Calibration",
+        compute=cpu,
+        function=PixelCalibration,
+        params={"pixel_agenda": pixel_agenda, "bit_depth": 16},
+        dependencies=["Camera"]
+    ))
+    
+    # Add centroider
+    pipeline.add_component(PipelineComponent(
+        component_type=ComponentType.CENTROIDER,
+        name="Centroider",
+        compute=gpu,
+        function=Centroider,
+        params={"centroid_agenda": centroid_agenda, "n_pix_per_subap": 16*16},
+        dependencies=["Pixel Calibration"]
+    ))
+    
+    # Add reconstructor
+    pipeline.add_component(PipelineComponent(
+        component_type=ComponentType.RECONSTRUCTOR,
+        name="Reconstructor",
+        compute=gpu,
+        function=Reconstruction,
+        params={"centroid_agenda": centroid_agenda, "n_acts": n_acts},
+        dependencies=["Centroider"]
+    ))
+    
+    # Add controller
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CONTROL,
-        name="SCAO DM Controller",
+        name="Controller",
         compute=cpu,
-        function=dm_control,
+        function=FullFrameControl,
         params={
-            "n_actuators": 75*75,  # 75×75 actuator grid
-            "gain": 0.3  # Controller gain
+            "n_acts": n_acts,
+            "operations": ["integration", "offset", "saturation", "dm_power"]
         },
-        dependencies=["SCAO Reconstructor"]
+        dependencies=["Reconstructor"]
     ))
-
-Example 2: MCAO System with Multi-DM Control
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Controller for a multi-conjugate AO system with three DMs:
-
-.. code-block:: python
-
-    # MCAO controller with separate control for each DM
-    pipeline.add_component(PipelineComponent(
-        component_type=ComponentType.CONTROL,
-        name="MCAO Controller",
-        compute=cpu,
-        function=dm_control,
-        params={
-            "n_dm": 3,  # 3 deformable mirrors
-            "n_actuators_per_dm": [61*61, 31*31, 19*19],  # Actuator counts for each DM
-            "gains": [0.4, 0.35, 0.3]  # Different gains for each DM
-        },
-        dependencies=["MCAO Reconstructor"]
-    ))
+    
+    # Run pipeline
+    results = pipeline.run()
+    print(f"Control time: {results['Controller'].duration:.2f} µs")
 
 .. _performance_considerations:
 
@@ -151,68 +209,31 @@ Several factors affect controller performance:
 
 .. _system_size:
 
-System Size and Dimensionality
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+System Size
+~~~~~~~~~~~
 
-The computational requirements generally scale with:
-* **Number of actuators**: O(n²) for a square DM
+The computational requirements generally scale linearly with the number of actuators for basic control operations like integration.
 
 .. _algorithm_complexity:
 
 Algorithm Computational Complexity
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Different control algorithms have different computational costs:
+Different control operations have different computational costs:
 
-* **DM Control**: O(n) - Simple vector operations
-
-.. _memory_vs_compute:
-
-Memory Bandwidth vs. Computation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Control algorithms may be either:
-
-* **Memory bandwidth limited**: Simple operations like DM control
-
-.. _realtime_constraints:
-
-Real-Time Constraints
-~~~~~~~~~~~~~~~~~~~~~
-
-Controllers must operate with fixed, deterministic timing:
-
-* **Jitter**: Timing variability can affect stability
-* **Worst-case execution time**: Must be predictable and bounded
-* **Synchronization**: Proper synchronization with other AO components
-
-.. _performance_metrics:
-
-Performance Metrics
--------------------
-
-Controller performance in daolite is typically evaluated by timing analysis, latency, and throughput of the control loop. For more details on how to interpret these metrics and optimize controller performance, see the :ref:`latency_model` section.
-
-.. _related_topics:
+* **Integration**: O(n) - Vector addition and scaling
+* **Offset**: O(n) - Vector addition  
+* **Saturation**: O(n) - Conditional operations on actuator commands
+* **DM Power**: O(n) - Power calculation for actuator commands
 
 Related Topics
 --------------
 
 * :ref:`reconstruction` - Provides inputs to the control system
-* :ref:`centroider` - Initial wavefront measurements used in the AO loop
-* :ref:`hardware_compute_resources` - Hardware considerations for controller implementation
-* :ref:`pipeline` - Integration of control into the complete AO pipeline
-* :ref:`latency_model` - Understanding timing and latency impacts on control performance
-
-.. _api_reference:
+* :ref:`centroider` - Wavefront measurements
+* :ref:`pipeline` - Integration into complete AO pipeline
 
 API Reference
 -------------
 
 For complete API details, see the :ref:`api_control` section.
-
-.. seealso::
-   
-   * :ref:`performance_metrics` - For detailed information on evaluating controller performance
-   * :ref:`practical_examples` - For practical implementation examples
-   * Example configuration files in the ``examples/`` directory

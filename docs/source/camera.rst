@@ -34,13 +34,13 @@ Adding a camera simulator to your AO pipeline is straightforward:
 
     from daolite import Pipeline, PipelineComponent, ComponentType
     from daolite.simulation.camera import PCOCamLink
-    from daolite import amd_epyc_7763
+    from daolite.compute import hardware
     
     # Create a pipeline
     pipeline = Pipeline()
     
     # Define a CPU resource for camera simulation
-    cpu = amd_epyc_7763()
+    cpu = hardware.amd_epyc_7763()
     
     # Add camera component
     pipeline.add_component(PipelineComponent(
@@ -50,9 +50,8 @@ Adding a camera simulator to your AO pipeline is straightforward:
         function=PCOCamLink,
         params={
             "n_pixels": 1024*1024,  # 1 megapixel camera
-            "readout_mode": "global",  # Global shutter
-            "bit_depth": 12,  # 12-bit ADC
-            "frame_rate": 1000  # 1000 Hz
+            "group": 50,             # Read out in 50 groups
+            "readout": 500.0         # 500 µs readout time
         }
     ))
 
@@ -63,6 +62,8 @@ Camera Configuration
 
 Camera components accept various parameters to customize their behavior:
 
+**PCOCamLink Parameters:**
+
 .. code-block:: python
 
     params={
@@ -70,19 +71,32 @@ Camera components accept various parameters to customize their behavior:
         "n_pixels": 1024*1024,  # Total number of pixels
         
         # Optional parameters
-        "readout_mode": "global",  # "global", "rolling", "frame-transfer"
-        "bit_depth": 12,  # ADC bit depth
-        "frame_rate": 1000,  # Hz
-        "exposure_time": 800,  # μs
-        "readout_time": 200,  # μs
-        "interface": "cameralink",  # "cameralink", "gige", "usb3", "coaxpress"
-        "bandwidth": 800e6,  # Interface bandwidth in bits/second
-        "packetization": True,  # Enable packetized data transmission
-        "group_size": 64,  # Number of packets per group
-        "use_roi": False,  # Use Region of Interest
-        "roi_width": 512,  # ROI width in pixels
-        "roi_height": 512,  # ROI height in pixels
-        "binning": 1,  # On-chip binning factor
+        "group": 50,            # Number of readout groups (default: 50)
+        "readout": 500.0,       # Readout time in microseconds (default: 500)
+        "debug": False          # Enable debug output
+    }
+
+**GigeVisionCamera Parameters:**
+
+.. code-block:: python
+
+    params={
+        "n_pixels": 1024*1024,       # Total number of pixels
+        "n_groups": 10,              # Number of packet groups (default: 10)
+        "link_speed": 1e9,           # 1 Gbps link speed (default)
+        "readout_time": 1000.0,      # Readout time in microseconds
+        "debug": False
+    }
+
+**RollingShutterCamera Parameters:**
+
+.. code-block:: python
+
+    params={
+        "n_pixels": 1024*1024,       # Total number of pixels
+        "n_rows": 1024,              # Number of rows
+        "row_readout_time": 10.0,    # Time per row in microseconds
+        "debug": False
     }
 
 .. _camera_models:

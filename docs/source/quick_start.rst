@@ -30,31 +30,38 @@ Let's create a simple Single Conjugate Adaptive Optics (SCAO) pipeline:
 
     import numpy as np
     from daolite import Pipeline, PipelineComponent, ComponentType
-    from daolite import amd_epyc_7763, nvidia_rtx_4090
-    from daolite.simulation.camera import simulate_camera_readout
-    from daolite.pipeline.calibration import pixel_calibration
-    from daolite.pipeline.centroider import center_of_gravity
-    from daolite.pipeline.reconstruction import mvm_reconstruction
-    from daolite.pipeline.control import integrator_control
+    from daolite.compute import hardware
+    from daolite.simulation.camera import PCOCamLink
+    from daolite.pipeline.calibration import PixelCalibration
+    from daolite.pipeline.centroider import Centroider
+    from daolite.pipeline.reconstruction import Reconstruction
+    from daolite.pipeline.control import FullFrameControl
     
     # Create a pipeline
     pipeline = Pipeline()
     
-    # Define compute resources
-    cpu = amd_epyc_7763()
-    gpu = nvidia_rtx_4090()
+    # Define system parameters
+    n_pixels = 1024 * 1024       # 1 megapixel camera
+    n_subaps = 80 * 80            # 80x80 subaperture grid
+    n_valid_subaps = int(n_subaps * 0.8)  # 80% illuminated
+    n_pix_per_subap = 16 * 16     # 16x16 pixels per subaperture
+    n_acts = 5000                 # 5000 DM actuators
+    n_groups = 50                 # Readout in 50 groups
+    
+    # Create agendas (how many items processed per iteration)
+    pixel_agenda = np.ones(n_groups, dtype=int) * (n_pixels // n_groups)
+    centroid_agenda = np.ones(n_groups, dtype=int) * (n_valid_subaps // n_groups)
     
     # Step 1: Add camera component
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CAMERA,
         name="WFS Camera",
-        compute=cpu,
-        function=simulate_camera_readout,
+        compute=hardware.amd_epyc_7763(),  # CPU
+        function=PCOCamLink,
         params={
-            "n_pixels": 240*240,  # Total pixels
-            "readout_mode": "global",
-            "bit_depth": 12,
-            "frame_rate": 1000  # 1 kHz frame rate
+            "n_pixels": n_pixels,
+            "group": n_groups,
+            "readout": 500.0  # 500 µs readout time
         }
     ))
     
@@ -62,12 +69,11 @@ Let's create a simple Single Conjugate Adaptive Optics (SCAO) pipeline:
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CALIBRATION,
         name="Pixel Calibration",
-        compute=cpu,
-        function=pixel_calibration,
+        compute=hardware.amd_epyc_7763(),  # CPU
+        function=PixelCalibration,
         params={
-            "n_pixels": 240*240,
-            "operations": ["dark_subtract", "flat_field", "threshold"],
-            "threshold": 100
+            "pixel_agenda": pixel_agenda,
+            "bit_depth": 16
         },
         dependencies=["WFS Camera"]  # Depends on camera output
     ))
@@ -75,12 +81,12 @@ Let's create a simple Single Conjugate Adaptive Optics (SCAO) pipeline:
     # Step 3: Add centroider component
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CENTROIDER,
-        name="CoG Centroider",
-        compute=gpu,  # Using GPU for centroiding
-        function=center_of_gravity,
+        name="Centroider",
+        compute=hardware.nvidia_rtx_4090(),  # GPU for centroiding
+        function=Centroider,
         params={
-            "n_subaps": 20*20,  # 20×20 subapertures
-            "pixels_per_subap": 12*12,  # 12×12 pixels per subaperture
+            "centroid_agenda": centroid_agenda,
+            "n_pix_per_subap": n_pix_per_subap
         },
         dependencies=["Pixel Calibration"]
     ))
@@ -88,39 +94,43 @@ Let's create a simple Single Conjugate Adaptive Optics (SCAO) pipeline:
     # Step 4: Add reconstructor component
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.RECONSTRUCTION,
-        name="MVM Reconstructor",
-        compute=gpu,  # Using GPU for reconstruction
-        function=mvm_reconstruction,
+        name="Reconstructor",
+        compute=hardware.nvidia_rtx_4090(),  # GPU for reconstruction
+        function=Reconstruction,
         params={
-            "n_slopes": 20*20*2,  # x and y slopes for each subaperture
-            "n_actuators": 21*21,  # 21×21 actuator DM
-            "sparse_fraction": 0.1  # 10% non-zero elements in control matrix
+            "n_slopes": n_valid_subaps * 2,  # x and y slopes
+            "n_acts": n_acts,
+            "centroid_agenda": centroid_agenda
         },
-        dependencies=["CoG Centroider"]
+        dependencies=["Centroider"]
     ))
     
     # Step 5: Add DM controller component
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CONTROL,
         name="DM Controller",
-        compute=cpu,
-        function=integrator_control,
+        compute=hardware.amd_epyc_7763(),  # CPU for control
+        function=FullFrameControl,
         params={
-            "n_actuators": 21*21,
-            "gain": 0.4,
-            "use_integrator": True
+            "n_acts": n_acts
         },
-        dependencies=["MVM Reconstructor"]
+        dependencies=["Reconstructor"]
     ))
     
     # Run the pipeline simulation
-    results = pipeline.run()
+    results = pipeline.run(debug=True)
     
-    # Print results
-    pipeline.print_summary()
+    # Visualize the timing diagram
+    pipeline.visualize(
+        title="AO Pipeline Timing",
+        save_path="ao_pipeline_timing.png"
+    )
     
-    # Plot the timing diagram
-    pipeline.plot_timing()
+    # Calculate frame rate
+    total_latency = results["DM Controller"][-1, 1]  # End time in microseconds
+    max_framerate = 1e6 / total_latency
+    print(f"Total latency: {total_latency:.2f} µs")
+    print(f"Maximum frame rate: {max_framerate:.1f} Hz")
 
 Running this code will simulate a basic AO pipeline, calculate the latency of each component, and generate a timing diagram.
 
@@ -147,21 +157,23 @@ daolite includes models for various CPUs and GPUs. You can use predefined resour
 .. code-block:: python
 
     # Using predefined resources
-    from daolite import amd_epyc_7763, nvidia_rtx_4090
+    from daolite.compute import hardware
     
-    cpu = amd_epyc_7763()
-    gpu = nvidia_rtx_4090()
+    cpu = hardware.amd_epyc_7763()
+    gpu = hardware.nvidia_rtx_4090()
     
-    # Or create a custom CPU
-    from daolite import CPU
+    # Or create a custom resource
+    from daolite.compute import create_compute_resources
     
-    custom_cpu = CPU(
+    custom_cpu = create_compute_resources(
         cores=64,
         core_frequency=3.5e9,  # 3.5 GHz
         memory_channels=8,
         memory_frequency=3200e6,  # 3200 MHz
-        memory_width=8,  # Bytes (64-bit)
-        flops_per_cycle=16  # AVX-512 instructions
+        memory_width=64,  # Bits
+        flops_per_cycle=16,  # AVX-512 instructions
+        network_speed=100e9,  # 100 Gbps
+        time_in_driver=5.0  # Driver overhead in µs
     )
 
 3. **Component Configuration**

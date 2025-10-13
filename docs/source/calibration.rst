@@ -27,21 +27,18 @@ daolite makes it easy to add pixel calibration stages to your AO pipeline:
 
     from daolite import Pipeline, PipelineComponent, ComponentType
     from daolite.pipeline.calibration import PixelCalibration
-    from daolite import amd_epyc_7763
+    from daolite.compute import hardware
+    import numpy as np
     
     pipeline = Pipeline()
     
     # Define a CPU resource
-    cpu = amd_epyc_7763()
+    cpu = hardware.amd_epyc_7763()
     
-    # Add camera component first
-    pipeline.add_component(PipelineComponent(
-        component_type=ComponentType.CAMERA,
-        name="Camera",
-        compute=cpu,
-        function=simulate_camera_readout,
-        params={"n_pixels": 1024*1024}
-    ))
+    # Define pixel agenda (how many pixels per iteration)
+    n_pixels = 1024 * 1024
+    n_groups = 10
+    pixel_agenda = np.ones(n_groups, dtype=int) * (n_pixels // n_groups)
     
     # Add pixel calibration component
     pipeline.add_component(PipelineComponent(
@@ -50,9 +47,9 @@ daolite makes it easy to add pixel calibration stages to your AO pipeline:
         compute=cpu,
         function=PixelCalibration,
         params={
-            "n_pixels": 1024*1024,
-            "operations": ["dark_subtract", "flat_field", "threshold"],
-            "threshold": 100
+            "pixel_agenda": pixel_agenda,
+            "bit_depth": 16,  # 16-bit camera data
+            "n_workers": 1
         },
         dependencies=["Camera"]
     ))
@@ -60,156 +57,149 @@ daolite makes it easy to add pixel calibration stages to your AO pipeline:
 Calibration Configuration
 -------------------------
 
-The pixel calibration component accepts a variety of parameters to customize its behavior:
+The pixel calibration component accepts the following parameters:
 
 .. code-block:: python
 
     params={
         # Required parameters
-        "n_pixels": 1024*1024,  # Total number of pixels
+        "pixel_agenda": pixel_agenda,  # Processing agenda (np.ndarray)
         
         # Optional parameters
-        "operations": ["dark_subtract", "flat_field", "bad_pixel", "normalize"],
-        "threshold": 100,  # Intensity threshold value
-        "iterations": 1,  # Number of iterations for certain operations
-        "window_size": 3,  # Window size for filtering operations (e.g., bad pixel)
-        "use_chunking": True,  # Process data in chunks for better memory usage
-        "chunk_size": 4096,  # Size of chunks when chunking is enabled
+        "bit_depth": 16,       # Bit depth of pixel data (default: 16)
+        "n_workers": 1,        # Number of parallel workers (default: 1)
+        "flop_scale": 1.0,     # FLOP scaling factor (default: 1.0)
+        "mem_scale": 1.0,      # Memory scaling factor (default: 1.0)
+        "debug": False         # Enable debug output (default: False)
     }
 
-Available Calibration Operations
+Understanding Pixel Calibration
 --------------------------------
 
-daolite provides timing models for the following calibration operations:
+The ``PixelCalibration`` function models the computational latency of preprocessing raw camera data before wavefront sensing. This includes operations like dark frame subtraction, flat fielding, and other pixel-level corrections.
 
-Dark Subtraction
-~~~~~~~~~~~~~~~~
+The function uses an **agenda-based API** where you specify how many pixels to process in each iteration through the ``pixel_agenda`` parameter. This allows modeling of pipelined or batched processing patterns.
 
-Removes dark current and bias from raw pixel data:
+Key Factors Affecting Performance
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: python
+The computational cost of pixel calibration depends on:
 
-    from daolite.pipeline.calibration import dark_subtraction
-    
-    # Use as a standalone function
-    timing = dark_subtraction(
-        compute=cpu,
-        n_pixels=1024*1024,
-        debug=True
-    )
-    
-    # Or in a pipeline component
-    pipeline.add_component(PipelineComponent(
-        component_type=ComponentType.CALIBRATION,
-        name="Dark Subtraction",
-        compute=cpu,
-        function=dark_subtraction,
-        params={"n_pixels": 1024*1024},
-        dependencies=["Camera"]
-    ))
+* **Number of Pixels**: Scales linearly with pixel count
+* **Bit Depth**: Higher bit depths require more memory bandwidth
+* **Memory Bandwidth**: Calibration operations are typically memory-bound
+* **Computational Resource**: CPU vs GPU implementation affects throughput
 
-Flat Fielding
-~~~~~~~~~~~~~
+Practical Example
+-----------------
 
-Corrects for pixel sensitivity variations:
+Complete Example: Full Pipeline with Calibration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
-    from daolite.pipeline.calibration import flat_field_correction
-    
-    # Add as a pipeline component
-    pipeline.add_component(PipelineComponent(
-        component_type=ComponentType.CALIBRATION,
-        name="Flat Fielding",
-        compute=cpu,
-        function=flat_field_correction,
-        params={"n_pixels": 1024*1024},
-        dependencies=["Dark Subtraction"]
-    ))
-
-Bad Pixel Correction
-~~~~~~~~~~~~~~~~~~~~
-
-Handles defective pixels:
-
-.. code-block:: python
-
-    from daolite.pipeline.calibration import bad_pixel_correction
-    
-    # Add as a pipeline component
-    pipeline.add_component(PipelineComponent(
-        component_type=ComponentType.CALIBRATION,
-        name="Bad Pixel Correction",
-        compute=cpu,
-        function=bad_pixel_correction,
-        params={
-            "n_pixels": 1024*1024,
-            "window_size": 3,  # Use a 3x3 window for correction
-            "bad_pixel_fraction": 0.01  # 1% of pixels are defective
-        },
-        dependencies=["Flat Fielding"]
-    ))
-
-Combined Calibration
-~~~~~~~~~~~~~~~~~~~~
-
-For convenience, daolite provides a combined calibration function that performs multiple operations in sequence:
-
-.. code-block:: python
-
+    from daolite import Pipeline, PipelineComponent, ComponentType
+    from daolite.pipeline.camera import PCOCamLink
     from daolite.pipeline.calibration import PixelCalibration
+    from daolite.compute import hardware
+    import numpy as np
     
-    # Add combined calibration to the pipeline
+    # Create pipeline
+    pipeline = Pipeline()
+    
+    # Define compute resources
+    cpu = hardware.amd_epyc_7763()
+    
+    # Camera parameters
+    n_pixels = 1024 * 1024
+    camera_groups = 10
+    
+    # Pixel calibration agenda
+    pixel_agenda = np.ones(camera_groups, dtype=int) * (n_pixels // camera_groups)
+    
+    # Add camera
+    pipeline.add_component(PipelineComponent(
+        component_type=ComponentType.CAMERA,
+        name="Camera",
+        compute=cpu,
+        function=PCOCamLink,
+        params={
+            "n_pixels": n_pixels,
+            "group": camera_groups,
+            "readout": "rolling"
+        }
+    ))
+    
+    # Add pixel calibration
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CALIBRATION,
         name="Pixel Calibration",
         compute=cpu,
         function=PixelCalibration,
         params={
-            "n_pixels": 1024*1024,
-            "operations": ["dark_subtract", "flat_field", "bad_pixel", "normalize"],
-            "window_size": 3,
-            "threshold": 100
+            "pixel_agenda": pixel_agenda,
+            "bit_depth": 16,
+            "n_workers": 1
         },
         dependencies=["Camera"]
     ))
-
-Performance Considerations
---------------------------
-
-The computational cost of pixel calibration operations depends on several factors:
-
-* **Number of Pixels**: Scales linearly with pixel count
-* **Operations Used**: More operations increase processing time
-* **Window-based Operations**: Operations like bad pixel correction scale with window size
-* **Memory Bandwidth**: Many calibration operations are memory-bound
-* **Computational Resource**: CPU vs GPU implementation
-
-GPU Acceleration
+    
+    # Run pipeline
+    results = pipeline.run()
+    print(f"Calibration time: {results['Pixel Calibration'].duration:.2f} µs")
+        GPU Acceleration
 ~~~~~~~~~~~~~~~~
 
-daolite models GPU-accelerated pixel calibration for higher performance:
+You can model GPU-accelerated pixel calibration by using a GPU compute resource:
 
 .. code-block:: python
 
-    from daolite import nvidia_rtx_4090
+    from daolite.compute import hardware
     
-    # Define a GPU resource
-    gpu = nvidia_rtx_4090()
+    # Use GPU instead of CPU
+    gpu = hardware.nvidia_rtx_4090()
     
-    # Use GPU-accelerated calibration
+    # Add GPU-accelerated calibration
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CALIBRATION,
         name="GPU Calibration",
         compute=gpu,  # Use GPU resource
         function=PixelCalibration,
         params={
-            "n_pixels": 1024*1024,
-            "operations": ["dark_subtract", "flat_field", "normalize"],
-            "use_gpu_kernels": True  # Enable GPU-specific optimizations
+            "pixel_agenda": pixel_agenda,
+            "bit_depth": 16,
+            "n_workers": 1
         },
         dependencies=["Camera"]
     ))
+
+Tuning Performance
+~~~~~~~~~~~~~~~~~~
+
+You can tune the performance model using the ``flop_scale`` and ``mem_scale`` parameters:
+
+.. code-block:: python
+
+    # Scale computational intensity
+    pipeline.add_component(PipelineComponent(
+        component_type=ComponentType.CALIBRATION,
+        name="Tuned Calibration",
+        compute=cpu,
+        function=PixelCalibration,
+        params={
+            "pixel_agenda": pixel_agenda,
+            "bit_depth": 16,
+            "flop_scale": 1.2,  # Increase FLOPs by 20%
+            "mem_scale": 0.8,   # Reduce memory ops by 20%
+            "n_workers": 4      # Use 4 parallel workers
+        },
+        dependencies=["Camera"]
+    ))
+
+API Reference
+-------------
+
+For complete API details, see the :ref:`api_calibration` section.
 
 Chunked Processing
 ~~~~~~~~~~~~~~~~~~

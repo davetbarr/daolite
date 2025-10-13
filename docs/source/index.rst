@@ -64,6 +64,7 @@ daolite provides timing and latency modelling for AO components. The docs below 
    :maxdepth: 2
    :caption: Getting Started:
 
+   about
    install
    quick_start
    contributing

@@ -83,37 +83,45 @@ CPU Profiles
 
 .. code-block:: python
 
-    from daolite import (
-        # AMD CPUs
-        amd_epyc_7763,    # AMD EPYC 7763 (Milan)
-        amd_epyc_9654,    # AMD EPYC 9654 (Genoa)
-        amd_ryzen_7950x,  # AMD Ryzen 9 7950X
-        
-        # Intel CPUs
-        intel_xeon_8480,  # Intel Xeon Platinum 8480+ (Sapphire Rapids)
-        intel_xeon_8462,  # Intel Xeon 8462Y+ (Emerald Rapids)
-    )
+    from daolite.compute import hardware
     
-    # Use a pre-defined CPU
-    cpu = amd_epyc_9654()
+    # AMD CPUs
+    cpu1 = hardware.amd_epyc_7763()    # AMD EPYC 7763 (Milan)
+    cpu2 = hardware.amd_epyc_9654()    # AMD EPYC 9654 (Genoa)
+    cpu3 = hardware.amd_ryzen_7950x()  # AMD Ryzen 9 7950X
+    
+    # Intel CPUs
+    cpu4 = hardware.intel_xeon_8480()  # Intel Xeon Platinum 8480+
+    cpu5 = hardware.intel_xeon_8462()  # Intel Xeon 8462Y+
+    
+    # Use a pre-defined CPU in a pipeline
+    pipeline.add_component(PipelineComponent(
+        name="Centroider",
+        compute=hardware.amd_epyc_7763(),  # Easy to use!
+        ...
+    ))
 
 GPU Profiles
 ~~~~~~~~~~~~
 
 .. code-block:: python
 
-    from daolite import (
-        # NVIDIA GPUs
-        nvidia_a100_80gb,  # NVIDIA A100 80GB
-        nvidia_h100_80gb,  # NVIDIA H100 80GB
-        nvidia_rtx_4090,   # NVIDIA RTX 4090
-        
-        # AMD GPUs
-        amd_mi300x,        # AMD Instinct MI300X
-    )
+    from daolite.compute import hardware
     
-    # Use a pre-defined GPU
-    gpu = nvidia_h100_80gb()
+    # NVIDIA GPUs
+    gpu1 = hardware.nvidia_a100_80gb()  # NVIDIA A100 80GB
+    gpu2 = hardware.nvidia_h100_80gb()  # NVIDIA H100 80GB
+    gpu3 = hardware.nvidia_rtx_4090()   # NVIDIA RTX 4090
+    
+    # AMD GPUs
+    gpu4 = hardware.amd_mi300x()        # AMD Instinct MI300X
+    
+    # Use a pre-defined GPU in a pipeline
+    pipeline.add_component(PipelineComponent(
+        name="Reconstructor",
+        compute=hardware.nvidia_rtx_4090(),
+        ...
+    ))
 
 Memory Model
 ------------

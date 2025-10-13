@@ -24,8 +24,9 @@ Adding a centroider to your AO pipeline:
 .. code-block:: python
 
     from daolite import Pipeline, PipelineComponent, ComponentType
-    from daolite.pipeline.centroider import cross_correlation_centroider
+    from daolite.pipeline.centroider import Centroider
     from daolite.compute import hardware
+    import numpy as np
     
     # Create a pipeline
     pipeline = Pipeline()
@@ -33,74 +34,105 @@ Adding a centroider to your AO pipeline:
     # Define a GPU resource for centroiding
     gpu = hardware.nvidia_rtx_4090()
     
+    # Define centroid agenda (how many subapertures per iteration)
+    n_valid_subaps = 6400
+    n_groups = 50
+    centroid_agenda = np.ones(n_groups, dtype=int) * (n_valid_subaps // n_groups)
+    
     # Add centroider component
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CENTROIDER,
-        name="Correlation Centroider",
+        name="Centroider",
         compute=gpu,
-        function=cross_correlation_centroider,
+        function=Centroider,
         params={
-            "n_subaps": 80*80,  # 80×80 solar wavefront sensor
-            "pixels_per_subap": 16*16,
-            "template_size": 8*8,  # 8×8 reference template
-            "search_extent": 4,  # Search +/- 4 pixels
-            "use_fft": True  # Use FFT for fast correlation
+            "centroid_agenda": centroid_agenda,
+            "n_pix_per_subap": 16*16,  # 16×16 pixels per subaperture
+            "n_workers": 1,
+            "sort": False
         },
         dependencies=["Pixel Calibration"]  # Depends on output from calibration
     ))
 
-Centroiding Algorithms
+Centroiding Functions
 ----------------------
 
-daolite provides timing models for the cross-correlation centroiding method, which is optimized for extended sources like in solar AO.
+daolite provides several centroiding functions for different wavefront sensor types:
 
-Cross-Correlation
-~~~~~~~~~~~~~~~~~
+Point Source Centroiding (Shack-Hartmann)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Ideal for extended sources like in solar AO:
+The ``Centroider`` function is used for standard Shack-Hartmann wavefront sensors with point sources:
 
 .. code-block:: python
 
-    from daolite.pipeline.centroider import cross_correlation_centroider
+    from daolite.pipeline.centroider import Centroider
     
-    # Add correlation centroider to pipeline
+    # Add Shack-Hartmann centroider to pipeline
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CENTROIDER,
-        name="Correlation Centroider",
+        name="SH Centroider",
         compute=gpu,
-        function=cross_correlation_centroider,
+        function=Centroider,
         params={
-            "n_subaps": 80*80,  # 80×80 solar wavefront sensor
-            "pixels_per_subap": 16*16,
-            "template_size": 8*8,  # 8×8 reference template
-            "search_extent": 4,  # Search +/- 4 pixels
-            "use_fft": True  # Use FFT for fast correlation
+            "centroid_agenda": centroid_agenda,  # Processing agenda
+            "n_pix_per_subap": 16*16,            # Pixels per subaperture
+            "n_workers": 1,                       # Parallel workers
+            "sort": False,                        # Sorting (for brightest pixel)
+            "flop_scale": 1.0,                    # FLOP scaling factor
+            "mem_scale": 1.0                      # Memory scaling factor
+        }
+    ))
+
+Extended Source Centroiding
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For extended sources (solar AO), use the extended source centroider module:
+
+.. code-block:: python
+
+    from daolite.pipeline.extended_source_centroider import ExtendedSourceCentroider
+    
+    # Add extended source centroider
+    pipeline.add_component(PipelineComponent(
+        component_type=ComponentType.CENTROIDER,
+        name="Extended Source Centroider",
+        compute=gpu,
+        function=ExtendedSourceCentroider,
+        params={
+            "centroid_agenda": centroid_agenda,
+            "n_pix_per_subap": 20*20,
+            "n_combine": 4  # Number of images to combine
         }
     ))
 
 Practical Examples
 ------------------
 
-Example 1: High-Resolution Solar AO
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Example 1: High-Order Adaptive Optics System
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Centroider configuration for a high-resolution solar wavefront sensor:
+Centroider configuration for a high-order AO system with many subapertures:
 
 .. code-block:: python
 
-    # Solar AO correlation centroider
+    import numpy as np
+    
+    # High-order AO centroider for 85×85 subapertures
+    n_valid_subaps = 85 * 85
+    n_groups = 100  # Process in 100 groups
+    centroid_agenda = np.ones(n_groups, dtype=int) * (n_valid_subaps // n_groups)
+    
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CENTROIDER,
-        name="Solar Centroider",
+        name="High-Order Centroider",
         compute=gpu,
-        function=cross_correlation_centroider,
+        function=Centroider,
         params={
-            "n_subaps": 85*85,  # 85×85 subapertures
-            "pixels_per_subap": 20*20,  # 20×20 pixels
-            "template_size": 10*10,  # 10×10 reference
-            "search_extent": 5,  # Search range
-            "use_fft": True,  # Use FFT for speed
-            "subpixel_method": "parabolic"  # Subpixel accuracy method
+            "centroid_agenda": centroid_agenda,
+            "n_pix_per_subap": 16*16,  # 16×16 pixels per subaperture
+            "n_workers": 1,
+            "sort": False
         },
         dependencies=["Pixel Calibration"]
     ))
@@ -139,8 +171,8 @@ When using GPU acceleration, consider:
 * **Parallelism**: GPUs benefit from high subaperture counts that can utilize all cores
 * **Memory Pattern**: Coalesced memory access patterns are crucial for performance
 
-Example: Comparing Algorithm Performance
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Example: Performance Analysis
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -148,9 +180,9 @@ Example: Comparing Algorithm Performance
     import numpy as np
     from daolite import Pipeline, PipelineComponent, ComponentType
     from daolite.compute import hardware
-    from daolite.pipeline.centroider import cross_correlation_centroider
+    from daolite.pipeline.centroider import Centroider
     
-    # Compare performance of cross-correlation centroiding algorithm
+    # Compare performance across different subaperture counts
     def compare_centroider_performance():
         # Create GPU resource
         gpu = hardware.nvidia_rtx_4090()
@@ -160,34 +192,37 @@ Example: Comparing Algorithm Performance
         pixels_per_subap = 16*16
         
         # Store results
-        cc_times = []
+        centroid_times = []
         
         # Test each subaperture count
         for n_subaps in subap_counts:
-            # Test Cross-Correlation
+            # Define centroid agenda
+            n_groups = 50
+            centroid_agenda = np.ones(n_groups, dtype=int) * (n_subaps // n_groups)
+            
+            # Test Centroider
             pipeline = Pipeline()
             pipeline.add_component(PipelineComponent(
                 component_type=ComponentType.CENTROIDER,
-                name="CC Centroider",
+                name="Centroider",
                 compute=gpu,
-                function=cross_correlation_centroider,
+                function=Centroider,
                 params={
-                    "n_subaps": n_subaps,
-                    "pixels_per_subap": pixels_per_subap,
-                    "template_size": 8*8,
-                    "search_extent": 4,
-                    "use_fft": True
+                    "centroid_agenda": centroid_agenda,
+                    "n_pix_per_subap": pixels_per_subap,
+                    "n_workers": 1,
+                    "sort": False
                 }
             ))
             results = pipeline.run()
-            cc_times.append(results["CC Centroider"].duration)
+            centroid_times.append(results["Centroider"].duration)
         
         # Plot results
         plt.figure(figsize=(10, 6))
-        plt.plot(subap_counts, cc_times, 's-', label='Cross-Correlation')
+        plt.plot(subap_counts, centroid_times, 's-', label='Centroider')
         plt.xlabel('Number of Subapertures')
         plt.ylabel('Execution Time (microseconds)')
-        plt.title('Centroiding Algorithm Performance Comparison')
+        plt.title('Centroiding Performance vs. Subaperture Count')
         plt.legend()
         plt.grid(True)
         plt.savefig('centroider_performance.png')

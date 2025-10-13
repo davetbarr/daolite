@@ -24,92 +24,149 @@ Adding a reconstructor to your AO pipeline:
 .. code-block:: python
 
     from daolite import Pipeline, PipelineComponent, ComponentType
-    from daolite.pipeline.reconstruction import mvr_reconstruction
-    from daolite import nvidia_a100_80gb
+    from daolite.pipeline.reconstruction import Reconstruction
+    from daolite.compute import hardware
+    import numpy as np
     
     # Create a pipeline
     pipeline = Pipeline()
     
     # Define a GPU resource for reconstruction
-    gpu = nvidia_a100_80gb()
+    gpu = hardware.nvidia_a100_80gb()
+    
+    # Define centroid agenda (matching centroider output)
+    n_valid_subaps = 6400
+    n_groups = 50
+    centroid_agenda = np.ones(n_groups, dtype=int) * (n_valid_subaps // n_groups)
     
     # Add reconstructor component
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.RECONSTRUCTOR,
-        name="MVR Reconstructor",
+        name="Reconstructor",
         compute=gpu,
-        function=mvr_reconstruction,
+        function=Reconstruction,
         params={
-            "n_slopes": 40*40*2,  # 40×40 subapertures, x and y slopes
-            "n_actuators": 41*41,  # 41×41 actuator grid
+            "centroid_agenda": centroid_agenda,
+            "n_acts": 81*81,  # 81×81 actuator grid
+            "n_workers": 1
         },
-        dependencies=["CoG Centroider"]
+        dependencies=["Centroider"]
     ))
 
-Reconstruction Algorithms
--------------------------
+Reconstruction Configuration
+----------------------------
 
-daolite provides timing models for the Minimum Variance Reconstruction (MVR) method.
-
-Minimum Variance Reconstruction (MVR)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Reconstruction that incorporates atmospheric statistics:
+The reconstruction component accepts the following parameters:
 
 .. code-block:: python
 
-    from daolite.pipeline.reconstruction import mvr_reconstruction
-    
-    # Add MVR reconstructor to pipeline
-    pipeline.add_component(PipelineComponent(
-        component_type=ComponentType.RECONSTRUCTOR,
-        name="MVR Reconstructor",
-        compute=gpu,
-        function=mvr_reconstruction,
-        params={
-            "n_slopes": 60*60*2,  # 60×60 subapertures
-            "n_actuators": 61*61,  # 61×61 actuator grid
-            "noise_variance": 0.1,  # Noise variance
-            "turbulence_strength": 1.0  # Cn² parameter
-        }
-    ))
+    params={
+        # Required parameters
+        "centroid_agenda": centroid_agenda,  # Processing agenda (np.ndarray)
+        "n_acts": 81*81,                     # Number of actuators
+        
+        # Optional parameters
+        "flop_scale": 1.0,    # FLOP scaling factor (default: 1.0)
+        "mem_scale": 1.0,     # Memory scaling factor (default: 1.0)
+        "n_workers": 1,       # Number of parallel workers (default: 1)
+        "debug": False        # Enable debug output (default: False)
+    }
 
-Planned Algorithms
-~~~~~~~~~~~~~~~~~~
+Understanding Reconstruction
+----------------------------
 
-The following reconstruction methods are planned for future implementation:
+The ``Reconstruction`` function models the computational latency of matrix-vector multiplication (MVM) operations that convert wavefront slopes into actuator commands. This corresponds to the operation:
 
-* **Tomographic Reconstruction**: Multi-guide star reconstruction for wide-field correction
-* **Conjugate Gradient (CG)**: Iterative method that avoids explicit control matrix computation
-* **Fourier Domain Preconditioned CG (FDPCG)**: Specialized iterative method with faster convergence
+.. math::
+
+    \\mathbf{a} = \\mathbf{R} \\cdot \\mathbf{s}
+
+where:
+
+* :math:`\\mathbf{s}` is the slope vector (from centroiding)
+* :math:`\\mathbf{R}` is the reconstruction matrix (e.g., pseudo-inverse of interaction matrix)
+* :math:`\\mathbf{a}` is the actuator command vector
+
+The function uses an **agenda-based API** where you specify how many slopes to process in each iteration through the ``centroid_agenda`` parameter.
 
 Practical Examples
 ------------------
 
-Example 1: High-Order SCAO System
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Reconstructor configuration for a high-order SCAO system:
+Example: Complete AO Pipeline with Reconstruction
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
-    # High-order SCAO MVR reconstructor
+    from daolite import Pipeline, PipelineComponent, ComponentType
+    from daolite.pipeline.camera import PCOCamLink
+    from daolite.pipeline.calibration import PixelCalibration
+    from daolite.pipeline.centroider import Centroider
+    from daolite.pipeline.reconstruction import Reconstruction
+    from daolite.compute import hardware
+    import numpy as np
+    
+    # Create pipeline
+    pipeline = Pipeline()
+    
+    # Define compute resources
+    cpu = hardware.amd_epyc_7763()
+    gpu = hardware.nvidia_a100_80gb()
+    
+    # System parameters
+    n_subaps = 74 * 74
+    n_acts = 75 * 75
+    n_pixels = 1024 * 1024
+    
+    # Define agendas
+    n_groups = 50
+    centroid_agenda = np.ones(n_groups, dtype=int) * (n_subaps // n_groups)
+    pixel_agenda = np.ones(n_groups, dtype=int) * (n_pixels // n_groups)
+    
+    # Add camera
+    pipeline.add_component(PipelineComponent(
+        component_type=ComponentType.CAMERA,
+        name="Camera",
+        compute=cpu,
+        function=PCOCamLink,
+        params={"n_pixels": n_pixels, "group": n_groups, "readout": "rolling"}
+    ))
+    
+    # Add calibration
+    pipeline.add_component(PipelineComponent(
+        component_type=ComponentType.CALIBRATION,
+        name="Pixel Calibration",
+        compute=cpu,
+        function=PixelCalibration,
+        params={"pixel_agenda": pixel_agenda, "bit_depth": 16},
+        dependencies=["Camera"]
+    ))
+    
+    # Add centroider
+    pipeline.add_component(PipelineComponent(
+        component_type=ComponentType.CENTROIDER,
+        name="Centroider",
+        compute=gpu,
+        function=Centroider,
+        params={"centroid_agenda": centroid_agenda, "n_pix_per_subap": 16*16},
+        dependencies=["Pixel Calibration"]
+    ))
+    
+    # Add reconstructor
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.RECONSTRUCTOR,
-        name="SCAO Reconstructor",
+        name="Reconstructor",
         compute=gpu,
-        function=mvr_reconstruction,
+        function=Reconstruction,
         params={
-            "n_slopes": 74*74*2,  # 74×74 subapertures
-            "n_actuators": 75*75,  # 75×75 actuator grid
-            "noise_variance": 0.1,  # Noise variance
-            "turbulence_strength": 1.0,  # Cn² parameter
-            "precision": "single",  # Use single precision for speed
-            "memory_layout": "optimal",  # Optimize memory layout for GPU
-            "matrix_layout": "column_major"  # Use column-major layout for CUDA
+            "centroid_agenda": centroid_agenda,
+            "n_acts": n_acts
         },
-        dependencies=["Solar Centroider"]
+        dependencies=["Centroider"]
     ))
+    
+    # Run and analyze
+    results = pipeline.run()
+    print(f"Reconstruction time: {results['Reconstructor'].duration:.2f} µs")
 
 Performance Considerations
 --------------------------
@@ -119,101 +176,59 @@ Several factors affect reconstruction performance:
 Matrix Size
 ~~~~~~~~~~~
 
-The control matrix size scales with:
-* Number of slopes: O(n² subapertures) since each subaperture produces 2 slopes (x and y)
-* Number of actuators: O(n² actuators) for a square DM
+The reconstruction matrix size scales with:
 
-For MVR methods, the computational complexity is O(slopes × actuators), which can become prohibitive for very large AO systems.
+* Number of slopes: Each subaperture produces 2 slopes (x and y), so :math:`n_{slopes} = 2 \\times n_{subaps}`
+* Number of actuators: Typically :math:`n_{acts} = (n_{subaps}^{1/2} + 1)^2` for a square DM
 
-Algorithm Computational Complexity
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The computational complexity is :math:`O(n_{slopes} \\times n_{acts})` for matrix-vector multiplication.
 
-The MVR algorithm has the following computational requirements:
-
-* **MVR**: O(slopes × actuators) - Direct computation
-
-GPU Acceleration Factors
-~~~~~~~~~~~~~~~~~~~~~~~~
+GPU Acceleration
+~~~~~~~~~~~~~~~~
 
 When using GPU acceleration, consider:
 
-* **Memory Bandwidth**: MVR operations are often memory-bound rather than compute-bound
-* **Precision**: Single precision (fp32) vs. double precision (fp64) has significant impact on GPU performance
-* **Kernel Occupancy**: Ensuring GPU cores are well-utilized through appropriate blocking and thread assignment
-* **Memory Transfers**: Minimizing CPU-GPU transfers, especially for iterative methods
+* **Memory Bandwidth**: Reconstruction operations are often memory-bound
+* **Data Transfers**: GPU memory transfers should be minimized
+* **Parallelism**: GPUs excel with large matrix operations that utilize all cores
 
-Memory Requirements
-~~~~~~~~~~~~~~~~~~~
+Tuning Performance
+~~~~~~~~~~~~~~~~~~
 
-Memory usage depends on the reconstructor type:
-
-* **Dense MVR**: O(slopes × actuators) - Requires storing entire control matrix
-
-Example: Memory Requirements by System Size
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+You can tune the performance model using the ``flop_scale`` and ``mem_scale`` parameters:
 
 .. code-block:: python
 
-    import matplotlib.pyplot as plt
-    import numpy as np
-    
-    # Compare memory requirements
-    def plot_memory_requirements():
-        # System sizes to compare
-        system_sizes = np.arange(20, 201, 20)  # 20 to 200 in steps of 20
-        
-        # Calculate memory requirements
-        dense_memory = []
-        
-        for size in system_sizes:
-            n_slopes = size * size * 2
-            n_actuators = (size + 1) * (size + 1)
-            
-            # Dense MVR (4 bytes per float32)
-            mem_dense = n_slopes * n_actuators * 4 / (1024**2)  # MB
-            dense_memory.append(mem_dense)
-        
-        # Plot results
-        plt.figure(figsize=(10, 6))
-        plt.plot(system_sizes, dense_memory, 'o-', label='Dense MVR')
-        plt.xlabel('System Size (subapertures across diameter)')
-        plt.ylabel('Memory Requirement (MB)')
-        plt.title('Reconstruction Algorithm Memory Requirements')
-        plt.legend()
-        plt.grid(True)
-        plt.yscale('log')
-        plt.savefig('reconstruction_memory.png')
-        plt.show()
-    
-    # Plot memory requirements
-    plot_memory_requirements()
+    # Scale computational model
+    pipeline.add_component(PipelineComponent(
+        component_type=ComponentType.RECONSTRUCTOR,
+        name="Tuned Reconstructor",
+        compute=gpu,
+        function=Reconstruction,
+        params={
+            "centroid_agenda": centroid_agenda,
+            "n_acts": n_acts,
+            "flop_scale": 1.2,  # Increase FLOPs by 20%
+            "mem_scale": 0.8,   # Reduce memory ops by 20%
+            "n_workers": 4      # Use 4 parallel workers
+        },
+        dependencies=["Centroider"]
+    ))
 
 Troubleshooting
 ---------------
 
-Common issues and solutions:
+Common performance considerations:
 
-* **High Latency**:
-  - For large systems, reduce precision from double to single when possible
-  - Optimize memory layout for coalesced access on GPUs
-  - Use asynchronous operations and streams for concurrent execution
-  
-* **Memory Limitations**:
-  - For very large systems, consider mixed-precision approaches (e.g., fp16 for computation, fp32 for accumulation)
-  
-* **Numerical Stability**:
-  - Monitor convergence and adjust regularization parameters
-  - Ensure control matrix is well-conditioned
-
-* **Multi-GPU Scaling**:
-  - For extremely large systems, distribute computation across multiple GPUs
+* **High Latency**: Use GPU acceleration for large systems, consider reducing precision
+* **Memory Limitations**: For very large systems, GPU memory may be a constraint
+* **Scaling**: Computational complexity is :math:`O(n_{slopes} \\times n_{acts})`
 
 Related Topics
 --------------
 
 * :ref:`centroider` - Wavefront sensing that provides inputs to reconstruction
 * :ref:`control` - Control algorithms that use reconstruction outputs
-* :ref:`network` - Data transfer between system components
 
 API Reference
 -------------

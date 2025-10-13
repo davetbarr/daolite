@@ -38,16 +38,18 @@ A pipeline is composed of individual components, each representing a specific pr
 .. code-block:: python
 
     from daolite import Pipeline, PipelineComponent, ComponentType
+    from daolite.pipeline.camera import PCOCamLink
     
     # Create a pipeline component
     camera_component = PipelineComponent(
         component_type=ComponentType.CAMERA,
         name="Camera",
         compute=cpu_resource,
-        function=simulate_camera_readout,
+        function=PCOCamLink,
         params={
             "n_pixels": 1024*1024,
-            "readout_time": 500  # µs
+            "group": 10,
+            "readout": "rolling"
         }
     )
 
@@ -76,15 +78,21 @@ Components can depend on other components, creating a directed graph of processi
 
 .. code-block:: python
 
+    from daolite.pipeline.centroider import Centroider
+    import numpy as np
+    
     # Create a component that depends on the camera component
+    n_subaps = 6400
+    centroid_agenda = np.ones(50, dtype=int) * (n_subaps // 50)
+    
     centroider_component = PipelineComponent(
         component_type=ComponentType.CENTROIDER,
         name="Centroider",
         compute=gpu_resource,
-        function=cross_correlation_centroider,
+        function=Centroider,
         params={
-            "n_subaps": 4096,
-            "pixels_per_subap": 256
+            "centroid_agenda": centroid_agenda,
+            "n_pix_per_subap": 16*16
         },
         dependencies=["Camera"]  # This component depends on "Camera"
     )
@@ -133,11 +141,25 @@ Here's how to create a basic AO pipeline:
 .. code-block:: python
 
     from daolite import Pipeline, PipelineComponent, ComponentType
-    from daolite import amd_epyc_7763, nvidia_rtx_4090
+    from daolite.compute import hardware
+    from daolite.pipeline.camera import PCOCamLink
+    from daolite.pipeline.centroider import Centroider
+    from daolite.pipeline.reconstruction import Reconstruction
+    from daolite.pipeline.control import FullFrameControl
+    import numpy as np
     
     # Create compute resources
-    cpu = amd_epyc_7763()
-    gpu = nvidia_rtx_4090()
+    cpu = hardware.amd_epyc_7763()
+    gpu = hardware.nvidia_rtx_4090()
+    
+    # System parameters
+    n_subaps = 6400
+    n_acts = 81 * 81
+    n_pixels = 1024 * 1024
+    n_groups = 50
+    
+    # Define agendas
+    centroid_agenda = np.ones(n_groups, dtype=int) * (n_subaps // n_groups)
     
     # Create a new pipeline
     pipeline = Pipeline(name="SCAO System")
@@ -147,25 +169,25 @@ Here's how to create a basic AO pipeline:
         component_type=ComponentType.CAMERA,
         name="Camera",
         compute=cpu,
-        function=simulate_camera_readout,
-        params={"n_pixels": 1024*1024}
+        function=PCOCamLink,
+        params={"n_pixels": n_pixels, "group": n_groups, "readout": "rolling"}
     ))
     
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CENTROIDER,
         name="Centroider",
         compute=gpu,
-        function=cross_correlation_centroider,
-        params={"n_subaps": 4096, "pixels_per_subap": 256},
+        function=Centroider,
+        params={"centroid_agenda": centroid_agenda, "n_pix_per_subap": 16*16},
         dependencies=["Camera"]
     ))
     
     pipeline.add_component(PipelineComponent(
-        component_type=ComponentType.RECONSTRUCTION,
+        component_type=ComponentType.RECONSTRUCTOR,
         name="Reconstructor",
         compute=gpu,
-        function=mvr_reconstruction,
-        params={"n_slopes": 8192, "n_actuators": 5000},
+        function=Reconstruction,
+        params={"centroid_agenda": centroid_agenda, "n_acts": n_acts},
         dependencies=["Centroider"]
     ))
     
@@ -173,8 +195,8 @@ Here's how to create a basic AO pipeline:
         component_type=ComponentType.CONTROL,
         name="Controller",
         compute=cpu,
-        function=dm_control,
-        params={"n_actuators": 5000},
+        function=FullFrameControl,
+        params={"n_acts": n_acts, "operations": ["integration", "offset", "saturation"]},
         dependencies=["Reconstructor"]
     ))
     
@@ -201,68 +223,41 @@ More complex pipelines can include branching, multiple dependencies, and transfe
         component_type=ComponentType.CAMERA,
         name="WFS Camera",
         compute=cpu,
-        function=simulate_camera_readout,
-        params={"n_pixels": 1024*1024}
-    ))
-    
-    # Add PCIe transfer
-    pipeline.add_component(PipelineComponent(
-        component_type=ComponentType.TRANSFER,
-        name="CPU to GPU Transfer",
-        compute=cpu,
-        function=pcie_transfer,
-        params={"data_size": 1024*1024*4},  # 4 bytes per pixel
-        dependencies=["WFS Camera"]
+        function=PCOCamLink,
+        params={"n_pixels": 1024*1024, "group": 10, "readout": "rolling"}
     ))
     
     # Add multiple centroiders for different guide stars
     for i in range(3):
+        centroid_agenda = np.ones(20, dtype=int) * (1024 // 20)
         pipeline.add_component(PipelineComponent(
             component_type=ComponentType.CENTROIDER,
             name=f"Centroider GS{i+1}",
             compute=gpu,
-            function=cross_correlation_centroider,
-            params={"n_subaps": 1024, "pixels_per_subap": 256},
-            dependencies=["CPU to GPU Transfer"]
+            function=Centroider,
+            params={"centroid_agenda": centroid_agenda, "n_pix_per_subap": 16*16},
+            dependencies=["WFS Camera"]
         ))
     
-    # Add tomographic reconstructor that depends on all centroiders
+    # Add reconstructor that depends on all centroiders
+    centroid_agenda_recon = np.ones(20, dtype=int) * (3072 // 20)  # Total slopes from 3 GS
     pipeline.add_component(PipelineComponent(
-        component_type=ComponentType.RECONSTRUCTION,
-        name="Tomographic Reconstructor",
+        component_type=ComponentType.RECONSTRUCTOR,
+        name="Reconstructor",
         compute=gpu,
-        function=tomographic_reconstruction,
-        params={"n_slopes": 6144, "n_actuators": 10000},
+        function=Reconstruction,
+        params={"centroid_agenda": centroid_agenda_recon, "n_acts": 10000},
         dependencies=["Centroider GS1", "Centroider GS2", "Centroider GS3"]
     ))
     
-    # Add transfer back to CPU
-    pipeline.add_component(PipelineComponent(
-        component_type=ComponentType.TRANSFER,
-        name="GPU to CPU Transfer",
-        compute=gpu,
-        function=pcie_transfer,
-        params={"data_size": 10000*4},  # 4 bytes per actuator
-        dependencies=["Tomographic Reconstructor"]
-    ))
-    
-    # Add multiple DM controllers
+    # Add DM controller
     pipeline.add_component(PipelineComponent(
         component_type=ComponentType.CONTROL,
-        name="High-altitude DM",
+        name="DM Controller",
         compute=cpu,
-        function=dm_control,
-        params={"n_actuators": 4000},
-        dependencies=["GPU to CPU Transfer"]
-    ))
-    
-    pipeline.add_component(PipelineComponent(
-        component_type=ComponentType.CONTROL,
-        name="Ground-layer DM",
-        compute=cpu,
-        function=dm_control,
-        params={"n_actuators": 6000},
-        dependencies=["GPU to CPU Transfer"]
+        function=FullFrameControl,
+        params={"n_acts": 10000, "operations": ["integration", "offset", "saturation"]},
+        dependencies=["Reconstructor"]
     ))
 
 .. _analyzing_pipelines:
@@ -446,87 +441,65 @@ A complete Single Conjugate Adaptive Optics pipeline:
     # Create SCAO pipeline
     scao = Pipeline(name="SCAO System")
     
+    # System parameters
+    n_subaps = 50 * 50
+    n_acts = 51 * 51
+    n_pixels = 800 * 800
+    n_groups = 50
+    
+    # Define agendas
+    centroid_agenda = np.ones(n_groups, dtype=int) * (n_subaps // n_groups)
+    
     # Add camera component
     scao.add_component(PipelineComponent(
         component_type=ComponentType.CAMERA,
         name="Shack-Hartmann Camera",
         compute=cpu,
-        function=simulate_camera_readout,
+        function=PCOCamLink,
         params={
-            "n_pixels": 800*800,
-            "readout_mode": "global",
-            "bit_depth": 12,
-            "frame_rate": 1000
+            "n_pixels": n_pixels,
+            "group": n_groups,
+            "readout": "global"
         }
-    ))
-    
-    # Add CPU to GPU transfer
-    scao.add_component(PipelineComponent(
-        component_type=ComponentType.TRANSFER,
-        name="Camera to GPU Transfer",
-        compute=cpu,
-        function=pcie_transfer,
-        params={
-            "data_size": 800*800*2,  # 2 bytes per pixel (12-bit)
-            "transfer_type": "host_to_device"
-        },
-        dependencies=["Shack-Hartmann Camera"]
     ))
     
     # Add centroider component
     scao.add_component(PipelineComponent(
         component_type=ComponentType.CENTROIDER,
-        name="WCoG Centroider",
+        name="Centroider",
         compute=gpu,
-        function=weighted_center_of_gravity,
+        function=Centroider,
         params={
-            "n_subaps": 50*50,
-            "pixels_per_subap": 16*16,
-            "weight_sigma": 2.0
+            "centroid_agenda": centroid_agenda,
+            "n_pix_per_subap": 16*16
         },
-        dependencies=["Camera to GPU Transfer"]
+        dependencies=["Shack-Hartmann Camera"]
     ))
     
     # Add reconstructor component
     scao.add_component(PipelineComponent(
-        component_type=ComponentType.RECONSTRUCTION,
-        name="MVM Reconstructor",
+        component_type=ComponentType.RECONSTRUCTOR,
+        name="Reconstructor",
         compute=gpu,
-        function=mvm_reconstruction,
+        function=Reconstruction,
         params={
-            "n_slopes": 50*50*2,
-            "n_actuators": 51*51,
-            "control_matrix_type": "dense"
+            "centroid_agenda": centroid_agenda,
+            "n_acts": n_acts
         },
-        dependencies=["WCoG Centroider"]
-    ))
-    
-    # Add GPU to CPU transfer
-    scao.add_component(PipelineComponent(
-        component_type=ComponentType.TRANSFER,
-        name="GPU to DM Transfer",
-        compute=gpu,
-        function=pcie_transfer,
-        params={
-            "data_size": 51*51*4,  # 4 bytes per actuator
-            "transfer_type": "device_to_host"
-        },
-        dependencies=["MVM Reconstructor"]
+        dependencies=["Centroider"]
     ))
     
     # Add controller component
     scao.add_component(PipelineComponent(
         component_type=ComponentType.CONTROL,
-        name="Integrator Controller",
+        name="Controller",
         compute=cpu,
-        function=integrator_control,
+        function=FullFrameControl,
         params={
-            "n_actuators": 51*51,
-            "gain": 0.4,
-            "type": "leaky",
-            "leak_factor": 0.01
+            "n_acts": n_acts,
+            "operations": ["integration", "offset", "saturation"]
         },
-        dependencies=["GPU to DM Transfer"]
+        dependencies=["Reconstructor"]
     ))
     
     # Run the pipeline
@@ -566,87 +539,58 @@ A Multi Conjugate Adaptive Optics pipeline with multiple wavefront sensors and d
             component_type=ComponentType.CAMERA,
             name=f"LGS Camera {i+1}",
             compute=cpu,
-            function=simulate_camera_readout,
+            function=PCOCamLink,
             params={
                 "n_pixels": 600*600,
-                "readout_mode": "global",
-                "bit_depth": 12,
-                "frame_rate": 800
+                "group": 10,
+                "readout": "global"
             }
         ))
         
-        # Add transfer to GPU for each camera
+        # Add centroider for each camera
+        n_subaps = 40 * 40
+        centroid_agenda = np.ones(30, dtype=int) * (n_subaps // 30)
         mcao.add_component(PipelineComponent(
-            component_type=ComponentType.TRANSFER,
-            name=f"Camera {i+1} to GPU",
-            compute=cpu,
-            function=pcie_transfer,
+            component_type=ComponentType.CENTROIDER,
+            name=f"Centroider {i+1}",
+            compute=gpu,
+            function=Centroider,
             params={
-                "data_size": 600*600*2,
-                "transfer_type": "host_to_device"
+                "centroid_agenda": centroid_agenda,
+                "n_pix_per_subap": 15*15
             },
             dependencies=[f"LGS Camera {i+1}"]
         ))
-        
-        # Add centroider for each camera
-        mcao.add_component(PipelineComponent(
-            component_type=ComponentType.CENTROIDER,
-            name=f"WCoG Centroider {i+1}",
-            compute=gpu,
-            function=weighted_center_of_gravity,
-            params={
-                "n_subaps": 40*40,
-                "pixels_per_subap": 15*15,
-                "weight_sigma": 1.8
-            },
-            dependencies=[f"Camera {i+1} to GPU"]
-        ))
     
-    # Add tomographic reconstructor that depends on all centroiders
+    # Add reconstructor that depends on all centroiders
+    # Combine all slopes
+    total_slopes = 5 * 40 * 40  # 5 guide stars
+    combined_agenda = np.ones(30, dtype=int) * (total_slopes // 30)
+    total_acts = 61*61 + 31*31 + 19*19  # 3 DMs
+    
     mcao.add_component(PipelineComponent(
-        component_type=ComponentType.RECONSTRUCTION,
-        name="Tomographic Reconstructor",
+        component_type=ComponentType.RECONSTRUCTOR,
+        name="Reconstructor",
         compute=gpu,
-        function=tomographic_reconstruction,
+        function=Reconstruction,
         params={
-            "n_wfs": 5,
-            "n_slopes_per_wfs": 40*40*2,
-            "n_dm": 3,
-            "n_actuators_per_dm": [61*61, 31*31, 19*19],
-            "dm_altitudes": [0, 4500, 9000],
-            "gs_directions": [[0,0], [30,0], [0,30], [-30,0], [0,-30]],
-            "gs_altitudes": [90000, 90000, 90000, 90000, 90000]
+            "centroid_agenda": combined_agenda,
+            "n_acts": total_acts
         },
-        dependencies=[f"WCoG Centroider {i+1}" for i in range(5)]
+        dependencies=[f"Centroider {i+1}" for i in range(5)]
     ))
     
-    # Add transfer back to CPU
-    mcao.add_component(PipelineComponent(
-        component_type=ComponentType.TRANSFER,
-        name="GPU to DM Transfer",
-        compute=gpu,
-        function=pcie_transfer,
-        params={
-            "data_size": (61*61 + 31*31 + 19*19)*4,  # Combined actuator data
-            "transfer_type": "device_to_host"
-        },
-        dependencies=["Tomographic Reconstructor"]
-    ))
-    
-    # Add multi-DM controller
+    # Add controller
     mcao.add_component(PipelineComponent(
         component_type=ComponentType.CONTROL,
-        name="Multi-DM Controller",
+        name="Controller",
         compute=cpu,
-        function=multi_dm_control,
+        function=FullFrameControl,
         params={
-            "n_dm": 3,
-            "n_actuators_per_dm": [61*61, 31*31, 19*19],
-            "gains": [0.4, 0.35, 0.3],
-            "controller_types": ["leaky", "leaky", "leaky"],
-            "leak_factors": [0.02, 0.02, 0.02]
+            "n_acts": total_acts,
+            "operations": ["integration", "offset", "saturation"]
         },
-        dependencies=["GPU to DM Transfer"]
+        dependencies=["Reconstructor"]
     ))
     
     # Run the pipeline
