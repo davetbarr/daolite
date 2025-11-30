@@ -485,10 +485,8 @@ class PipelineDesignerApp(QMainWindow):
         component = self._on_component_added(comp_type)
 
         # Set default compute resource if needed - safely check for compute attribute
-        if (
-            comp_type != ComponentType.NETWORK
-            and not hasattr(component, "compute")
-            or not component.compute
+        if comp_type != ComponentType.NETWORK and (
+            not hasattr(component, "compute") or not component.compute
         ):
             component.compute = self._get_default_compute_for_type(comp_type)
 

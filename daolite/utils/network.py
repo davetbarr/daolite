@@ -153,6 +153,8 @@ def pcie_transfer(
     debug: bool = False,
     start_times=None,
     group=None,
+    gen: int = 5,
+    overhead: float = 3.0,
     **kwargs,
 ) -> float:
     """
@@ -169,8 +171,9 @@ def pcie_transfer(
     Returns:
         float or np.ndarray: PCIe transfer time in microseconds or array of transfer timings
     """
+    print("\n\n\n\n\n\n\n\nHelp\n\n\n\n\n\n\n\n")
     # Default to PCIe Gen4 x16 if compute_resources doesn't specify
-    pcie_gen = getattr(compute_resources, "pcie_gen", 4)
+    pcie_gen = gen
 
     # Check if we're dealing with a component that passes timing data
     if (
@@ -180,20 +183,20 @@ def pcie_transfer(
     ):
         # Use the existing PCIE function for array timing calculations
         return PCIE(
-            n_bits, compute_resources, start_times, scale=1.0, gen=pcie_gen, debug=debug
+            n_bits, compute_resources, start_times, scale=1.0, gen=gen, debug=debug
         )
 
     # Standard case for scalar input: calculate a single transfer time
     transfer_time = pcie_bus(n_bits, gen=pcie_gen, debug=False) * 1e6  # Convert to µs
 
     # Add driver overhead
-    driver_overhead = getattr(compute_resources, "time_in_driver", 5.0)  # µs
-    total_time = transfer_time + driver_overhead * 2  # Overhead at both ends
+    total_time = transfer_time + overhead  # Overhead at both ends
+    print(f"PCIE transfer for {n_bits/8:.2f} bytes: {total_time:.2f} µs")
 
     if debug:
         print(f"PCIe transfer for {n_bits/8:.2f} bytes: {total_time:.2f} µs")
         print(f"  - Pure transfer: {transfer_time:.2f} µs with PCIe Gen {pcie_gen}")
-        print(f"  - Driver overhead: {driver_overhead * 2:.2f} µs")
+        print(f"  - Driver overhead: {overhead * 2:.2f} µs")
 
     return total_time
 
@@ -355,6 +358,7 @@ def PCIE(
     start_times: np.ndarray,
     scale: float = 1.0,
     gen: int = 5,
+    overhead: float = 3.0,
     debug: bool = False,
 ) -> np.ndarray:
     """
@@ -376,7 +380,7 @@ def PCIE(
 
     load_time = compute_resources.load_time(chunk_size) / 0.125
     transfer_time = pcie_bus(chunk_size, gen, debug)
-    total_time = load_time + transfer_time
+    total_time = load_time + transfer_time + overhead
 
     timings = np.zeros([start_times.shape[0], 2])
     timings[0, 0] = start_times[0, 1]

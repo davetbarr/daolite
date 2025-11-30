@@ -233,6 +233,7 @@ def FullFrameControl(
         print(f"Offset time: {off_time}")
         print(f"Saturation time: {sat_time}")
         print(f"DM Power time: {dmp_time}")
+        print(f"Overhead time: {overhead}")
         print(f"Total time: {total_time}")
         print(f"FLOP scaling factor: {flop_scale}")
         print(f"Memory scaling factor: {mem_scale}")

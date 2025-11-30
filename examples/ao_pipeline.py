@@ -14,9 +14,15 @@ from daolite.pipeline.calibration import PixelCalibration
 from daolite.pipeline.centroider import Centroider
 from daolite.pipeline.control import FullFrameControl
 from daolite.pipeline.reconstruction import Reconstruction
-from daolite.simulation.camera import PCOCamLink
+from daolite.simulation.camera import PCOCamLink, simulate_pco_readout
 from daolite.utils.chronograph import generate_chrono_plot_packetize
 from daolite.utils.network import TimeOnNetwork
+from daolite.utils.sh_utility import (
+    calculate_centroid_agenda,
+    genSHSubApMap,
+    getSubApCentrePoints,
+    readout_by_pixel_agenda,
+)
 
 
 def run_single_pipeline(config_file=None):
@@ -33,12 +39,12 @@ def run_single_pipeline(config_file=None):
         # Create default configuration
         camera = CameraConfig(
             n_pixels=1024 * 1024,  # 1MP camera
-            n_subapertures=80 * 80,  # 80x80 subaperture grid
-            pixels_per_subaperture=16 * 16,  # 16x16 pixels per subaperture
+            n_subapertures=50 * 50,  # 50x50 subaperture grid
+            pixels_per_subaperture=10 * 10,  # 12x12 pixels per subaperture
         )
 
         optics = OpticsConfig(
-            n_actuators=5000,  # 5000 actuator DM
+            n_actuators=5000,  # 500 actuator DM
             n_combine=1,
             calibration_scale=1.0,
             centroid_scale=1.0,
@@ -75,15 +81,29 @@ def run_single_pipeline(config_file=None):
 
     # Calculate total number of valid subapertures
     # In a real system, not all subapertures would be valid due to telescope pupil shape
-    n_valid_subaps = int(config.camera.n_subapertures * 0.8)  # Assume 80% are valid
-
+    # n_valid_subaps = int(config.camera.n_subapertures * 0.8)  # Assume 80% are valid
+    pixel_agenda_1d = np.array(
+        [1024 * 1024 // 50 + (1 if i < 1024 * 1024 % 50 else 0) for i in range(50)],
+        dtype=int,
+    )
+    # Convert to 2D format for compatibility with readout_by_pixel_agenda
+    pixel_agenda = np.column_stack((np.arange(50), pixel_agenda_1d))
     # Calculate group size based on packetization
     n_groups = 50  # Default packet count
 
-    # For simplicity, distribute subapertures evenly across packets
-    # In reality, this would depend on camera readout pattern
-    centroid_agenda = np.ones(n_groups, dtype=int) * (n_valid_subaps // n_groups)
-    pixel_agenda = np.ones(n_groups, dtype=int) * (config.camera.n_pixels // n_groups)
+    subApMap = genSHSubApMap(50, 50, 2, 50 // 2, mask=False)
+
+    nSlopes = np.sum(subApMap > 0) * 2  # *2 for x and y slopes
+    print(f"Number of slopes: {nSlopes}")
+    readout_pattern = simulate_pco_readout(1024, 1024)
+    packet_map = readout_by_pixel_agenda(readout_pattern, pixel_agenda)
+    centres = getSubApCentrePoints(subApMap, 10, 1024, 1024, 0)
+    # Calculate when each centroid becomes available
+    centroid_agenda = calculate_centroid_agenda(packet_map, centres, 10)
+
+    print(f"Using {50} valid subapertures for centroiding.")
+    print(f"Centroid agenda (subaps per group): {centroid_agenda}")
+    print(f"Pixel agenda (pixels per group): {pixel_agenda}\n")
 
     # ======= Pipeline Timing Simulation =======
 
@@ -100,8 +120,9 @@ def run_single_pipeline(config_file=None):
     calibration_timing = PixelCalibration(
         compute_resources=config.compute,
         start_times=camera_timing,
-        pixel_agenda=pixel_agenda,
-        flop_scale=config.optics.calibration_scale,
+        pixel_agenda=pixel_agenda[:, 1],
+        flop_scale=0.5,
+        mem_scale=0.5,
         debug=True,
     )
 
@@ -110,10 +131,10 @@ def run_single_pipeline(config_file=None):
         compute_resources=config.compute,
         start_times=calibration_timing,
         centroid_agenda=centroid_agenda,
-        n_pix_per_subap=config.camera.pixels_per_subaperture,
-        flop_scale=config.optics.centroid_scale,
-        sort=config.pipeline.use_sorting,
-        n_workers=config.pipeline.n_workers,
+        n_pix_per_subap=10,
+        flop_scale=0.125,
+        mem_scale=0.125,
+        sort=True,
         debug=True,
     )
 
@@ -123,7 +144,8 @@ def run_single_pipeline(config_file=None):
         start_times=centroid_timing,
         centroid_agenda=centroid_agenda,
         n_acts=config.optics.n_actuators,
-        flop_scale=config.optics.reconstruction_scale,
+        flop_scale=0.125,
+        mem_scale=0.125,
         debug=True,
     )
 
@@ -149,7 +171,7 @@ def run_single_pipeline(config_file=None):
     )
 
     control_timing = np.zeros([1, 2])
-    control_timing[0, 0] = network_timing[0, 1]
+    control_timing[0, 0] = reconstruction_timing[-1, 1]
     control_timing[0, 1] = control_timing[0, 0] + control_time
 
     # Create readout timing for visualization
@@ -166,7 +188,6 @@ def run_single_pipeline(config_file=None):
         [calibration_timing, "Calibration"],
         [centroid_timing, "Centroiding"],
         [reconstruction_timing, "Reconstruction"],
-        [network_timing, "Network Transfer"],
         [control_timing, "DM Control"],
     ]
 

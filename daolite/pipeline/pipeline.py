@@ -55,6 +55,7 @@ class Pipeline:
         self.components: Dict[str, PipelineComponent] = {}
         self.timing_results: Dict[str, np.ndarray] = {}
         self.execution_order: List[str] = []
+        self.process_timing: Dict[str, float] = {}
 
     def add_component(self, component: PipelineComponent) -> None:
         """
@@ -122,12 +123,17 @@ class Pipeline:
         Returns:
             Dict mapping component names to timing arrays
 
+        Note:
+            After running, process timing data (total time per component) is available
+            via the `process_timing` attribute and can be saved using `save_process_timing_csv()`.
+
         Raises:
             ValueError: If pipeline contains circular dependencies
         """
         # Resolve dependencies and get execution order
         self.execution_order = self._resolve_dependencies()
         self.timing_results = {}
+        self.process_timing = {}
 
         if debug:
             print("\n===== Pipeline Execution Order =====")
@@ -209,12 +215,26 @@ class Pipeline:
             timing = component.function(**params)
             self.timing_results[name] = timing
 
-            if debug and hasattr(timing, "shape"):
+            # Calculate total time spent in this process (sum of all intervals)
+            if hasattr(timing, "shape"):
                 if len(timing.shape) == 2 and timing.shape[1] == 2:
-                    start = timing[0, 0]
-                    end = timing[-1, 1]
-                    print(f"  - Duration: {end - start:.2f} μs")
+                    # Sum all intervals: (end - start) for each row
+                    total_time = np.sum(timing[:, 1] - timing[:, 0])
+                    self.process_timing[name] = total_time
+                    if debug:
+                        start = timing[0, 0]
+                        end = timing[-1, 1]
+                        print(
+                            f"  - Duration: {end - start:.2f} μs (Total time: {total_time:.2f} μs)"
+                        )
                 elif len(timing.shape) == 0:  # Scalar
+                    self.process_timing[name] = float(timing)
+                    if debug:
+                        print(f"  - Duration: {timing:.2f} μs")
+            else:
+                # Handle non-numpy types
+                self.process_timing[name] = float(timing)
+                if debug:
                     print(f"  - Duration: {timing:.2f} μs")
 
         return self.timing_results
@@ -307,3 +327,27 @@ class Pipeline:
             fig.savefig(save_path, dpi=300, bbox_inches="tight")
 
         return fig, ax, latency
+
+    def save_process_timing_csv(self, file_path: str) -> None:
+        """
+        Save process timing data to a CSV file.
+
+        Args:
+            file_path: Path where the CSV file should be saved
+
+        Raises:
+            ValueError: If pipeline has not been run yet
+        """
+        if not self.process_timing:
+            raise ValueError("Pipeline must be run before saving timing data")
+
+        import csv
+
+        with open(file_path, "w", newline="") as csvfile:
+            writer = csv.writer(csvfile)
+            # Write header
+            writer.writerow(["Process", "Total Time (μs)"])
+            # Write data rows in execution order
+            for name in self.execution_order:
+                if name in self.process_timing:
+                    writer.writerow([name, f"{self.process_timing[name]:.2f}"])

@@ -129,7 +129,8 @@ def _process_reconstruction_group(
 
     # Memory for slopes + actuators + reconstruction matrix
     # Matrix is (n_acts x total_slope_values), vector is total_slope_values, output is n_acts
-    memory_to_load = _mvm_mem(n_acts, total_slope_values)
+    memory_elements = _mvm_mem(n_acts, total_slope_values)
+    memory_to_load = memory_elements * 32  # Convert FP32 elements to bits
     load_time = compute_resources.load_time(memory_to_load) / mem_scale
 
     # Matrix-vector multiplication operations: (n_acts x total_slope_values) * (total_slope_values x 1)
